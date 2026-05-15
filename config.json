@@ -1,0 +1,46 @@
+{
+    "metabolismo": {
+        "energia_base_perda": 0.1,
+        "fome_base_ganho_min": 1.5,
+        "fome_base_ganho_max": 3.0,
+        "social_base_perda_min": 0.5,
+        "social_base_perda_max": 1.2,
+        "_comentario": "Valores que mudam a cada tick (15min simulados) independente da ação."
+    },
+    "acoes": {
+        "dormir": {
+            "energia_ganho": 10.0,
+            "fome_ganho": 0.2
+        },
+        "comer": {
+            "fome_perda": 20.0,
+            "energia_ganho": 3.0,
+            "custo_pc": 50
+        },
+        "trabalhar": {
+            "energia_perda": 1.2,
+            "salario_pc": 5
+        },
+        "socializar": {
+            "energia_perda": 0.4,
+            "social_ganho": 15.0,
+            "custo_pc": 20
+        },
+        "ocioso": {
+            "energia_ganho": 2.5
+        },
+        "_comentario": "Ganhos e perdas específicos de cada atividade. Energia_perda no trabalho agora é 1.2."
+    },
+    "ia_decisao": {
+        "gatilho_fome_normal": 40,
+        "gatilho_fome_dormindo": 85,
+        "fome_urgente_limiar": 70,
+        "energia_limiar_desmaio": 10,
+        "hora_inicio_trabalho": 8,
+        "hora_fim_trabalho": 18,
+        "hora_inicio_sono_obrigatorio": 22,
+        "bonus_happy_hour": 120.0,
+        "bonus_persistencia": 60.0,
+        "_comentario": "Parâmetros que afetam como os NPCs escolhem o que fazer."
+    }
+}

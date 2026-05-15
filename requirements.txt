@@ -1,4 +1,3 @@
 # Arquivo: requirements.txt
-torch
-transformers
-# json
+flask
+pydantic
