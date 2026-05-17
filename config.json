@@ -1,35 +1,35 @@
 {
     "metabolismo": {
-        "energia_base_perda": 0.1,
+        "energia_base_perda": 0.5,
         "fome_base_ganho_min": 1.5,
-        "fome_base_ganho_max": 3.0,
+        "fome_base_ganho_max": 3.5,
         "social_base_perda_min": 0.5,
         "social_base_perda_max": 1.2,
-        "_comentario": "Valores que mudam a cada tick (15min simulados) independente da ação."
+        "_comentario": "Valores base. Aumentei a perda de energia base para 0.5."
     },
     "acoes": {
         "dormir": {
-            "energia_ganho": 10.0,
-            "fome_ganho": 0.2
+            "energia_ganho": 5.0,
+            "fome_ganho": 0.5
         },
         "comer": {
-            "fome_perda": 20.0,
-            "energia_ganho": 3.0,
-            "custo_pc": 50
+            "fome_perda": 25.0,
+            "energia_ganho": 1.0,
+            "custo_pc": 15
         },
         "trabalhar": {
-            "energia_perda": 1.2,
+            "energia_perda": 3.0,
             "salario_pc": 5
         },
         "socializar": {
-            "energia_perda": 0.4,
+            "energia_perda": 1.6,
             "social_ganho": 15.0,
-            "custo_pc": 20
+            "custo_pc": 30
         },
         "ocioso": {
-            "energia_ganho": 2.5
+            "energia_ganho": 0.1
         },
-        "_comentario": "Ganhos e perdas específicos de cada atividade. Energia_perda no trabalho agora é 1.2."
+        "_comentario": "Socializar agora cansa (1.6) e Ocioso quase não recupera (0.1). Dormir é essencial."
     },
     "ia_decisao": {
         "gatilho_fome_normal": 40,
@@ -40,7 +40,25 @@
         "hora_fim_trabalho": 18,
         "hora_inicio_sono_obrigatorio": 22,
         "bonus_happy_hour": 120.0,
-        "bonus_persistencia": 60.0,
-        "_comentario": "Parâmetros que afetam como os NPCs escolhem o que fazer."
+        "bonus_persistencia": 40.0,
+        "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas."
+    },
+    "biologia_e_sociedade": {
+        "concepcao_hora": 3,
+        "concepcao_afinidade_minima": 80,
+        "concepcao_chance": 0.20,
+        "gravidez_duracao_ticks": 192,
+        "gravidez_multiplicador_perda_energia": 2.0,
+        "gravidez_multiplicador_ganho_fome": 1.5,
+        "parto_afinidade_inicial_pais": 100,
+        "crescimento_hora": 4,
+        "crescimento_dias_bebe_para_crianca": 1,
+        "crescimento_dias_crianca_para_adulto": 3,
+        "cuidar_prole_consumo_energia": 2.0,
+        "cuidar_prole_ganho_social": 15.0,
+        "heranca_afinidade_minima_conjuge": 50,
+        "heranca_evento_modificador_afinidade": 10,
+        "inaniacao_perda_saude": 5,
+        "dormir_ganho_saude": 2
     }
 }

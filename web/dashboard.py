@@ -80,30 +80,58 @@ def get_update():
             npcs.append({
                 "id": r['id'], "nome": r['nome'], "profissao": r['profissao'],
                 "acao": r['acao_atual'], "coords": mapa_coords.get(r['localizacao_atual_id'], [0,0]),
-                "status": {"e": r['energia'], "f": r['fome'], "s": r['social'], "d": formatar_moeda(r['dinheiro_total_pc'])}
+                "status": {
+                    "e": r['energia'], "f": r['fome'], "s": r['social'], 
+                    "d": formatar_moeda(r['dinheiro_total_pc']),
+                    "h": r['saude'], "m": r['humor']
+                }
+
             })
 
         # Relacionamentos
         rel_rows = safe_query(conn, 'SELECT * FROM relacionamentos WHERE afinidade != 0')
         rels = [{"a": r['npc_a_id'], "b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo']} for r in rel_rows]
 
-        # Meta
+        # Locais Dinâmicos (Sincronização de construções/destruições)
+        loc_rows = safe_query(conn, 'SELECT * FROM locais')
+        locs = {r['id']: {
+            "n": r['nome'], "t": r['tipo'], "c": json.loads(r['coordenadas']),
+            "s": r['status'], "i": r['integridade']
+        } for r in loc_rows}
+
+        # Evento Global Ativo
+        evg_row = safe_query(conn, 'SELECT titulo, descricao, tipo FROM eventos_globais WHERE ticks_restantes > 0 LIMIT 1')
+        evg = {"t": evg_row[0]['titulo'], "d": evg_row[0]['descricao'], "tp": evg_row[0]['tipo']} if evg_row else None
+
+        # Meta e Velocidade
         meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'hora_simulada'").fetchone()
         meta_pausa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'simulacao_pausada'").fetchone()
+        meta_vel = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'velocidade_simulacao'").fetchone()
         
-        # Eventos
-        ev_rows = safe_query(conn, 'SELECT * FROM eventos ORDER BY timestamp DESC LIMIT 15')
-        eventos = [{"t": r['timestamp'], "r": r['resumo_estruturado']} for r in ev_rows]
+        # Eventos Unificados
+        ev_rows = safe_query(conn, 'SELECT timestamp, resumo_estruturado FROM eventos ORDER BY timestamp DESC LIMIT 15')
+        evg_rows = safe_query(conn, 'SELECT timestamp_criacao, titulo FROM eventos_globais ORDER BY timestamp_criacao DESC LIMIT 5')
+        
+        cronicas = [{"t": r['timestamp'], "r": r['resumo_estruturado'], "type": "npc"} for r in ev_rows]
+        for eg in evg_rows:
+            cronicas.append({"t": eg['timestamp_criacao'], "r": f"📢 EVENTO: {eg['titulo']}", "type": "global"})
+        
+        cronicas = sorted(cronicas, key=lambda x: x['t'], reverse=True)[:20]
 
         conn.close()
         return jsonify({
             "h": meta_hora['valor'] if meta_hora else "Sincronizando...",
             "p": meta_pausa['valor'] == "1" if meta_pausa else False,
+            "v": float(meta_vel['valor']) if meta_vel else 1.0,
             "npcs": npcs,
             "rels": rels,
-            "evs": eventos,
+            "evs": cronicas,
+            "locs": locs,
+            "evg": evg,
             "warnings": warnings
         })
+
+
 
     except Exception as e:
         return jsonify({"error": f"Erro de Sincronização: {str(e)}"}), 500
@@ -126,6 +154,18 @@ def toggle_pause():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/set_speed/<speed>')
+def set_speed(speed):
+    try:
+        conn = get_db_connection()
+        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES ('velocidade_simulacao', ?)", (speed,))
+        conn.commit()
+        conn.close()
+        return jsonify({"velocidade": speed})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
+
 
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -1,9 +1,16 @@
 import time
 import random
+import sqlite3
 from datetime import datetime, timedelta
-from .models import NPC, Local, Evento, Acao
+from .models import NPC, Local, Evento, Acao, EstagioVida, HumorNPC, TipoEvento
+
 from .logic import NPCBrain
 from .database import DatabaseManager
+from .biology import NPCBiologyManager
+from .finance import NPCLegacyManager
+from .social import NPCSocialManager
+from .actions import NPCActionManager
+from .logger import WorldLogger
 
 import json
 import os
@@ -36,7 +43,16 @@ class SimulationEngine:
     def adicionar_local(self, local: Local):
         self.locais[local.id] = local
 
+    def recarregar_habitantes(self):
+        """Recarrega os NPCs do banco para sincronizar com mudanças externas (ex: JobMarket)."""
+        novos_npcs = self.db.carregar_npcs()
+        if novos_npcs:
+            self.npcs = novos_npcs
+            WorldLogger.debug(f"🔄 Memória sincronizada com o banco de dados ({len(self.npcs)} NPCs).")
+
+
     def tick(self):
+
         self.tick_count += 1
         self.data_simulada += timedelta(minutes=15)
         
@@ -46,97 +62,110 @@ class SimulationEngine:
         self.db.salvar_meta("hora_simulada_iso", self.data_simulada.isoformat())
         self.db.salvar_meta("hora_simulada", hora_formatada)
         
-        print(f"\n--- Tick {self.tick_count} | {hora_formatada} ---")
-        
+        WorldLogger.info(f"\n--- Tick {self.tick_count} | {hora_formatada} ---")
+
+        # 0. Carregar e Atualizar Eventos Globais
+        eventos_globais = self.db.carregar_eventos_globais_ativos()
+        for ev in eventos_globais:
+            novos_ticks = ev['ticks_restantes'] - 1
+            conn = sqlite3.connect(self.db.db_path)
+            if novos_ticks <= 0:
+                conn.execute("DELETE FROM eventos_globais WHERE id = ?", (ev['id'],))
+            else:
+                conn.execute("UPDATE eventos_globais SET ticks_restantes = ? WHERE id = ?", (novos_ticks, ev['id']))
+            conn.commit()
+            conn.close()
+
+        cfg_bio = self.config.get("biologia_e_sociedade", {})
+        concepcao_h = cfg_bio.get("concepcao_hora", 3)
+        crescimento_h = cfg_bio.get("crescimento_hora", 4)
+
+        # 0.5. Concepção Noturna
+        if self.data_simulada.hour == concepcao_h and self.data_simulada.minute == 0:
+            NPCBiologyManager.processar_concepcao(self)
+
+        # 0.6. Evolução Temporal / Crescimento
+        if self.data_simulada.hour == crescimento_h and self.data_simulada.minute == 0:
+            NPCBiologyManager.processar_crescimento(self)
+
+        maes_parto = []
+
         for npc in self.npcs:
-            # 1. Metabolismo Base (Vindo do Config)
+            if not npc.esta_vivo():
+                continue
+                
+            # 1. Metabolismo Base
             meta = self.config["metabolismo"]
-            npc.energia -= meta["energia_base_perda"]
-            npc.fome += random.uniform(meta["fome_base_ganho_min"], meta["fome_base_ganho_max"])
+            energia_perda = meta["energia_base_perda"]
+            fome_ganho = random.uniform(meta["fome_base_ganho_min"], meta["fome_base_ganho_max"])
+            
+            # Se for gestante, aumenta consumo de comida e reduz drástica de energia
+            if npc.genero == 'F' and npc.gravidez_ticks > 0:
+                mult_energia = cfg_bio.get("gravidez_multiplicador_perda_energia", 2.0)
+                mult_fome = cfg_bio.get("gravidez_multiplicador_ganho_fome", 1.5)
+                energia_perda *= mult_energia
+                fome_ganho *= mult_fome
+                
+                # Decrementar ticks de gravidez
+                npc.gravidez_ticks -= 1
+                if npc.gravidez_ticks == 0:
+                    maes_parto.append(npc)
+                    
+            npc.energia -= energia_perda
+            npc.fome += fome_ganho
             npc.social -= random.uniform(meta["social_base_perda_min"], meta["social_base_perda_max"])
             
-            # 2. Decisão (Agora passa o config e os locais para o Brain)
+            # 2. Decisão (Agora com Eventos Globais)
+            # Contar dependentes na mesma casa
+            npc.num_dependentes = 0
+            for n in self.npcs:
+                if n.casa_id == npc.casa_id and n.id != npc.id and n.esta_vivo():
+                    if n.mae_id == npc.id or n.pai_id == npc.id:
+                        if n.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value) or n.profissao == 'dependente':
+                            npc.num_dependentes += 1
+
             acao_anterior = npc.acao_atual
-            NPCBrain.decidir_acao(npc, self.data_simulada.hour, self.config["ia_decisao"], self.locais)
+            NPCBrain.decidir_acao(npc, self.data_simulada.hour, self.config["ia_decisao"], self.locais, eventos_globais)
+
+
 
             
             if npc.acao_atual != acao_anterior:
-                print(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}")
+                WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}")
 
             # 3. Execução (Vindo do Config)
-            cfg_acoes = self.config["acoes"]
-            if npc.acao_atual == Acao.DORMIR:
-                npc.energia += cfg_acoes["dormir"]["energia_ganho"]
-                npc.fome += cfg_acoes["dormir"]["fome_ganho"]
-            elif npc.acao_atual == Acao.COMER:
-                npc.fome -= cfg_acoes["comer"]["fome_perda"]
-                npc.dinheiro_total_pc -= cfg_acoes["comer"]["custo_pc"]
-                npc.energia += cfg_acoes["comer"]["energia_ganho"]
-            elif npc.acao_atual == Acao.TRABALHAR:
-                npc.energia -= cfg_acoes["trabalhar"]["energia_perda"]
-                npc.dinheiro_total_pc += cfg_acoes["trabalhar"]["salario_pc"]
-            elif npc.acao_atual == Acao.SOCIALIZAR:
-                npc.energia -= cfg_acoes["socializar"]["energia_perda"]
-                npc.social += cfg_acoes["socializar"]["social_ganho"]
-                npc.dinheiro_total_pc -= cfg_acoes["socializar"]["custo_pc"]
-            elif npc.acao_atual == Acao.OCIOSO:
-                npc.energia += cfg_acoes["ocioso"]["energia_ganho"]
+            NPCActionManager.executar_acao(self, npc)
 
+            # 4. Lógica Biológica (Saúde e Morte)
+            if npc.fome > 90:
+                perda_saude = cfg_bio.get("inaniacao_perda_saude", 5)
+                npc.saude -= perda_saude
+                WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})")
+            elif npc.fome < 20 and npc.acao_atual == Acao.DORMIR:
+                if npc.saude < 100:
+                    ganho_saude = cfg_bio.get("dormir_ganho_saude", 2)
+                    npc.saude = min(100, npc.saude + ganho_saude)
 
-
-            
             # Garantir limites
             npc.energia = max(0, min(100, npc.energia))
             npc.fome = max(0, min(100, npc.fome))
             npc.social = max(0, min(100, npc.social))
+            npc.saude = max(0, min(100, npc.saude))
+            
+            if npc.saude <= 0:
+                NPCLegacyManager.processar_morte(self, npc)
+                continue
             
             self.db.salvar_npc(npc)
+        
+        # Limpeza de Falecidos da Memória
+        self.npcs = [n for n in self.npcs if n.saude > 0]
+
+        # Processar nascimentos de partos ocorridos neste tick
+        for mae in maes_parto:
+            NPCBiologyManager.processar_parto(self, mae)
             
-        self.processar_interacoes()
+        NPCSocialManager.processar_interacoes(self)
 
-    def processar_interacoes(self):
-        por_local = {}
-        for npc in self.npcs:
-            if npc.acao_atual == Acao.DORMIR: continue
-            loc_id = npc.localizacao_atual_id
-            if loc_id not in por_local: por_local[loc_id] = []
-            por_local[loc_id].append(npc)
-            
-        for loc_id, lista in por_local.items():
-            if len(lista) >= 2:
-                if random.random() < 0.3:
-                    n1, n2 = random.sample(lista, 2)
-                    if n1.id != n2.id:
-                        self.gerar_evento_interacao(n1, n2, loc_id)
 
-    def gerar_evento_interacao(self, n1: NPC, n2: NPC, loc_id: str):
-        local_nome = self.locais[loc_id].nome if loc_id in self.locais else loc_id
-        
-        # Lógica de Afinidade
-        mod = random.choice([-5, 5, 10])
-        nova_afinidade = n1.relacionamentos.get(n2.id, 0) + mod
-        
-        n1.relacionamentos[n2.id] = nova_afinidade
-        n2.relacionamentos[n1.id] = nova_afinidade
-        
-        # Determinar Vínculo
-        vinculo = "Conhecido"
-        if nova_afinidade >= 70: vinculo = "Aliado"
-        elif nova_afinidade >= 30: vinculo = "Amigo"
-        elif nova_afinidade < -20: vinculo = "Rival"
-        elif nova_afinidade < -50: vinculo = "Inimigo"
-
-        # Salvar na tabela oficial de relacionamentos
-        self.db.salvar_relacionamento(n1.id, n2.id, nova_afinidade, vinculo)
-
-        tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
-        resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
-        dia = (self.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {self.data_simulada.strftime('%H:%M')}"
-        
-        evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}", 
-                        timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
-        
-        self.db.salvar_evento(evento)
-        print(f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})")
 

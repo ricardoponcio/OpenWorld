@@ -1,3 +1,9 @@
+"""
+SCRIPT: cartographer.py
+FUNÇÃO: Mestre de Coordenadas e Geometria do Mundo.
+DESCRIÇÃO: Gerencia o posicionamento espacial de casas e locais, garantindo que 
+           novas construções não se sobreponham e respeitem o layout da vila.
+"""
 import random
 import json
 

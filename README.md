@@ -1,69 +1,60 @@
-# OpenWorld Engine (MVP)
+# 🌍 OpenWorld Engine: Autonomous City Simulation
 
-Motor de simulação de mundo autônomo e emergente para suporte a RPG de mesa. Esta engine utiliza uma abordagem híbrida: lógica matemática para o dia-a-dia (Utility AI) e Inteligência Artificial (Ollama) para geração de conteúdo e lore.
+OpenWorld é um motor de simulação de mundo autônomo e emergente projetado para suporte a RPG de mesa e mundos persistentes. A engine combina **Utility AI** (lógica matemática para decisões) com **Inteligência Artificial Generativa** (LLMs locais via Ollama) para criar uma experiência onde habitantes vivem, trabalham e interagem de forma independente.
 
-## 🚀 Como Executar
+## 🚀 Estado Atual: Reabilitação Urbana (v8.0)
 
-1. Certifique-se de que o **Ollama** está rodando localmente.
-2. Certifique-se de ter o modelo `qwen2.5-coder:7b` instalado:
-   ```bash
-   ollama pull qwen2.5-coder:7b
-   ```
-3. Execute o motor principal:
-   ```bash
-   python3 run_simulation.py
-   ```
+O projeto superou desafios críticos de corrupção de dados e arquitetura, estabelecendo uma base sólida de persistência e matchmaking profissional.
+
+### Funcionalidades Implementadas:
+*   **Ciclo de Vida Autônomo**: NPCs gerenciam energia, fome e socialização através de uma Utility AI de 15 minutos (ticks).
+*   **Mercado de Trabalho Inteligente (JobMarket)**: Sistema de contratação que vincula NPCs a locais de trabalho baseados em especializações técnicas.
+*   **Mapeamento Semântico (Tradução IA)**: Tabela de tradução que permite à IA criar nomes criativos (ex: "Taberna do Dragão") e ao sistema entender que ali há vagas para a categoria funcional "social".
+*   **Persistência Híbrida**: Sincronização em tempo real entre o estado em memória (RAM) e o banco de dados (SQLite), garantindo que nenhuma mudança do mundo se perca entre os ticks.
+*   **Rede de Segurança Habitacional**: Protocolo automático para evitar NPCs desalojados ou presos em coordenadas nulas (0,0).
+*   **Geração de Conteúdo via IA**: Nomes, profissões e descrições de locais gerados dinamicamente para manter a imersão.
 
 ---
 
-## 🐍 Tutorial: Ambiente Virtual (venv)
+## 🏗️ Como Iniciar o Mundo
 
-Como prometido, aqui está o guia rápido para você nunca mais esquecer como isolar seu ambiente Python no Linux.
+### 1. Requisitos
+*   **Python 3.10+**
+*   **Ollama** rodando localmente com o modelo `qwen2.5-coder:7b` (ou similar).
 
-### 1. Instalar o suporte ao venv (se necessário)
-No Ubuntu, às vezes o módulo de venv não vem por padrão. Se o comando de criação falhar, execute:
+### 2. Reset e Construção (Recomendado para novos mundos)
+Para criar um novo mundo com 15 habitantes gerados por IA e infraestrutura base:
 ```bash
-sudo apt update
-sudo apt install python3-venv
+./builder/reset_world.sh
 ```
 
-### 2. Criar o ambiente virtual
-Dentro da pasta do projeto (`OpenWorld`), execute:
+### 3. Rodar a Simulação
 ```bash
-python3 -m venv venv
-```
-*Isso criará uma pasta chamada `venv` com uma cópia isolada do Python.*
-
-### 3. Ativar o ambiente
-Sempre que for trabalhar no projeto, você precisa "entrar" no ambiente:
-```bash
-source venv/bin/activate
-```
-*Dica: Seu terminal geralmente mostrará `(venv)` no início da linha para indicar que está ativo.*
-
-### 4. Dependências
-Atualmente, a engine utiliza apenas bibliotecas nativas do Python (Standard Library), então **não é necessário instalar nada via pip** para rodar o motor básico. Basta ter o Ollama rodando localmente.
-
-
-### 5. Desativar
-Quando terminar de trabalhar e quiser voltar ao Python global do sistema:
-```bash
-deactivate
+python3 run_simulation.py
 ```
 
 ---
 
-## 📂 Estrutura do Projeto
+## 📂 Estrutura do Ecossistema
 
-- `run_simulation.py`: Loop principal e lógica de tempo (Time Ticks).
-- `world_state.py`: Modelos de dados (NPC, Local, Eventos) e lógica de Utility AI.
-- `npc_generator.py`: Integração com Ollama para "dar luz" a novos personagens.
-- `database_manager.py`: Gerenciamento do banco de dados SQLite.
-- `database/`: Pasta onde o estado do mundo é persistido.
+### `engine/` (O Cérebro)
+*   **`core.py`**: Loop principal e motor metabólico dos NPCs.
+*   **`logic.py`**: IA de utilidade e tomada de decisão.
+*   **`market.py`**: Lógica de contratação e matchmaking profissional.
+*   **`database.py`**: Gestão da persistência e mapeamento semântico.
+
+### `builder/` (A Gênese)
+*   **`manager.py`**: Orquestrador inicial do mundo.
+*   **`setup_jobs.py`**: Definidor da economia e profissões.
+*   **`fix/`**: Scripts utilitários para auditoria e reparo rápido do banco.
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
-- **Python 3** (Lógica Core)
-- **Ollama** (Geração de Conteúdo Local)
-- **SQLite** (Persistência de Dados)
+- **Python 3** (Lógica Core e Processamento)
+- **Ollama / LLM** (Geração de Identidades e Narrativa)
+- **SQLite** (Banco de Dados Relacional Persistente)
+- **Bash** (Automação de Infraestrutura)
+
+---
+*OpenWorld: Onde cada pixel tem uma história e cada habitante tem um plano.*

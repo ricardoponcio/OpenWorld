@@ -1,3 +1,10 @@
+"""
+SCRIPT: manager.py
+FUNÇÃO: Orquestrador Principal de Construção de Mundo.
+DESCRIÇÃO: Este script coordena a criação inicial do banco de dados, gera o mapa base, 
+           os locais padrão e invoca o Generator para criar a população.
+USO: python3 builder/manager.py --npcs [QTD] --ia (para geração criativa).
+"""
 import random
 import argparse
 import sys
@@ -72,31 +79,60 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
     for l_data in profissoes_pool:
         coord = mapa_coords.get(l_data['id'], [0, 0])
         loc = Local(id=l_data['id'], nome=l_data['nome'], tipo=l_data['tipo'], 
+                    categoria=l_data.get('categoria', 'publico'),
                     descricao=l_data.get('descricao', f"Local temático de {tema}."), coordenadas=coord)
         db.salvar_local(loc)
 
     # Criar Casas
-    for c_id in casas_ids:
+    for i, c_id in enumerate(casas_ids):
         coord = mapa_coords.get(c_id, [0,0])
-        db.salvar_local(Local(c_id, f"Residência {c_id[-2:]}", "Casa", "Moradia.", coord))
+        db.salvar_local(Local(
+            id=c_id, 
+            nome=f"Residência {i:02d}", 
+            tipo="Casa", 
+            categoria="residencia",
+            descricao="Uma moradia simples.",
+            coordenadas=coord
+        ))
 
     # 3. Gerar NPCs
+    nomes_gerados = []
     for i in range(num_npcs):
+        # Decidir gênero de forma balanceada (Alternado)
+        genero_alvo = 'M' if i % 2 == 0 else 'F'
+
         # NPCs trabalham em locais que não são sociais
         loc_trabalho = random.choice([l for l in profissoes_pool if l['tipo'] != 'Social'])
         casa = random.choice(casas_ids)
         
         dna = None
         if usar_ia:
-            print(f"  🧠 Consultando IA para habitante {i+1} de {tema}...")
-            dna = AIWorldGenerator.generate_npc_dna(tema, loc_trabalho['nome'], loc_trabalho['tipo'])
+            print(f"  🧠 Consultando IA para habitante {i+1} ({genero_alvo}) de {tema}...")
+            dna = AIWorldGenerator.generate_npc_dna(tema, loc_trabalho['nome'], loc_trabalho['tipo'], genero_alvo, nomes_gerados)
         
         if dna:
-            nome = dna.get('nome', f"Npc {i}")
+            nome = dna.get('nome', f"Habitante {i}")
             profissao = dna.get('cargo', f"Trabalhador de {loc_trabalho['nome']}")
+            genero = dna.get('genero', genero_alvo)
         else:
-            nome = f"Habitante {i+1}"
-            profissao = f"Trabalhador de {loc_trabalho['nome']}"
+            # Fallback imersivo
+            prefixo = "Sir" if genero_alvo == 'M' else "Lady"
+            sobrenome = random.choice(["Blackwood", "Thorne", "Stormwind", "Ironfist", "Greycastle", "Oakheart"])
+            nome = f"{prefixo} {random.randint(10, 99)} de {sobrenome}"
+            profissao = f"Auxiliar de {loc_trabalho['nome']}"
+            genero = genero_alvo
+        
+        nomes_gerados.append(nome)
+
+
+
+        # Sorteia idade inicial (18 a 65 anos) e calcula data_nascimento (começo em 1200)
+        idade_inicial = random.randint(18, 65)
+        ano_nasc = 1200 - idade_inicial
+        mes_nasc = random.randint(1, 12)
+        dia_nasc = random.randint(1, 28)
+        data_nascimento = f"{ano_nasc:04d}-{mes_nasc:02d}-{dia_nasc:02d}T00:00:00"
+        estagio_vida = "adulto" if idade_inicial <= 50 else "idoso"
 
         npc = NPC(
             id=f"npc_{i:03d}",
@@ -105,10 +141,14 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
             casa_id=casa,
             local_trabalho_id=loc_trabalho['id'],
             localizacao_atual_id=casa,
-            dinheiro_total_pc=random.randint(200, 2000)
+            dinheiro_total_pc=random.randint(200, 2000),
+            genero=genero,
+            data_nascimento=data_nascimento,
+            estagio_vida=estagio_vida
         )
         db.salvar_npc(npc)
-        print(f"  ✅ Gerado: {nome} | Atuação: {profissao}")
+        print(f"  ✅ Gerado: {nome} ({genero}) | Idade: {idade_inicial} anos ({estagio_vida}) | Atuação: {profissao}")
+
 
 
 

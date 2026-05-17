@@ -1,3 +1,9 @@
+"""
+SCRIPT: generator.py
+FUNÇÃO: Gerador de Identidades e Personagens.
+DESCRIÇÃO: Interface direta com a IA para criar nomes, backgrounds e atributos 
+           para os habitantes, transformando 'NPCs' em personagens com história.
+"""
 import json
 import urllib.request
 import re
@@ -35,19 +41,46 @@ class AIWorldGenerator:
             return None
 
     @staticmethod
-    def generate_npc_dna(tema: str, loc_nome: str, loc_tipo: str) -> Optional[Dict]:
-        """Gera um DNA único e um CARGO específico para o local."""
+    def ask_ai(prompt: str) -> str:
+        """Método genérico para consultar a IA."""
+        payload = {
+            "model": MODEL_NAME,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False
+        }
+        try:
+            req = urllib.request.Request(OLLAMA_URL, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                res = json.loads(response.read().decode('utf-8'))
+                return res['message']['content']
+        except Exception as e:
+            return f"Erro na IA: {e}"
+
+    @staticmethod
+    def generate_npc_dna(tema: str, loc_nome: str, loc_tipo: str, genero: str = 'M', nomes_excluidos: list = None) -> Optional[Dict]:
+        """Gera um DNA único evitando nomes repetidos."""
+        nomes_str = ", ".join(nomes_excluidos) if nomes_excluidos else "Nenhum"
+        gen_ext = "MASCULINO" if genero == 'M' else "FEMININO"
+        
         prompt = f"""
-        Crie um habitante para um mundo com o tema: {tema}.
-        Este habitante trabalha no local: {loc_nome} (Tipo: {loc_tipo}).
+        Você é um mestre de RPG. Crie um habitante único para um mundo '{tema}'.
+        REGRAS CRÍTICAS:
+        1. Gênero OBRIGATÓRIO: {gen_ext}.
+        2. NOME ÚNICO: Não use nomes da lista: [{nomes_str}].
+        3. Local de Trabalho: {loc_nome} ({loc_tipo}).
         
         Retorne um JSON com:
-        - nome: Nome completo.
+        - nome: Nome e Sobrenome inéditos.
+        - genero: Retorne exatamente '{genero}'.
         - raca: Raça condizente.
+
+
+
         - cargo: Um cargo específico (Ex: Mestre Ferreiro, Aprendiz, Guarda, Alquimista).
         - personalidade: Uma frase.
         - background: Uma frase.
         """
+
 
         
         payload = {
