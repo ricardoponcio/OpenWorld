@@ -15,7 +15,8 @@ class NPCReproductionManager:
         for npc in engine.npcs:
             if not npc.casa_id:
                 continue
-            if npc.acao_atual != Acao.DORMIR:
+            # Verifica apenas se estão na mesma casa de madrugada, independente se estão dormindo ou ociosos
+            if npc.localizacao_atual_id != npc.casa_id:
                 continue
             if npc.casa_id not in por_casa:
                 por_casa[npc.casa_id] = []
@@ -123,7 +124,7 @@ class NPCReproductionManager:
             data_nascimento=engine.data_simulada.isoformat(),
             pai_id=pai.id if pai else "",
             mae_id=mae.id,
-            genealogia=[pai.id, mae.id] if pai else [mae.id],
+            genealogia=list(set((pai.genealogia if pai else []) + mae.genealogia + ([pai.id, mae.id] if pai else [mae.id]))),
             relacionamentos={},
             memoria_eventos=[]
         )

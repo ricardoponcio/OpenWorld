@@ -44,6 +44,10 @@ class NPCSocialManager:
                 # Verificar se n2 já tem um parceiro 
                 if NPCUtils.tem_conjuge(n2):
                     continue
+                    
+                # Impedir incesto (não podem ser parentes diretos)
+                if NPCUtils.sao_parentes(n1, n2):
+                    continue
                 
                 # Verificar afinidade
                 afinidade = n1.relacionamentos.get(n2.id, 0)
@@ -137,8 +141,10 @@ class NPCSocialManager:
             if n1.genero != n2.genero and n1.casa_id != n2.casa_id:
                 # Verificar se já são comprometidos
                 if not NPCUtils.tem_conjuge(n1) and not NPCUtils.tem_conjuge(n2):
-                    cfg_bio = engine.config.get("biologia_e_sociedade", {})
-                    limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
+                    # Impedir incesto aqui também
+                    if not NPCUtils.sao_parentes(n1, n2):
+                        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+                        limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
                     if nova_afinidade >= limiar_uniao:
                         # Chance de 15% de decidir morar junto durante a conversa real
                         if random.random() < 0.15:

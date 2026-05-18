@@ -59,3 +59,28 @@ class NPCUtils:
         """
         from .models import EstadoCivil
         return npc.estado_civil == EstadoCivil.CASADO.value and npc.conjuge_id != ""
+
+    @staticmethod
+    def sao_parentes(n1: NPC, n2: NPC) -> bool:
+        """
+        Verifica se dois NPCs são parentes diretos (pais, filhos, ou irmãos)
+        para impedir casamentos incestuosos.
+        """
+        # Verifica se n1 é pai/mãe de n2
+        if n1.id in n2.genealogia or n1.id == n2.pai_id or n1.id == n2.mae_id:
+            return True
+        # Verifica se n2 é pai/mãe de n1
+        if n2.id in n1.genealogia or n2.id == n1.pai_id or n2.id == n1.mae_id:
+            return True
+            
+        # Verifica se são irmãos (possuem pais em comum que não sejam nulos)
+        pais_n1 = set(n1.genealogia + ([n1.pai_id, n1.mae_id]))
+        pais_n1.discard("")
+        
+        pais_n2 = set(n2.genealogia + ([n2.pai_id, n2.mae_id]))
+        pais_n2.discard("")
+        
+        if len(pais_n1.intersection(pais_n2)) > 0:
+            return True
+            
+        return False
