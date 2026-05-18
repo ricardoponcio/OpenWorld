@@ -1,6 +1,6 @@
 import time
 from engine.core import SimulationEngine
-from engine.mechanics import JobMarket
+from engine.mechanics import JobMarket, InfrastructureManager
 
 def start_simulation():
     engine = SimulationEngine()
@@ -17,8 +17,6 @@ def start_simulation():
     ticks = 0
     try:
         while True:
-            # Verificar se a simulação está pausada
-
             status_pausa = engine.db.carregar_meta("simulacao_pausada")
             v_str = engine.db.carregar_meta("velocidade_simulacao")
             velocidade = float(v_str) if v_str else 1.0
@@ -30,18 +28,22 @@ def start_simulation():
 
             engine.tick()
             ticks += 1
+
+            # A cada 20 ticks (~5h jogo): mercado de trabalho e recarga de habitantes
             if ticks % 20 == 0:
                 market.processar_contratacoes()
                 engine.recarregar_habitantes()
 
+            # A cada 96 ticks (1 dia jogo = 96 × 15min): decadência e reparos de infraestrutura
+            if ticks % 96 == 0:
+                InfrastructureManager.processar_desgaste(engine)
+                InfrastructureManager.processar_reparos_espontaneos(engine)
 
             if velocidade > 1.0:
                 print(f"⏩ Velocidade: {velocidade}x")
             time.sleep(espera)
 
-
     except KeyboardInterrupt:
-
         print("\nSimulação pausada. Até logo, Mestre!")
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from datetime import datetime
 from ..models import NPC, Evento, Acao, TipoEvento, EstagioVida, EstadoCivil
 from ..logger import WorldLogger
 from ..utils import NPCUtils
+from ..config_loader import cfg_get
 
 class NPCSocialManager:
     @staticmethod
@@ -11,8 +12,8 @@ class NPCSocialManager:
         # Utiliza o helper para agrupar NPCs por localização
         por_local = NPCUtils.agrupar_npcs_por_localizacao(engine.npcs, ignorar_dormindo=True)
             
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
-        chance_interacao = cfg_bio.get("interacao_chance", 0.5)
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        chance_interacao = cfg_get(cfg_bio, "interacao_chance")
             
         for loc_id, lista in por_local.items():
             if len(lista) >= 2:
@@ -27,7 +28,7 @@ class NPCSocialManager:
     @staticmethod
     def processar_coabitacao(engine):
         """NPCs adultos solteiros que têm alta afinidade podem decidir morar juntos para constituir família."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
         # Chance de união por tick (baixa para ser realista, ex: 2%)
         chance_uniao = 0.02
         
@@ -54,7 +55,7 @@ class NPCSocialManager:
                 
                 # Verificar afinidade
                 afinidade = n1.relacionamentos.get(n2.id, 0)
-                limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
+                limiar_uniao = cfg_get(cfg_bio, "concepcao_afinidade_minima")
                 
                 if afinidade >= limiar_uniao and n1.casa_id != n2.casa_id:
                     if random.random() < chance_uniao:
@@ -110,8 +111,8 @@ class NPCSocialManager:
     def gerar_evento_interacao(engine, n1: NPC, n2: NPC, loc_id: str):
         local_nome = engine.locais[loc_id].nome if loc_id in engine.locais else loc_id
         
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
-        ganhos = cfg_bio.get("interacao_afinidade_ganhos", [-5, 5, 10, 15])
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        ganhos = cfg_get(cfg_bio, "interacao_afinidade_ganhos")
         mod = random.choice(ganhos)
         nova_afinidade = n1.relacionamentos.get(n2.id, 0) + mod
         
@@ -147,8 +148,8 @@ class NPCSocialManager:
                 if not NPCUtils.tem_conjuge(n1) and not NPCUtils.tem_conjuge(n2):
                     # Impedir incesto aqui também
                     if not NPCUtils.sao_parentes(n1, n2):
-                        cfg_bio = engine.config.get("biologia_e_sociedade", {})
-                        limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
+                        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+                        limiar_uniao = cfg_get(cfg_bio, "concepcao_afinidade_minima")
                         if nova_afinidade >= limiar_uniao:
                             # Chance de 15% de decidir morar junto durante a conversa real
                             if random.random() < 0.15:

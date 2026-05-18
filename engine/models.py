@@ -24,10 +24,30 @@ class EstadoCivil(Enum):
     VIUVO = "viuvo"
 
 class CategoriaLocal(Enum):
-    PUBLICO = "publico"
-    COMERCIAL = "comercial"
+    PUBLICO    = "publico"
+    COMERCIAL  = "comercial"
     RESIDENCIA = "residencia"
-    GENERIC = "generic"
+    GENERIC    = "generic"
+
+class TipoLocal(Enum):
+    OFICINA  = "Oficina"
+    CAMPO    = "Campo"
+    MAR      = "Mar"
+    DEFESA   = "Defesa"
+    MAGIA    = "Magia"
+    LOJA     = "Loja"
+    SOCIAL   = "Social"
+    CASA     = "Casa"
+    RUINA    = "Ruina"
+    OUTRO    = "Outro"
+
+class EstadoInfraestrutura(Enum):
+    """Estado qualitativo derivado do campo integridade (0–100)."""
+    CONSERVADO  = "Conservado"   # 100–76
+    DESGASTADO  = "Desgastado"   # 75–51
+    DETERIORADO = "Deteriorado"  # 50–26
+    CRITICO     = "Crítico"      # 25–11
+    RUINA       = "Ruína"        # 10–0
 
 class HumorNPC(Enum):
     NEUTRO = "Neutro"

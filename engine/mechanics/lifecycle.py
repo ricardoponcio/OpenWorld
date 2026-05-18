@@ -3,12 +3,13 @@ import random
 from datetime import datetime
 from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao
 from ..logger import WorldLogger
+from ..config_loader import cfg_get
 
 class NPCLifecycleManager:
     @staticmethod
     def processar_crescimento(engine):
         """Varredura diária para processar o crescimento e transição de estágios de vida dos NPCs."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
         dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
         timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
 
@@ -24,7 +25,7 @@ class NPCLifecycleManager:
                 continue
 
             # Bebê -> Criança
-            limiar_crianca = cfg_bio.get("crescimento_dias_bebe_para_crianca", 1)
+            limiar_crianca = cfg_get(cfg_bio, "crescimento_dias_bebe_para_crianca")
             if npc.estagio_vida == EstagioVida.BEBE.value and idade_dias >= limiar_crianca:
                 npc.estagio_vida = EstagioVida.CRIANCA.value
                 
@@ -44,7 +45,7 @@ class NPCLifecycleManager:
                 engine.db.salvar_npc(npc)
 
             # Criança -> Adulto
-            elif npc.estagio_vida == EstagioVida.CRIANCA.value and idade_dias >= cfg_bio.get("crescimento_dias_crianca_para_adulto", 3):
+            elif npc.estagio_vida == EstagioVida.CRIANCA.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_crianca_para_adulto"):
                 npc.estagio_vida = EstagioVida.ADULTO.value
                 
                 # Procura emprego no mercado de trabalho
@@ -54,7 +55,7 @@ class NPCLifecycleManager:
                     loc_trab = engine.locais[npc.local_trabalho_id]
                     npc.profissao = f"Auxiliar de {loc_trab.nome}"
                 else:
-                    npc.local_trabalho_id = ""
+                    npc.local_trabalho_id = None
                     npc.profissao = "Trabalhador Autônomo"
 
                 resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e assumindo o papel de {npc.profissao}!"
@@ -73,13 +74,12 @@ class NPCLifecycleManager:
                 engine.db.salvar_npc(npc)
 
             # Adulto -> Idoso
-            elif npc.estagio_vida == EstagioVida.ADULTO.value and idade_dias >= cfg_bio.get("crescimento_dias_adulto_para_idoso", 8):
+            elif npc.estagio_vida == EstagioVida.ADULTO.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_adulto_para_idoso"):
                 npc.estagio_vida = EstagioVida.IDOSO.value
                 
-                # Aposentadoria (desvincula do trabalho)
-                if npc.local_trabalho_id:
-                    npc.local_trabalho_id = ""
-                    npc.profissao = "Aposentado(a)"
+                # Aposentadoria — desvincula do trabalho com None (não string vazia)
+                npc.local_trabalho_id = None
+                npc.profissao = "Aposentado(a)"
                 
                 resumo = f"Envelhecimento: {npc.nome} entrou na terceira idade, tornando-se um sábio ancião aposentado da vila!"
                 WorldLogger.info(f"👵 [ENVELHECIMENTO] {resumo}", npc=npc)
@@ -97,7 +97,7 @@ class NPCLifecycleManager:
                 engine.db.salvar_npc(npc)
 
             # Idoso -> Morto por Velhice
-            elif npc.estagio_vida == EstagioVida.IDOSO.value and idade_dias >= cfg_bio.get("crescimento_dias_idoso_para_morte", 12):
+            elif npc.estagio_vida == EstagioVida.IDOSO.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte"):
                 npc.saude = 0
                 NPCLifecycleManager.processar_morte(engine, npc)
 
@@ -113,8 +113,8 @@ class NPCLifecycleManager:
         idade_anos = 0
         if npc.data_nascimento:
             try:
-                cfg_bio = engine.config.get("biologia_e_sociedade", {})
-                limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 12)
+                cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+                limiar_morte = cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte")
                 
                 dt_str = npc.data_nascimento.replace(' ', 'T')
                 birth = datetime.fromisoformat(dt_str)

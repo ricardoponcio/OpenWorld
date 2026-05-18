@@ -1,16 +1,19 @@
 import time
 import random
+import threading
+import sqlite3
 from datetime import datetime
 from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao
 from ..logger import WorldLogger
 from ..utils import NPCUtils
 from ..ai import AIBiographyClient
+from ..config_loader import cfg_get
 
 class NPCReproductionManager:
     @staticmethod
     def processar_concepcao(engine):
         """Varredura noturna para concepção em casais que dividem a mesma casa e têm alta afinidade."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
         por_casa = NPCUtils.agrupar_por_casa(engine.npcs)
             
         for casa_id, moradores in por_casa.items():
@@ -26,12 +29,12 @@ class NPCReproductionManager:
             for h in homens:
                 for m in mulheres:
                     afinidade = h.relacionamentos.get(m.id, 0)
-                    afinidade_minima = cfg_bio.get("concepcao_afinidade_minima", 80)
+                    afinidade_minima = cfg_get(cfg_bio, "concepcao_afinidade_minima")
                     if afinidade >= afinidade_minima:
                         # Sorteio de probabilidade de gravidez
-                        chance_gravidez = cfg_bio.get("concepcao_chance", 0.20)
+                        chance_gravidez = cfg_get(cfg_bio, "concepcao_chance")
                         if random.random() < chance_gravidez:
-                            m.gravidez_ticks = cfg_bio.get("gravidez_duracao_ticks", 192)
+                            m.gravidez_ticks = cfg_get(cfg_bio, "gravidez_duracao_ticks")
                             engine.db.salvar_npc(m)
                             
                             # Registrar evento de concepção
@@ -57,7 +60,7 @@ class NPCReproductionManager:
     @staticmethod
     def processar_parto(engine, mae: NPC):
         """Processa o nascimento de um bebê de uma NPC gestante."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
         # 1. Encontrar o pai (o morador masculino com quem a mãe tem maior afinidade)
         pai = None
         moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, mae.casa_id, apenas_vivos=True)
@@ -123,7 +126,7 @@ class NPCReproductionManager:
         )
         
         # 4. Atualizar relacionamentos dos pais com o bebê
-        afinidade_inicial = cfg_bio.get("parto_afinidade_inicial_pais", 100)
+        afinidade_inicial = cfg_get(cfg_bio, "parto_afinidade_inicial_pais")
         mae.relacionamentos[bebe_id] = afinidade_inicial
         novo_bebe.relacionamentos[mae.id] = afinidade_inicial
         if pai:
@@ -170,9 +173,6 @@ class NPCReproductionManager:
         Dispara uma thread separada para gerar o nome do bebê via IA
         e atualizar o banco de dados e a memória em execução de forma assíncrona.
         """
-        import threading
-        import sqlite3
-
         def batizar_bebe_thread():
             try:
                 # 1. Consulta o LLM em background (sem travar os ticks principais)

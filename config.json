@@ -71,5 +71,30 @@
         "pensao_aposentadoria": 40,
         "fornecer_sopao": true,
         "custo_sopao_ao_reino": 5
+    },
+    "infraestrutura": {
+        "_comentario": "Sistema de decadência e manutenção de construções. Valores de integridade em pontos (0-100).",
+        "limiar_desgastado": 75,
+        "limiar_deteriorado": 50,
+        "limiar_critico": 25,
+        "limiar_ruina": 10,
+        "desgaste_por_tipo": {
+            "Oficina": 0.30,
+            "Campo":   0.20,
+            "Mar":     0.25,
+            "Defesa":  0.15,
+            "Magia":   0.20,
+            "Loja":    0.20,
+            "Social":  0.10,
+            "Casa":    0.15
+        },
+        "desgaste_padrao": 0.20,
+        "desgaste_por_excedente": 0.10,
+        "custo_reparo_espontaneo": 30,
+        "reparo_integridade_ganho": 8,
+        "chance_reparo_espontaneo": 0.08,
+        "chance_log_deteriorado": 0.10,
+        "chance_log_desgastado": 0.05,
+        "energia_minima_reparo": 50
     }
 }

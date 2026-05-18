@@ -1,16 +1,15 @@
 import time
 import random
 import sqlite3
+import json
+import os
 from datetime import datetime, timedelta
 from .models import NPC, Local, Evento, Acao, EstagioVida, HumorNPC, TipoEvento
-
 from .mechanics import NPCBrain, NPCBiologyManager, NPCLegacyManager, NPCSocialManager, NPCActionManager, NPCHousingManager, KingdomManager
 from .database import DatabaseManager
 from .logger import WorldLogger
 from .utils import NPCUtils
-
-import json
-import os
+from .config_loader import cfg_get
 
 class SimulationEngine:
     def __init__(self, db_path="database/openworld.db"):
@@ -73,9 +72,9 @@ class SimulationEngine:
             conn.commit()
             conn.close()
 
-        cfg_bio = self.config.get("biologia_e_sociedade", {})
-        concepcao_h = cfg_bio.get("concepcao_hora", 3)
-        crescimento_h = cfg_bio.get("crescimento_hora", 4)
+        cfg_bio = cfg_get(self.config, "biologia_e_sociedade")
+        concepcao_h  = cfg_get(cfg_bio, "concepcao_hora")
+        crescimento_h = cfg_get(cfg_bio, "crescimento_hora")
 
         # 0.5. Concepção Noturna
         if self.data_simulada.hour == concepcao_h and self.data_simulada.minute == 0:
@@ -106,8 +105,8 @@ class SimulationEngine:
             
             # Se for gestante, aumenta consumo de comida e reduz drástica de energia
             if npc.genero == 'F' and npc.gravidez_ticks > 0:
-                mult_energia = cfg_bio.get("gravidez_multiplicador_perda_energia", 2.0)
-                mult_fome = cfg_bio.get("gravidez_multiplicador_ganho_fome", 1.5)
+                mult_energia = cfg_get(cfg_bio, "gravidez_multiplicador_perda_energia")
+                mult_fome    = cfg_get(cfg_bio, "gravidez_multiplicador_ganho_fome")
                 energia_perda *= mult_energia
                 fome_ganho *= mult_fome
                 
@@ -144,12 +143,12 @@ class SimulationEngine:
 
             # 4. Lógica Biológica (Saúde e Morte)
             if npc.fome > 90:
-                perda_saude = cfg_bio.get("inaniacao_perda_saude", 5)
+                perda_saude = cfg_get(cfg_bio, "inaniacao_perda_saude")
                 npc.saude -= perda_saude
                 WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})", npc=npc)
             elif npc.fome < 20 and npc.acao_atual == Acao.DORMIR:
                 if npc.saude < 100:
-                    ganho_saude = cfg_bio.get("dormir_ganho_saude", 2)
+                    ganho_saude = cfg_get(cfg_bio, "dormir_ganho_saude")
                     npc.saude = min(100, npc.saude + ganho_saude)
 
             # Garantir limites

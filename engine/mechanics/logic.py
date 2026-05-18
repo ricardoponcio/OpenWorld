@@ -1,5 +1,6 @@
 import json
 from ..models import Acao, NPC, HumorNPC
+from ..config_loader import cfg_get
 from typing import Dict, List
 
 class NPCBrain:
@@ -62,7 +63,7 @@ class NPCBrain:
             utilidades[Acao.SOCIALIZAR] = (100 - npc.social) * 1.5
             
         # Debuff de Socialização se estiver pobre, a menos que existam locais públicos/gratuitos (praças/parques) no mundo
-        limiar_pobreza = cfg.get("limiar_pobreza_pc", 50)
+        limiar_pobreza = cfg_get(cfg, "limiar_pobreza_pc")
         if npc.dinheiro_total_pc < limiar_pobreza:
             from ..utils import LocationUtils
             tem_local_gratis = False

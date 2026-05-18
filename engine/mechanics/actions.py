@@ -3,14 +3,15 @@ from ..models import NPC, Acao, EstagioVida, HumorNPC
 from ..logger import WorldLogger
 from .movement import NPCMovementManager
 from ..utils import NPCUtils, LocationUtils
+from ..config_loader import cfg_get
 from .kingdom import KingdomManager
 
 class NPCActionManager:
     @staticmethod
     def executar_acao(engine, npc: NPC):
         """Orquestra e delega a execução da ação atual do NPC."""
-        cfg_acoes = engine.config.get("acoes", {})
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_acoes = cfg_get(engine.config, "acoes")
+        cfg_bio   = cfg_get(engine.config, "biologia_e_sociedade")
         
         acao = npc.acao_atual
         
@@ -33,17 +34,15 @@ class NPCActionManager:
     def _executar_dormir(engine, npc: NPC, cfg_acoes: dict):
         NPCMovementManager.mover_para_casa(engine, npc)
         
-        cfg = cfg_acoes.get("dormir", {})
-        # Restaura energia
-        npc.energia += cfg.get("energia_ganho", 5.0)
+        cfg = cfg_get(cfg_acoes, "dormir")
+        npc.energia += cfg_get(cfg, "energia_ganho")
         if npc.energia > 100.0:
             npc.energia = 100.0
             
-        # Acorda se estiver com energia cheia e não for sono obrigatório
         hora = engine.data_simulada.hour
-        cfg_dec = engine.config.get("ia_decisao", {})
-        sono_obrigatorio = (hora >= cfg_dec.get("hora_inicio_sono_obrigatorio", 22) or 
-                            hora < cfg_dec.get("hora_fim_sono_obrigatorio", 8))
+        cfg_dec = cfg_get(engine.config, "ia_decisao")
+        sono_obrigatorio = (hora >= cfg_get(cfg_dec, "hora_inicio_sono_obrigatorio") or 
+                            hora <  cfg_get(cfg_dec, "hora_inicio_trabalho"))
         
         if npc.energia >= 85.0 and not sono_obrigatorio:
             npc.acao_atual = Acao.OCIOSO
@@ -53,9 +52,9 @@ class NPCActionManager:
     def _executar_comer(engine, npc: NPC, cfg_acoes: dict, cfg_bio: dict):
         NPCMovementManager.mover_para_restaurante(engine, npc)
 
-        cfg = cfg_acoes.get("comer", {})
-        custo_base = cfg.get("custo_pc", 15)
-        fome_rec_max = cfg.get("fome_perda", 40.0)
+        cfg = cfg_get(cfg_acoes, "comer")
+        custo_base   = cfg_get(cfg, "custo_pc")
+        fome_rec_max = cfg_get(cfg, "fome_perda")
         pc_por_fome = custo_base / fome_rec_max
         
         pagador = npc
@@ -86,7 +85,7 @@ class NPCActionManager:
         # Comer progressivo (a refeição inteira leva 3 ticks de 15 minutos = 45 minutos)
         custo_do_tick = max(1, int(custo_final / 3.0))
         fome_rec_do_tick = fome_rec_max / 3.0
-        energia_ganho_do_tick = cfg.get("energia_ganho", 5.0) / 3.0
+        energia_ganho_do_tick = cfg_get(cfg, "energia_ganho") / 3.0
         
         if pagador.dinheiro_total_pc >= custo_do_tick:
             npc.fome -= fome_rec_do_tick
@@ -130,9 +129,9 @@ class NPCActionManager:
             
         NPCMovementManager.mover_para_trabalho(engine, npc)
         
-        cfg = cfg_acoes.get("trabalhar", {})
-        salario = cfg.get("salario_pc", 5)
-        perda_energia = cfg.get("energia_perda", 1.8)
+        cfg = cfg_get(cfg_acoes, "trabalhar")
+        salario       = cfg_get(cfg, "salario_pc")
+        perda_energia = cfg_get(cfg, "energia_perda")
         
         npc.energia -= perda_energia
         npc.dinheiro_total_pc += salario
@@ -144,8 +143,8 @@ class NPCActionManager:
     def _executar_socializar(engine, npc: NPC, cfg_acoes: dict):
         NPCMovementManager.mover_para_local_social(engine, npc)
         
-        cfg = cfg_acoes.get("socializar", {})
-        custo = cfg.get("custo_pc", 20)
+        cfg  = cfg_get(cfg_acoes, "socializar")
+        custo = cfg_get(cfg, "custo_pc")
         
         local_atual = engine.locais.get(npc.localizacao_atual_id)
         custo_real = custo

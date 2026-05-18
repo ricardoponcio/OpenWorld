@@ -1,6 +1,7 @@
 import random
 from ..models import NPC, Acao
 from ..logger import WorldLogger
+from ..config_loader import cfg_get
 
 class NPCMovementManager:
     @staticmethod
@@ -71,8 +72,8 @@ class NPCMovementManager:
             NPCMovementManager.mover_para_casa(engine, npc)
         elif sociais:
             # NPCs com menos de limiar_pobreza dão preferência a locais públicos/gratuitos (praças, parques, arenas, etc.)
-            cfg_dec = engine.config.get("ia_decisao", {})
-            limiar_pobreza = cfg_dec.get("limiar_pobreza_pc", 50)
+            cfg_dec = cfg_get(engine.config, "ia_decisao")
+            limiar_pobreza = cfg_get(cfg_dec, "limiar_pobreza_pc")
             
             if npc.dinheiro_total_pc < limiar_pobreza:
                 sociais_gratuitos = [

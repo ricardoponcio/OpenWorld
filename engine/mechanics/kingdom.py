@@ -1,12 +1,13 @@
 from ..models import NPC, EstagioVida
 from ..logger import WorldLogger
+from ..config_loader import cfg_get
 
 class KingdomManager:
     @staticmethod
     def processar_pagamentos_reino(engine):
         """Varredura diária (ex: 08:00) para pagar aposentadorias do reino aos idosos."""
-        cfg_reino = engine.config.get("reino", {})
-        pensao_diaria = cfg_reino.get("pensao_aposentadoria", 40)  # Pagamento diário
+        cfg_reino = cfg_get(engine.config, "reino")
+        pensao_diaria = cfg_get(cfg_reino, "pensao_aposentadoria")
         
         pagos = 0
         for npc in engine.npcs:
@@ -20,8 +21,8 @@ class KingdomManager:
     @staticmethod
     def fornecer_sopao(engine, npc: NPC, fome_rec_do_tick: float, energia_ganho_do_tick: float):
         """Fornece alimento gratuito para cidadãos na miséria."""
-        cfg_reino = engine.config.get("reino", {})
-        if not cfg_reino.get("fornecer_sopao", True):
+        cfg_reino = cfg_get(engine.config, "reino")
+        if not cfg_get(cfg_reino, "fornecer_sopao"):
             return False
             
         # Permitir sopão se o NPC for idoso OU se estiver em extrema miséria e fome (> 60) sem dinheiro
@@ -35,3 +36,4 @@ class KingdomManager:
         if engine.tick_count % 4 == 0:
             WorldLogger.info(f"🍲 [SOPÃO COMUNITÁRIO] O reino forneceu um sopão para {npc.nome}, evitando a inanição.", npc=npc)
         return True
+

@@ -5,27 +5,26 @@ from ..models import NPC, Evento, Acao, EstagioVida, TipoEvento
 from ..logger import WorldLogger
 from ..utils import NPCUtils
 
+from ..config_loader import cfg_get
+
 class NPCLegacyManager:
     @staticmethod
     def processar_heranca(engine, npc: NPC, timestamp_rpg: str):
         """Processa o testamento e a herança financeira de um NPC recém-falecido."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
         
-        # --- Testamento Automático (Herança) ---
         herdeiros = []
-        # 1. Procurar filhos vivos em qualquer lugar do mundo
         for n in engine.npcs:
             if n.esta_vivo() and (n.mae_id == npc.id or n.pai_id == npc.id):
                 herdeiros.append(n)
                 
-        # 2. Se não houver filhos vivos, procurar parceiro/cônjuge na mesma casa com alta afinidade
         if not herdeiros and npc.casa_id:
             parceiros = []
             moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, npc.casa_id, apenas_vivos=True)
             for n in moradores:
                 if n.id != npc.id:
                     afinidade = npc.relacionamentos.get(n.id, 0)
-                    limiar_conjuge = cfg_bio.get("heranca_afinidade_minima_conjuge", 50)
+                    limiar_conjuge = cfg_get(cfg_bio, "heranca_afinidade_minima_conjuge")
                     if afinidade >= limiar_conjuge:
                         parceiros.append((n, afinidade))
             if parceiros:
@@ -50,7 +49,7 @@ class NPCLegacyManager:
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id] + [h.id for h in herdeiros],
                     tipo_evento=TipoEvento.HERANCA.value,
-                    modificador_afinidade=cfg_bio.get("heranca_evento_modificador_afinidade", 10),
+                    modificador_afinidade=cfg_get(cfg_bio, "heranca_evento_modificador_afinidade"),
                     resumo_estruturado=resumo_heranca
                 )
                 engine.db.salvar_evento(evt_heranca)

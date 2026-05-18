@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import queue
 import threading
+from .config_loader import cfg_get
 
 class WorldLogger:
     _logger = None
@@ -66,7 +67,8 @@ class WorldLogger:
                     import json
                     with open(config_path, "r", encoding="utf-8") as f:
                         cfg = json.load(f)
-                    WorldLogger._npc_logging_enabled = cfg.get("salvar_logs_npc_no_banco", True)
+                    # default=True: fallback de sistema — logger não deve parar a simulação
+                    WorldLogger._npc_logging_enabled = cfg_get(cfg, "salvar_logs_npc_no_banco", default=True)
                 else:
                     WorldLogger._npc_logging_enabled = True
             except Exception:
