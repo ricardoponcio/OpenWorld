@@ -65,6 +65,8 @@
         "inaniacao_perda_saude": 5,
         "dormir_ganho_saude": 2,
         "interacao_chance": 0.5,
+        "casamento_chance_coabitacao": 0.02,
+        "casamento_chance_romance_fisico": 0.15,
         "interacao_afinidade_ganhos": [-5, 5, 10, 15]
     },
     "reino": {

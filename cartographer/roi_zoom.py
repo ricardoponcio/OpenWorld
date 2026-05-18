@@ -15,6 +15,11 @@ import json
 import os
 import numpy as np
 from cartographer.math import NoiseGenerator, ClimateProcessor
+try:
+    from scipy.ndimage import zoom as scipy_zoom
+except ImportError:
+    scipy_zoom = None
+
 
 
 class ROIZoomGenerator:
@@ -139,15 +144,13 @@ class ROIZoomGenerator:
 
         Usa scipy se disponível (melhor qualidade), cai em numpy puro via zoom.
         """
-        try:
-            from scipy.ndimage import zoom as scipy_zoom
-
+        if scipy_zoom is not None:
             # Fatores de escala por eixo (H e W) — canal 4 não é redimensionado
             fh = target_h / crop.shape[0]
             fw = target_w / crop.shape[1]
             # order=1 → interpolação bilinear
             return scipy_zoom(crop, (fh, fw, 1), order=1).astype(np.float32)
-        except ImportError:
+        else:
             # Fallback manual sem scipy
             out = np.zeros((target_h, target_w, crop.shape[2]), dtype=np.float32)
             for c in range(crop.shape[2]):

@@ -15,12 +15,55 @@ CORREÇÕES APLICADAS:
 """
 import time
 import random
-from ..models import Acao, Local, TipoLocal, CategoriaLocal
+import json
+from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
 from ..utils import NPCUtils
+from ..world.cartographer import Cartographer
 
 
 class NPCHousingManager:
+    @staticmethod
+    def iniciar_obra_para_casal(engine, n1: NPC, n2: NPC = None) -> bool:
+        """
+        Cria uma nova obra de residência alocada no mapa para o casal especificado.
+        Reutilizável para expansão urbana e novos casamentos.
+        """
+        # Evita duplicar se já possui obra ativa em andamento
+        if NPCUtils.obter_obra_do_npc(engine.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(engine.locais, n2)):
+            return False
+
+        grid_json = engine.db.carregar_meta("mapa_terreno")
+        if not grid_json:
+            return False
+
+        carto = Cartographer()
+        carto.grid = json.loads(grid_json)
+
+        nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
+        coords = carto.assign_coordinates([nova_obra_id])
+        if nova_obra_id not in coords:
+            return False
+
+        engine.db.salvar_meta("mapa_terreno", carto.export_map())
+
+        sobrenome = n1.nome.split()[-1]
+
+        obra = Local(
+            id=nova_obra_id,
+            nome=f"Obra de {sobrenome}",
+            tipo=TipoLocal.CASA.value,
+            categoria=CategoriaLocal.RESIDENCIA.value,
+            descricao=f"Dono: {n1.id}",
+            coordenadas=coords[nova_obra_id],
+            status=0,
+            integridade=0,
+            capacidade=5,
+        )
+        engine.locais[nova_obra_id] = obra
+        engine.db.salvar_local(obra)
+        return True
+
     @staticmethod
     def processar_habitacao(engine):
         """
@@ -50,6 +93,13 @@ class NPCHousingManager:
             if not casais:
                 continue
 
+            # Ordenar casais pelo mais jovem (data de nascimento mais recente) usando o helper centralizado
+            casais.sort(key=NPCUtils.obter_data_nascimento_valida, reverse=True)
+
+            # Escolhe o casal mais jovem disponível
+            n1 = casais[0]
+            n2 = next((m for m in moradores if m.id == n1.conjuge_id), None)
+
             # Bug B: se QUALQUER morador já tem obra em andamento, não disparar nova obra
             ja_ha_obra = any(
                 NPCUtils.obter_obra_do_npc(engine.locais, m) is not None
@@ -58,45 +108,12 @@ class NPCHousingManager:
             if ja_ha_obra:
                 continue
 
-            # Escolhe o primeiro casal adulto disponível
-            n1 = casais[0]
-            n2 = next((m for m in moradores if m.id == n1.conjuge_id), None)
-
-            # Requer o cartógrafo para alocar coordenadas no mapa
-            from ..world.cartographer import Cartographer
-            import json
-
-            grid_json = engine.db.carregar_meta("mapa_terreno")
-            if not grid_json:
-                continue
-
-            carto = Cartographer()
-            carto.grid = json.loads(grid_json)
-
-            nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
-            coords = carto.assign_coordinates([nova_obra_id])
-            if nova_obra_id not in coords:
-                continue
-
-            engine.db.salvar_meta("mapa_terreno", carto.export_map())
-
-            obra = Local(
-                id=nova_obra_id,
-                nome=f"Obra de {n1.nome.split()[-1]}",
-                tipo=TipoLocal.CASA.value,
-                categoria=CategoriaLocal.RESIDENCIA.value,
-                descricao=f"Dono: {n1.id}",
-                coordenadas=coords[nova_obra_id],
-                status=0,
-                integridade=0,
-                capacidade=5,
-            )
-            engine.locais[nova_obra_id] = obra
-            engine.db.salvar_local(obra)
-
-            WorldLogger.info(
-                f"🏗️ [EXPANSÃO URBANA] A família de {n1.nome} iniciou a construção de "
-                f"uma nova casa — superlotação em {casa.nome} "
-                f"({len(moradores)}/{casa.capacidade} moradores).",
-                npc=n1,
-            )
+            # Iniciar a construção da obra usando a função utilitária
+            sucesso = NPCHousingManager.iniciar_obra_para_casal(engine, n1, n2)
+            if sucesso:
+                WorldLogger.info(
+                    f"🏗️ [EXPANSÃO URBANA] A família de {n1.nome} iniciou a construção de "
+                    f"uma nova casa — superlotação em {casa.nome} "
+                    f"({len(moradores)}/{casa.capacidade} moradores).",
+                    npc=n1,
+                )

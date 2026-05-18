@@ -2,7 +2,8 @@ from flask import Blueprint, render_template, jsonify, send_file
 import numpy as np
 import io
 import os
-from cartographer.math import ShadingProcessor, ColoringProcessor
+import json
+from web.helpers import render_npz_map_to_bytes, obter_manifesto, obter_continente_e_caminhos
 
 composed_bp = Blueprint('composed', __name__)
 
@@ -12,99 +13,15 @@ MAPA_COMPOSTO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 def mapa_composto_view():
     return render_template('mapa_composto.html')
 
+
 @composed_bp.route('/api/mapa_composto/imagem')
 def api_mapa_composto_imagem():
     try:
-        if not os.path.exists(MAPA_COMPOSTO_PATH):
-            # Fallback se o mapa composto não existir
-            try:
-                from PIL import Image
-                img = Image.new("RGB", (768, 768), (20, 24, 33))
-                img_io = io.BytesIO()
-                img.save(img_io, 'PNG')
-                img_io.seek(0)
-                return send_file(img_io, mimetype='image/png')
-            except ImportError:
-                transparent_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82'
-                return send_file(io.BytesIO(transparent_png), mimetype='image/png')
-            
-        dados = np.load(MAPA_COMPOSTO_PATH)
-        mapa = dados["mapa"]
-        height, width, _ = mapa.shape
-        
-        biomas = mapa[:, :, 3].astype(int)
-        altitudes = mapa[:, :, 0]
-        nivel_mar = 0.35
-        
-        # 1. Renderiza o oceano dinâmico baseado na profundidade
-        img_rgb = ColoringProcessor.render_ocean(altitudes, nivel_mar=nivel_mar)
-        
-        # 2. Renderizar biomas de terra firme com gradiente de altitude (Verde -> Rocha -> Neve nos picos)
-        mask_terra = (biomas > 1)
-        if np.any(mask_terra):
-            # Normaliza a altitude da terra firme
-            alt_terra_norm = np.clip((altitudes - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
-            
-            # Aplica a interpolação altitudinal de cor para cada bioma de terra
-            for b_id in [2, 3, 4, 5]:
-                mask_b = (biomas == b_id)
-                if np.any(mask_b):
-                    r_c, g_c, b_c = ColoringProcessor.interpolate_land_biome(b_id, alt_terra_norm)
-                    img_rgb[mask_b, 0] = r_c[mask_b]
-                    img_rgb[mask_b, 1] = g_c[mask_b]
-                    img_rgb[mask_b, 2] = b_c[mask_b]
-            
-        # 3. Sombreamento 3D de Relevo (Hillshading) vindo de Noroeste
-        fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, escala_terreno=48.0)
-        
-        # Aplicamos o sombreamento 3D exclusivamente na terra firme para destacar o relevo
-        if np.any(mask_terra):
-            for c in range(3):
-                img_rgb[mask_terra, c] = np.clip(
-                    img_rgb[mask_terra, c] * fator_luz[mask_terra], 
-                    0, 255
-                ).astype(np.uint8)
-            
-        try:
-            from PIL import Image
-            img = Image.fromarray(img_rgb)
-            img_io = io.BytesIO()
-            img.save(img_io, 'PNG')
-            img_io.seek(0)
-            return send_file(img_io, mimetype='image/png')
-        except ImportError:
-            # Gerador de BMP fallback de 24-bits em pura memória Python
-            row_size = (width * 3 + 3) & ~3
-            padding = row_size - width * 3
-            bmp_pixels = bytearray()
-            for y in range(height - 1, -1, -1):
-                row = img_rgb[y]
-                for x in range(width):
-                    r, g, b = row[x]
-                    bmp_pixels.append(b)  # BMP usa BGR
-                    bmp_pixels.append(g)
-                    bmp_pixels.append(r)
-                bmp_pixels.extend([0] * padding)
-                
-            file_size = 54 + len(bmp_pixels)
-            header = bytearray([
-                66, 77,  # BM
-                file_size & 255, (file_size >> 8) & 255, (file_size >> 16) & 255, (file_size >> 24) & 255,
-                0, 0, 0, 0,
-                54, 0, 0, 0,  # Offset
-                40, 0, 0, 0,  # Header size
-                width & 255, (width >> 8) & 255, (width >> 16) & 255, (width >> 24) & 255,
-                height & 255, (height >> 8) & 255, (height >> 16) & 255, (height >> 24) & 255,
-                1, 0,  # Planes
-                24, 0,  # Bits per pixel
-                0, 0, 0, 0,
-                len(bmp_pixels) & 255, (len(bmp_pixels) >> 8) & 255, (len(bmp_pixels) >> 16) & 255, (len(bmp_pixels) >> 24) & 255,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ])
-            return send_file(io.BytesIO(header + bmp_pixels), mimetype='image/bmp')
-            
+        img_io, mimetype = render_npz_map_to_bytes(MAPA_COMPOSTO_PATH)
+        return send_file(img_io, mimetype=mimetype)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @composed_bp.route('/api/mapa_composto/info/<int:x>/<int:y>')
 def api_mapa_composto_info(x, y):
@@ -147,6 +64,122 @@ def api_mapa_composto_info(x, y):
             "bioma_nome": nome_bioma,
             "tile_x": tile_x,
             "tile_y": tile_y
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@composed_bp.route('/api/continentes')
+def api_continentes():
+    """
+    Retorna a lista de continentes do world_manifest.json indicando o status
+    de geração do arquivo NPZ de zoom para cada um.
+    """
+    try:
+        manifest = obter_manifesto()
+        if not manifest:
+            return jsonify({"continentes": []})
+            
+        continentes = []
+        for c in manifest.get("continentes", []):
+            slug = c["nome"].lower().replace(" ", "_")
+            npz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'continentes'))
+            npz_path = os.path.join(npz_dir, f"mapa_{slug}.npz")
+            gerado = os.path.exists(npz_path)
+            
+            continentes.append({
+                "uuid": c["uuid"],
+                "nome": c["nome"],
+                "area_real_km2": c.get("area_real_km2", 0),
+                "biomas_predominantes": c.get("biomas_predominantes", []),
+                "bounding_box": c.get("bounding_box", {}),
+                "gerado": gerado
+            })
+            
+        return jsonify({"continentes": continentes})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@composed_bp.route('/api/continente/<uuid>/imagem')
+def api_continente_imagem(uuid):
+    """
+    Retorna a imagem renderizada do continente. Se o arquivo NPZ de zoom do continente
+    ainda não existir, ele é gerado dinamicamente sob demanda (ROI Zoom) de forma transparente!
+    """
+    try:
+        continente, npz_path, manifest = obter_continente_e_caminhos(uuid)
+        if not continente:
+            return jsonify({"error": "Continente não encontrado"}), 404
+            
+        # Geração dinâmica sob demanda se não existir
+        if not os.path.exists(npz_path):
+            from cartographer.roi_zoom import ROIZoomGenerator
+            npz_dir = os.path.dirname(npz_path)
+            global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
+            manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
+            
+            # Usando uma resolução amigável para a web (1200x1200px) para geração ultra veloz em tempo real
+            generator = ROIZoomGenerator(
+                manifest_path=manifest_path,
+                npz_path=global_npz_path,
+                output_dir=npz_dir,
+                target_resolution=1200,
+                seed=manifest.get("seed", 1337),
+                config={"nivel_mar": 0.35, "nivel_montanha": 0.80}
+            )
+            generator.generate(uuid)
+            
+        img_io, mimetype = render_npz_map_to_bytes(npz_path)
+        return send_file(img_io, mimetype=mimetype)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@composed_bp.route('/api/continente/<uuid>/info/<int:x>/<int:y>')
+def api_continente_info(uuid, x, y):
+    """
+    Retorna detalhes de bioma, altitude, temperatura e umidade da coordenada do mapa de zoom do continente.
+    """
+    try:
+        continente, npz_path, _ = obter_continente_e_caminhos(uuid)
+        if not continente:
+            return jsonify({"error": "Continente não encontrado"}), 404
+            
+        if not os.path.exists(npz_path):
+            return jsonify({"error": "Zoom do continente não gerado"}), 404
+            
+        dados = np.load(npz_path)
+        mapa = dados["mapa"]
+        height, width, _ = mapa.shape
+        
+        if x < 0 or x >= width or y < 0 or y >= height:
+            return jsonify({"error": "Coordenada fora dos limites"}), 400
+            
+        altitude = float(mapa[y, x, 0])
+        temperatura = float(mapa[y, x, 1])
+        umidade = float(mapa[y, x, 2])
+        id_bioma = int(mapa[y, x, 3])
+        
+        NOME_BIOMAS = {
+            1: "Oceano",
+            2: "Deserto",
+            3: "Mediterrâneo",
+            4: "Floresta Temperada",
+            5: "Montanha Rochosa"
+        }
+        nome_bioma = NOME_BIOMAS.get(id_bioma, "Desconhecido")
+        
+        return jsonify({
+            "x": x,
+            "y": y,
+            "altitude": altitude,
+            "temperatura": temperatura,
+            "umidade": umidade,
+            "bioma_id": id_bioma,
+            "bioma_nome": nome_bioma,
+            "map_width": width,
+            "map_height": height
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

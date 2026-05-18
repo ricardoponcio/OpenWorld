@@ -225,14 +225,29 @@ class NPCActionManager:
             nome_familia = obra.nome.replace("Obra de ", "")
             obra.nome = f"Residência {nome_familia}"
             
-            # Muda a família para a nova casa
-            moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, npc.casa_id, apenas_vivos=True)
+            # Identifica o dono da obra para mover a família correta (evita migração nômade em bloco)
+            dono_id = obra.descricao.replace("Dono: ", "").strip()
+            dono = next((n for n in engine.npcs if n.id == dono_id), None)
+            if not dono:
+                dono = npc
+                
+            moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, dono.casa_id, apenas_vivos=True)
             for m in moradores:
-                if m.id == npc.id or m.id == npc.conjuge_id or m.pai_id in [npc.id, npc.conjuge_id] or m.mae_id in [npc.id, npc.conjuge_id]:
+                eh_proprio = (m.id == dono.id)
+                eh_conjuge = (dono.conjuge_id and m.id == dono.conjuge_id)
+                
+                # Apenas filhos dependentes se movem com os pais. Filhos adultos continuam na casa antiga.
+                eh_filho_dependente = False
+                if (m.pai_id and m.pai_id in [dono.id, dono.conjuge_id]) or (m.mae_id and m.mae_id in [dono.id, dono.conjuge_id]):
+                    is_dep = (m.profissao == "dependente" or getattr(m, 'estagio_vida', '') in ('bebe', 'crianca'))
+                    if is_dep:
+                        eh_filho_dependente = True
+                
+                if eh_proprio or eh_conjuge or eh_filho_dependente:
                     m.casa_id = obra.id
                     m.localizacao_atual_id = obra.id
                     engine.db.salvar_npc(m)
             
             engine.db.salvar_local(obra)
-            WorldLogger.info(f"🏡 [MUDANÇA] A família de {npc.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=npc)
+            WorldLogger.info(f"🏡 [MUDANÇA] A família de {dono.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=dono)
             npc.acao_atual = Acao.OCIOSO

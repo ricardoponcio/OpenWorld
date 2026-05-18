@@ -25,7 +25,19 @@ USO:
 """
 
 
+import os
+import json
+
 _MISSING = object()  # Sentinela: distingue "não informado" de None explícito
+
+
+def carregar_config_global() -> dict:
+    """
+    Carrega e retorna o dicionário de configurações global a partir de config.json.
+    """
+    config_path = os.path.join(os.path.dirname(__file__), "..", "config.json")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 def cfg_get(config: dict, *keys: str, default=_MISSING):

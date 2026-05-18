@@ -1,4 +1,5 @@
 from typing import List, Dict
+from datetime import datetime
 from .models import NPC, Local
 
 class NPCUtils:
@@ -111,6 +112,33 @@ class NPCUtils:
                 if npc.id in getattr(l, 'descricao', '') or (npc.conjuge_id and npc.conjuge_id in getattr(l, 'descricao', '')):
                     return l
         return None
+
+    @staticmethod
+    def obter_data_nascimento_valida(npc: NPC):
+        """
+        Retorna um objeto datetime correspondente à data de nascimento do NPC.
+        Se for inválida ou vazia, retorna datetime.min para ordenação uniforme.
+        """
+        if not npc.data_nascimento:
+            return datetime.min
+        try:
+            return datetime.fromisoformat(npc.data_nascimento.replace(' ', 'T'))
+        except:
+            return datetime.min
+
+    @staticmethod
+    def obter_data_simulada_inicial(db) -> datetime:
+        """
+        Carrega a data simulada do banco de dados (meta) ou retorna o valor inicial padrão (Dia 1, 06:00).
+        """
+        hora_salva = db.carregar_meta("hora_simulada_iso")
+        if hora_salva:
+            try:
+                return datetime.fromisoformat(hora_salva)
+            except:
+                pass
+        return datetime(1200, 1, 1, 6, 0)
+
 
 class LocationUtils:
     @staticmethod
