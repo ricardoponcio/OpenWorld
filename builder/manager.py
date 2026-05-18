@@ -197,6 +197,46 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
         
         npcs_gerados.append(npc)
 
+    # --- FORMAÇÃO DE CASAIS INICIAIS ---
+    print("\n❤️  Estabelecendo casais iniciais casados e coabitantes na vila...")
+    adultos_m = [n for n in npcs_gerados if n.genero == 'M' and n.estagio_vida == 'adulto']
+    adultos_f = [n for n in npcs_gerados if n.genero == 'F' and n.estagio_vida == 'adulto']
+    
+    num_casais = min(len(adultos_m), len(adultos_f), num_npcs // 4)
+    for idx in range(num_casais):
+        m = adultos_m[idx]
+        f = adultos_f[idx]
+        
+        # Escolher uma casa em comum para eles morarem
+        casa_comum = m.casa_id or f.casa_id or casas_ids[0]
+        m.casa_id = casa_comum
+        m.localizacao_atual_id = casa_comum
+        f.casa_id = casa_comum
+        f.localizacao_atual_id = casa_comum
+        
+        # Formalizar casamento
+        from engine.models import EstadoCivil
+        m.estado_civil = EstadoCivil.CASADO.value
+        m.conjuge_id = f.id
+        f.estado_civil = EstadoCivil.CASADO.value
+        f.conjuge_id = m.id
+        
+        # Ajustar sobrenomes para combinar
+        sobrenome_m = m.nome.split()[-1] if len(m.nome.split()) > 1 else ""
+        if sobrenome_m and sobrenome_m not in f.nome:
+            f.nome = f"{f.nome} {sobrenome_m}"
+            
+        # Definir afinidade muito alta para concepção imediata
+        af = random.randint(85, 95)
+        m.relacionamentos[f.id] = af
+        f.relacionamentos[m.id] = af
+        
+        db.salvar_npc(m)
+        db.salvar_npc(f)
+        
+        db.salvar_relacionamento(m.id, f.id, af, "Cônjuge")
+        print(f"  ❤️  CASAL INICIAL FORMADO: {m.nome} e {f.nome} morando juntos em {casa_comum} com afinidade {af}!")
+
     # --- RELACIONAMENTOS INICIAIS (PONTO 2) ---
     print("\n💞 Estabelecendo laços sociais e amizades prévias na comunidade...")
     for npc_a in npcs_gerados:

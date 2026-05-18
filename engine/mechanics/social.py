@@ -11,9 +11,12 @@ class NPCSocialManager:
         # Utiliza o helper para agrupar NPCs por localização
         por_local = NPCUtils.agrupar_npcs_por_localizacao(engine.npcs, ignorar_dormindo=True)
             
+        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        chance_interacao = cfg_bio.get("interacao_chance", 0.5)
+            
         for loc_id, lista in por_local.items():
             if len(lista) >= 2:
-                if random.random() < 0.3:
+                if random.random() < chance_interacao:
                     n1, n2 = random.sample(lista, 2)
                     if n1.id != n2.id:
                         NPCSocialManager.gerar_evento_interacao(engine, n1, n2, loc_id)
@@ -107,8 +110,9 @@ class NPCSocialManager:
     def gerar_evento_interacao(engine, n1: NPC, n2: NPC, loc_id: str):
         local_nome = engine.locais[loc_id].nome if loc_id in engine.locais else loc_id
         
-        # Lógica de Afinidade
-        mod = random.choice([-5, 5, 10])
+        cfg_bio = engine.config.get("biologia_e_sociedade", {})
+        ganhos = cfg_bio.get("interacao_afinidade_ganhos", [-5, 5, 10, 15])
+        mod = random.choice(ganhos)
         nova_afinidade = n1.relacionamentos.get(n2.id, 0) + mod
         
         n1.relacionamentos[n2.id] = nova_afinidade

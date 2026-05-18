@@ -1,7 +1,7 @@
 import random
 from typing import Dict, List, Optional
 from .client import AIClient
-from .utils import AIUtils
+from ai.utils import AIUtils
 from ..logger import WorldLogger
 
 class AIGeneratorClient:

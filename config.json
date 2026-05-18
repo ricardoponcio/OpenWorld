@@ -2,11 +2,11 @@
     "salvar_logs_npc_no_banco": false,
     "metabolismo": {
         "energia_base_perda": 0.5,
-        "fome_base_ganho_min": 0.8,
-        "fome_base_ganho_max": 1.6,
+        "fome_base_ganho_min": 0.4,
+        "fome_base_ganho_max": 0.8,
         "social_base_perda_min": 0.5,
         "social_base_perda_max": 1.2,
-        "_comentario": "Valores base. Aumentei a perda de energia base para 0.5."
+        "_comentario": "Valores base. Reduzi a taxa de fome diária para um nível sustentável (~0.6 por tick average)."
     },
     "acoes": {
         "dormir": {
@@ -49,8 +49,8 @@
         "concepcao_afinidade_minima": 80,
         "concepcao_chance": 0.20,
         "gravidez_duracao_ticks": 192,
-        "gravidez_multiplicador_perda_energia": 2.0,
-        "gravidez_multiplicador_ganho_fome": 1.5,
+        "gravidez_multiplicador_perda_energia": 1.2,
+        "gravidez_multiplicador_ganho_fome": 1.2,
         "parto_afinidade_inicial_pais": 100,
         "crescimento_hora": 4,
         "crescimento_dias_bebe_para_crianca": 5,
@@ -62,10 +62,12 @@
         "heranca_afinidade_minima_conjuge": 50,
         "heranca_evento_modificador_afinidade": 10,
         "inaniacao_perda_saude": 5,
-        "dormir_ganho_saude": 2
+        "dormir_ganho_saude": 2,
+        "interacao_chance": 0.5,
+        "interacao_afinidade_ganhos": [-5, 5, 10, 15]
     },
     "reino": {
-        "pensao_aposentadoria": 8,
+        "pensao_aposentadoria": 40,
         "fornecer_sopao": true,
         "custo_sopao_ao_reino": 5
     }

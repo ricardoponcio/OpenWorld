@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, jsonify, send_file
 import numpy as np
 import io
 import os
+from cartographer.math import ShadingProcessor, ColoringProcessor
 
 composed_bp = Blueprint('composed', __name__)
 
@@ -31,20 +32,38 @@ def api_mapa_composto_imagem():
         mapa = dados["mapa"]
         height, width, _ = mapa.shape
         
-        # Paleta de cores para os biomas
-        CORES = {
-            1: (28, 107, 160),   # OCEANO (Azul)
-            2: (224, 192, 114),  # DESERTO (Areia)
-            3: (114, 166, 102),  # MEDITERRANEO (Verde Oliva)
-            4: (43, 94, 60),     # FLORESTA_TEMPERADA (Verde Escuro)
-            5: (110, 110, 110)   # MONTANHA_ROCHOSA (Cinza)
-        }
-        
         biomas = mapa[:, :, 3].astype(int)
+        altitudes = mapa[:, :, 0]
+        nivel_mar = 0.35
         
-        img_rgb = np.zeros((height, width, 3), dtype=np.uint8)
-        for id_bioma, cor in CORES.items():
-            img_rgb[biomas == id_bioma] = cor
+        # 1. Renderiza o oceano dinâmico baseado na profundidade
+        img_rgb = ColoringProcessor.render_ocean(altitudes, nivel_mar=nivel_mar)
+        
+        # 2. Renderizar biomas de terra firme com gradiente de altitude (Verde -> Rocha -> Neve nos picos)
+        mask_terra = (biomas > 1)
+        if np.any(mask_terra):
+            # Normaliza a altitude da terra firme
+            alt_terra_norm = np.clip((altitudes - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
+            
+            # Aplica a interpolação altitudinal de cor para cada bioma de terra
+            for b_id in [2, 3, 4, 5]:
+                mask_b = (biomas == b_id)
+                if np.any(mask_b):
+                    r_c, g_c, b_c = ColoringProcessor.interpolate_land_biome(b_id, alt_terra_norm)
+                    img_rgb[mask_b, 0] = r_c[mask_b]
+                    img_rgb[mask_b, 1] = g_c[mask_b]
+                    img_rgb[mask_b, 2] = b_c[mask_b]
+            
+        # 3. Sombreamento 3D de Relevo (Hillshading) vindo de Noroeste
+        fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, escala_terreno=48.0)
+        
+        # Aplicamos o sombreamento 3D exclusivamente na terra firme para destacar o relevo
+        if np.any(mask_terra):
+            for c in range(3):
+                img_rgb[mask_terra, c] = np.clip(
+                    img_rgb[mask_terra, c] * fator_luz[mask_terra], 
+                    0, 255
+                ).astype(np.uint8)
             
         try:
             from PIL import Image

@@ -1,7 +1,7 @@
 import re
 import json
 from typing import Optional, Union, Dict, List
-from ..logger import WorldLogger
+from engine.logger import WorldLogger
 
 class AIUtils:
     """

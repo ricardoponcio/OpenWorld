@@ -1,0 +1,32 @@
+Você é um Gerador Geográfico Estratégico para um simulador de mundo procedural.
+Sua tarefa é projetar a macro-geografia de um planeta com base na semente: {semente}.
+
+Gere um JSON com uma lista de continentes (3 a 6 massas de terra). Cada continente deve seguir estes parâmetros técnicos para garantir consistência física no Python:
+
+- "nome": Nome fictício único.
+- "centro_x" / "centro_y": Coordenadas globais do centro (entre 150 e {limite}).
+- "area_km2": Área total da massa de terra (entre 500.000 e 8.000.000 km²).
+- "raio_visual": Raio em pixels para a máscara de influência (entre 120 e 300).
+- "irregularidade": Coeficiente de recorte costeiro (0.1: suave/circular, 0.8: muito recortado/fiordes).
+- "elevacao_maxima": Teto de altitude (0.6 a 1.0). Determina a agressividade dos picos.
+- "perfil_geologico": Escolha um: ["Alpino", "Platô", "Arquipélago", "Erosivo"].
+- "modificadores":
+    - "calor": Offset térmico (-0.3 a +0.3).
+    - "umidade": Offset de chuva (-0.3 a +0.3).
+
+Responda ESTRITAMENTE em formato JSON puro, sem markdown, sem comentários, seguindo exatamente esta estrutura:
+{
+    "continentes": [
+        {
+            "nome": "Terrae",
+            "centro_x": 500,
+            "centro_y": 500,
+            "area_km2": 2500000,
+            "raio_visual": 200,
+            "irregularidade": 0.4,
+            "elevacao_maxima": 0.8,
+            "perfil_geologico": "Alpino",
+            "modificadores": { "calor": 0.0, "umidade": 0.0 }
+        }
+    ]
+}

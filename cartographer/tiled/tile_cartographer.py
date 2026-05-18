@@ -1,13 +1,18 @@
 import numpy as np
-from noise import pnoise2
+from cartographer.math import NoiseGenerator, TectonicsProcessor, ClimateProcessor
 
 class TileCartographer:
+    """
+    Cartógrafo procedural responsável por gerar os dados geográficos e climáticos
+    de tiles individuais de forma perfeitamente contínua e determinística.
+    """
     def __init__(self, size=256, seed=0, config=None, layout_continentes=None):
         self.size = size
         self.seed = seed
         self.config = config
         self.layout_continentes = layout_continentes or {"continentes": []}
-        # Cada Tile tem seus próprios dados
+        # Cada Tile possui 4 canais de dados de ponto flutuante:
+        # [0: Altitude, 1: Temperatura, 2: Umidade, 3: ID do Bioma]
         self.data = np.zeros((self.size, self.size, 4), dtype=np.float32)
 
     def generate_tile(self, offset_x, offset_y):
@@ -24,30 +29,19 @@ class TileCartographer:
         x_range = np.arange(start_x, start_x + self.size)
         grid_x, grid_y = np.meshgrid(x_range, y_range)
 
-        # 1. Relevo com Coordenadas Globais (Garante a continuidade)
-        v_pnoise2 = np.vectorize(lambda x, y: pnoise2(
-            x / self.config["frequencia"], 
-            y / self.config["frequencia"], 
-            octaves=self.config["oitavas"],
-            base=self.seed
-        ))
-        
-        ruido = v_pnoise2(grid_x, grid_y)
-        # Importante: Normalização fixa para evitar que tiles vizinhos tenham escalas diferentes
-        relevo_base = (ruido + 1) / 2.0 
+        # 1. Geração da base geológica contínua via Perlin noise
+        ruido_macro = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=220.0, octaves=3, seed=self.seed)
+        relevo_base = NoiseGenerator.generate_tectonic_base(grid_x, grid_y, seed=self.seed)
 
-        # --- APLICAÇÃO DE MÁSCARAS DE CONTINENTES (ESTRATÉGIA IA + ARQUITETURA PYTHON) ---
-        # Ruído de costa para criar penínsulas, cabos e baías irregulares (alta frequência)
-        v_noise_costa = np.vectorize(lambda x, y: pnoise2(
-            x / 60.0, 
-            y / 60.0, 
-            octaves=4, 
-            base=(self.seed + 12345) % 50000
-        ))
-        ruido_costa = v_noise_costa(grid_x, grid_y)
+        # 2. Costa de alta frequência para distorções locais
+        ruido_costa = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=60.0, octaves=4, seed=self.seed, offset=12345)
 
-        # Inicializa a máscara de continente vazia (tamanho do tile)
+        # Inicializa a máscara de continente vazia e o relevo acumulado
         mask_continente = np.zeros((self.size, self.size), dtype=np.float32)
+        relevo_continentes = np.zeros((self.size, self.size), dtype=np.float32)
+        
+        nivel_mar = self.config["nivel_mar"]
+        nivel_montanha = self.config["nivel_montanha"]
         
         # Calor e umidade modificadores ponderados pela proximidade ao continente
         mod_calor_total = np.zeros((self.size, self.size), dtype=np.float32)
@@ -56,66 +50,84 @@ class TileCartographer:
         for cont in self.layout_continentes.get("continentes", []):
             cx = cont["centro_x"]
             cy = cont["centro_y"]
-            R = cont["raio"]
+            
+            # Conversão de escala (pixels vs km²) com teto de segurança
+            area = cont.get("area_km2", 0)
+            if area > 0:
+                R = np.sqrt(area / np.pi) / 10.0
+            else:
+                R = cont.get("raio_visual", cont.get("raio", 200.0))
+            
+            R = np.clip(R, 65.0, 155.0)
+                
             irreg = cont["irregularidade"]
+            elev_max = cont.get("elevacao_maxima", 0.8)
+            perfil = cont.get("perfil_geologico", "Alpino")
             
-            # Distância euclidiana global de cada ponto do tile até o centro do continente
-            dx = grid_x - cx
-            dy = grid_y - cy
-            distancia = np.sqrt(dx**2 + dy**2)
+            # Distância euclidiana e raio modulado dinamicamente pelas correntes tectônicas
+            distancia = TectonicsProcessor.calculate_distance_grid(grid_x, grid_y, cx, cy)
+            raio_dinamico = TectonicsProcessor.calculate_tectonic_radius(R, ruido_macro)
             
-            # Perturba a distância calculada com o ruído de costa proporcional à irregularidade e ao raio
-            dist_perturbada = distancia + (ruido_costa * irreg * R * 0.4)
+            # Distorção costeira
+            dist_perturbada = TectonicsProcessor.apply_coastal_distortion(distancia, ruido_costa, irreg, R)
             
-            # Fator de gradiente radial: 1.0 no centro, cai para 0.0 na borda do raio perturbado
-            fator_radial = 1.0 - (dist_perturbada / R)
-            fator_radial = np.clip(fator_radial, 0.0, 1.0)
+            # Fator de gradiente radial perturbado
+            fator_radial = np.clip(1.0 - (dist_perturbada / raio_dinamico), 0.0, 1.0)
             
-            # Combina os continentes acumulando com o máximo (para manter o pico de relevo onde se sobrepõem)
+            # Acumula a máscara continental
             mask_continente = np.maximum(mask_continente, fator_radial)
             
-            # Modificadores de calor e umidade regionais ponderados pelo fator radial
-            mod_calor_total += fator_radial * cont.get("modificador_calor", 0.0)
-            mod_umidade_total += fator_radial * cont.get("modificador_umidade", 0.0)
-
-        # Multiplica o relevo base pela máscara de continente:
-        # Nas bordas e no meio do oceano, a máscara é 0, empurrando tudo para o oceano profundo!
-        self.data[:, :, 0] = relevo_base * mask_continente
+            # Modelagem do perfil geológico do continente
+            relevo_perfil = TectonicsProcessor.calculate_geological_profile(perfil, relevo_base, grid_x, grid_y, self.seed)
+            
+            # Altitude continental garantida acima da costa
+            f_terra = np.clip((fator_radial - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
+            altura_terra = nivel_mar + (elev_max - nivel_mar) * relevo_perfil * f_terra
+            altura_terra = np.where(fator_radial >= nivel_mar, altura_terra, 0.0)
+            
+            # Acumula relevo continental
+            relevo_continentes = np.maximum(relevo_continentes, altura_terra)
+            
+            # Climatologia regional baseada nos modificadores da IA
+            modificadores = cont.get("modificadores", {})
+            mod_calor = modificadores.get("calor", cont.get("modificador_calor", 0.0))
+            mod_umidade = modificadores.get("umidade", cont.get("modificador_umidade", 0.0))
+            
+            mod_calor_total += fator_radial * mod_calor
+            mod_umidade_total += fator_radial * mod_umidade
+            
+        # Máscara de Vignette de Cosseno global para as bordas do mundo (768x768)
+        fator_borda = TectonicsProcessor.apply_cosine_vignette(grid_x, grid_y, map_size=768.0)
         
-        # 2. Clima: Temperatura por Latitude Global, Altitude e modificadores IA
-        # Supondo um mundo de 3x3 tiles (768 pixels) para a escala de latitude
-        total_mundo_h = 768.0
-        latitude_factor = 1.0 - (grid_y / total_mundo_h)
-        latitude_factor = np.clip(latitude_factor, 0.0, 1.0)
+        mask_continente = mask_continente * fator_borda
+        relevo_continentes = relevo_continentes * fator_borda
         
-        # Temperatura = Latitude - (Altitude * 0.4) + modificadores de calor regionais
-        temp_base = latitude_factor - (self.data[:, :, 0] * 0.4) + mod_calor_total
-        self.data[:, :, 1] = np.clip(temp_base, 0.0, 1.0)
+        # Ruído marinho para fossas e bancos de areia
+        f_mar = self.config.get("ruido_mar_escala", 80.0)
+        oct_mar = self.config.get("ruido_mar_oitavas", 3)
+        amp_mar = self.config.get("ruido_mar_amplitude", 0.14)
         
-        # Umidade = 0.8 se abaixo do mar, senão 0.4 + modificadores de umidade regionais
-        umid_base = np.where(self.data[:, :, 0] < self.config["nivel_mar"], 0.8, 0.4 + mod_umidade_total)
-        self.data[:, :, 2] = np.clip(umid_base, 0.0, 1.0)
-
-        # 3. Classificação de Biomas
-        BIOME_IDS = {
-            "OCEANO": 1, "DESERTO": 2, "MEDITERRANEO": 3,
-            "FLORESTA_TEMPERADA": 4, "MONTANHA_ROCHOSA": 5
-        }
+        ruido_mar = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=f_mar, octaves=oct_mar, seed=self.seed, offset=9999)
+        max_ruido_mar = min(nivel_mar * 0.90, 0.02 + amp_mar)
+        ruido_mar_suave = 0.02 + (ruido_mar * (max_ruido_mar - 0.02))
         
-        height = self.data[:, :, 0]
-        temp = self.data[:, :, 1]
-        umid = self.data[:, :, 2]
-        biomas = self.data[:, :, 3]
-
-        biomas[height < self.config["nivel_mar"]] = BIOME_IDS["OCEANO"]
-        biomas[height > self.config["nivel_montanha"]] = BIOME_IDS["MONTANHA_ROCHOSA"]
+        # Mesclagem terra-mar final no canal 0 (Altitude)
+        self.data[:, :, 0] = np.where(
+            mask_continente >= nivel_mar,
+            relevo_continentes,
+            (1.0 - (mask_continente / nivel_mar)) * ruido_mar_suave + (mask_continente / nivel_mar) * nivel_mar
+        )
         
-        # Máscaras para áreas de terra firme
-        terra_firme = (height >= self.config["nivel_mar"]) & (height <= self.config["nivel_montanha"])
+        # 3. Cálculo climático e classificação dos biomas
+        self.data[:, :, 1] = ClimateProcessor.calculate_temperature(
+            grid_y, self.data[:, :, 0], mod_calor_total, map_height=768.0
+        )
+        self.data[:, :, 2] = ClimateProcessor.calculate_humidity(
+            self.data[:, :, 0], mod_umidade_total, nivel_mar=nivel_mar
+        )
+        self.data[:, :, 3] = ClimateProcessor.classify_biomes(
+            self.data[:, :, 0], self.data[:, :, 1], self.data[:, :, 2],
+            nivel_mar=nivel_mar, nivel_montanha=nivel_montanha
+        )
         
-        # Lógica de Clima para terra firme
-        biomas[terra_firme & (temp > 0.6) & (umid < 0.5)] = BIOME_IDS["DESERTO"]
-        biomas[terra_firme & (temp > 0.4) & (umid >= 0.5)] = BIOME_IDS["MEDITERRANEO"]
-        biomas[terra_firme & (biomas == 0)] = BIOME_IDS["FLORESTA_TEMPERADA"]
-
         return self.data

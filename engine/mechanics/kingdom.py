@@ -24,7 +24,9 @@ class KingdomManager:
         if not cfg_reino.get("fornecer_sopao", True):
             return False
             
-        if not npc.is_idoso():
+        # Permitir sopão se o NPC for idoso OU se estiver em extrema miséria e fome (> 60) sem dinheiro
+        extremamente_pobre = npc.dinheiro_total_pc <= 0 and npc.fome > 60.0
+        if not npc.is_idoso() and not extremamente_pobre:
             return False
             
         npc.fome -= (fome_rec_do_tick * 0.5)  # Sopão alimenta menos que refeição paga

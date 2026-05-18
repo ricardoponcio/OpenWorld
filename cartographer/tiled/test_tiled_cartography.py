@@ -17,7 +17,12 @@ def gerar_mundo_composto():
         "persistencia": 0.5,
         "lacunariedade": 2.1,
         "nivel_mar": 0.35,
-        "nivel_montanha": 0.8
+        "nivel_montanha": 0.8,
+        
+        # Parâmetros customizados para o ruído do relevo marinho (bancos de areia)
+        "ruido_mar_escala": 80.0,     # Frequência horizontal do ruído (escala menor = mais detalhes de ilhotas/fossas)
+        "ruido_mar_oitavas": 3,       # Complexidade do relevo do mar
+        "ruido_mar_amplitude": 0.14    # Amplitude do relevo do mar (0.14 garante transições suaves de praia)
     }
     
     # 2. Instancia o Gerente

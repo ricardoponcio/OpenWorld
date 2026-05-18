@@ -1,6 +1,6 @@
 import numpy as np
 from tile_cartographer import TileCartographer
-from world_manager_ai import WorldManagerAIClient
+from cartographer.tiled.ai.world_manager_ai import WorldManagerAIClient
 
 class WorldManager:
     def __init__(self, tile_size=256, seed=42, config=None):
