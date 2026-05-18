@@ -48,7 +48,8 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
         ai_locais = [
             {"nome": "Fazenda das Couves", "tipo": "Campo"},
             {"nome": "Forja de Aço", "tipo": "Oficina"},
-            {"nome": "Taverna do Dragão", "tipo": "Social"},
+            {"nome": "Taverna do Dragão", "tipo": "Social", "categoria": "comercial"},
+            {"nome": "Praça Central", "tipo": "Social", "categoria": "publico"},
             {"nome": "Quartel da Vila", "tipo": "Defesa"},
             {"nome": "Laboratório Arcano", "tipo": "Magia"},
             {"nome": "Doca do Porto", "tipo": "Mar"}
@@ -80,8 +81,18 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
     # Criar Locais no Banco
     for l_data in profissoes_pool:
         coord = mapa_coords.get(l_data['id'], [0, 0])
+        
+        # Classificação dinâmica de locais sociais (comercial vs publico)
+        cat = l_data.get('categoria', 'publico')
+        if l_data['tipo'] == 'Social':
+            nome_lower = l_data['nome'].lower()
+            if any(p in nome_lower for p in ['taverna', 'clube', 'estalagem', 'teatro', 'bar', 'hospedaria', 'pub', 'taberna']):
+                cat = 'comercial'
+            else:
+                cat = 'publico'
+                
         loc = Local(id=l_data['id'], nome=l_data['nome'], tipo=l_data['tipo'], 
-                    categoria=l_data.get('categoria', 'publico'),
+                    categoria=cat,
                     descricao=l_data.get('descricao', f"Local temático de {tema}."), coordenadas=coord)
         db.salvar_local(loc)
 

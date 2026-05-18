@@ -111,3 +111,18 @@ class NPCUtils:
                 if npc.id in getattr(l, 'descricao', '') or (npc.conjuge_id and npc.conjuge_id in getattr(l, 'descricao', '')):
                     return l
         return None
+
+class LocationUtils:
+    @staticmethod
+    def is_local_publico(local: 'Local') -> bool:
+        """
+        Verifica se um local é público/gratuito (ex: praça, parque, etc.).
+        """
+        if not local:
+            return False
+        from .models import CategoriaLocal
+        if local.categoria == CategoriaLocal.PUBLICO.value:
+            return True
+        palavras_publicas = ['praça', 'praca', 'parque', 'jardim', 'rua', 'largo', 'campo', 'arena']
+        nome_lower = local.nome.lower()
+        return any(p in nome_lower for p in palavras_publicas)

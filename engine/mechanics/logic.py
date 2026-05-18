@@ -61,9 +61,22 @@ class NPCBrain:
         elif hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < cfg["hora_inicio_trabalho"]:
             utilidades[Acao.SOCIALIZAR] = (100 - npc.social) * 1.5
             
-        # Debuff de Socialização: se o NPC tiver menos de 50 PC (pouco dinheiro), ele não sai para socializar
-        if npc.dinheiro_total_pc < 50:
-            utilidades[Acao.SOCIALIZAR] = 0.0
+        # Debuff de Socialização se estiver pobre, a menos que existam locais públicos/gratuitos (praças/parques) no mundo
+        limiar_pobreza = cfg.get("limiar_pobreza_pc", 50)
+        if npc.dinheiro_total_pc < limiar_pobreza:
+            from ..utils import LocationUtils
+            tem_local_gratis = False
+            if locais:
+                for l in locais.values():
+                    if l.tipo == 'Social' and getattr(l, 'status', 1) == 1:
+                        if LocationUtils.is_local_publico(l):
+                            tem_local_gratis = True
+                            break
+            if not tem_local_gratis:
+                utilidades[Acao.SOCIALIZAR] = 0.0
+            else:
+                # Se tem parque público, ele pode ir socializar de graça, mas o incentivo é menor
+                utilidades[Acao.SOCIALIZAR] *= 0.4
             
         # Se tem dependentes, reduz a utilidade de socializar em 50%
         num_dep = getattr(npc, 'num_dependentes', 0)

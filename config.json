@@ -42,6 +42,7 @@
         "hora_inicio_sono_obrigatorio": 22,
         "bonus_happy_hour": 120.0,
         "bonus_persistencia": 40.0,
+        "limiar_pobreza_pc": 50,
         "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas."
     },
     "biologia_e_sociedade": {

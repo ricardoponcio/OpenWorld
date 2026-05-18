@@ -23,6 +23,12 @@ class EstadoCivil(Enum):
     CASADO = "casado"
     VIUVO = "viuvo"
 
+class CategoriaLocal(Enum):
+    PUBLICO = "publico"
+    COMERCIAL = "comercial"
+    RESIDENCIA = "residencia"
+    GENERIC = "generic"
+
 class HumorNPC(Enum):
     NEUTRO = "Neutro"
     ALEGRE = "Alegre"

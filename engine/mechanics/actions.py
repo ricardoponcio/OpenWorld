@@ -2,7 +2,7 @@ import random
 from ..models import NPC, Acao, EstagioVida, HumorNPC
 from ..logger import WorldLogger
 from .movement import NPCMovementManager
-from ..utils import NPCUtils
+from ..utils import NPCUtils, LocationUtils
 from .kingdom import KingdomManager
 
 class NPCActionManager:
@@ -31,6 +31,8 @@ class NPCActionManager:
 
     @staticmethod
     def _executar_dormir(engine, npc: NPC, cfg_acoes: dict):
+        NPCMovementManager.mover_para_casa(engine, npc)
+        
         cfg = cfg_acoes.get("dormir", {})
         # Restaura energia
         npc.energia += cfg.get("energia_ganho", 5.0)
@@ -145,8 +147,14 @@ class NPCActionManager:
         cfg = cfg_acoes.get("socializar", {})
         custo = cfg.get("custo_pc", 20)
         
-        if npc.dinheiro_total_pc >= custo:
-            npc.dinheiro_total_pc -= custo
+        local_atual = engine.locais.get(npc.localizacao_atual_id)
+        custo_real = custo
+        if local_atual and LocationUtils.is_local_publico(local_atual):
+            custo_real = 0
+        
+        if npc.dinheiro_total_pc >= custo_real:
+            if custo_real > 0:
+                npc.dinheiro_total_pc -= custo_real
             # Acelera ganho social
             npc.social += 15.0
             if npc.social > 100.0:
@@ -156,7 +164,7 @@ class NPCActionManager:
             if random.random() < 0.2:
                 npc.humor = HumorNPC.ALEGRE.value
         else:
-            # Se não tem dinheiro, tenta socializar de graça mas com menos ganho
+            # Se não tem dinheiro (e tentou ir a um local pago), tenta socializar de graça mas com menos ganho
             npc.social += 5.0
             if npc.social > 100.0:
                 npc.social = 100.0

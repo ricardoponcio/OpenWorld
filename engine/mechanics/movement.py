@@ -62,6 +62,7 @@ class NPCMovementManager:
     @staticmethod
     def mover_para_social(engine, npc: NPC):
         """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local."""
+        from ..utils import LocationUtils
         locais = engine.locais
         sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and getattr(l, 'status', 1) == 1] if locais else []
         
@@ -69,6 +70,19 @@ class NPCMovementManager:
         if num_dep > 0 and random.random() < 0.50:
             NPCMovementManager.mover_para_casa(engine, npc)
         elif sociais:
+            # NPCs com menos de limiar_pobreza dão preferência a locais públicos/gratuitos (praças, parques, arenas, etc.)
+            cfg_dec = engine.config.get("ia_decisao", {})
+            limiar_pobreza = cfg_dec.get("limiar_pobreza_pc", 50)
+            
+            if npc.dinheiro_total_pc < limiar_pobreza:
+                sociais_gratuitos = [
+                    l_id for l_id in sociais 
+                    if LocationUtils.is_local_publico(locais[l_id])
+                ]
+                if sociais_gratuitos:
+                    NPCMovementManager.mover_para(engine, npc, random.choice(sociais_gratuitos))
+                    return
+            
             NPCMovementManager.mover_para(engine, npc, random.choice(sociais))
         else:
             NPCMovementManager.mover_para_casa(engine, npc)
