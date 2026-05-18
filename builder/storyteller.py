@@ -13,7 +13,7 @@ from datetime import datetime
 
 # Adicionar o diretório raiz ao path para importar a engine
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from builder.generator import AIWorldGenerator
+from engine.ai import AIStorytellerClient
 
 DB_PATH = "database/openworld.db"
 
@@ -88,27 +88,8 @@ def run_storyteller(tema="Cyberpunk"):
     """
     
     print("🧠 Consultando a Mente do Mundo...")
-    gen = AIWorldGenerator()
-    resultado = ""
     try:
-        resultado = gen.ask_ai(prompt) 
-        
-        # Extração Robusta de JSON (Busca o primeiro { e o último })
-        start_idx = resultado.find('{')
-        end_idx = resultado.rfind('}')
-        if start_idx == -1 or end_idx == -1:
-            raise ValueError("A IA não retornou um JSON válido.")
-        
-        json_str = resultado[start_idx:end_idx+1]
-        
-        import re
-        # Remove comentários estilo // ou # dentro do JSON
-        json_str = re.sub(r'//.*', '', json_str)
-
-        # Remove comentários de linha (// ...)
-        json_str = re.sub(r'//.*', '', json_str)
-        
-        evento = json.loads(json_str.strip())
+        evento = AIStorytellerClient.gerar_evento_global(tema, contexto)
 
 
         
@@ -192,7 +173,6 @@ def run_storyteller(tema="Cyberpunk"):
         
     except Exception as e:
         print(f"❌ Erro ao gerar evento: {e}")
-        print(f"Resultado bruto da IA: {resultado}")
     finally:
         conn.close()
 

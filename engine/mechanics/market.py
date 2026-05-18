@@ -1,6 +1,6 @@
 import sqlite3
-from .database import DatabaseManager
-from .logger import WorldLogger
+from ..database import DatabaseManager
+from ..logger import WorldLogger
 
 class JobMarket:
     def __init__(self, db_path="database/openworld.db"):
@@ -17,7 +17,6 @@ class JobMarket:
         
         # Carregar Mapeamento de Categorias de Trabalho (Tradução IA -> Sistema)
         mapeamento = self.db.carregar_mapeamento_categorias_trabalho()
-
 
         # 1. Encontrar Locais com Vagas Abertas
         # Uma vaga está aberta se (capacidade - ocupacao atual) > 0
@@ -43,7 +42,6 @@ class JobMarket:
                     "vagas": vagas_livres
                 })
 
-
         if not vagas_por_categoria:
             WorldLogger.debug("📭 Nenhuma vaga disponível no momento.")
             conn.close()
@@ -51,16 +49,19 @@ class JobMarket:
 
         # 2. Encontrar NPCs Desempregados ou em locais destruídos
         # (local_trabalho_id IS NULL ou local de trabalho com status = 0)
+        # Filtra bebês, crianças e dependentes para não entrarem no mercado de trabalho
         desempregados = cursor.execute("""
             SELECT n.id, n.nome, n.profissao_id, p.categoria_local_id
             FROM npcs n
             JOIN profissoes p ON n.profissao_id = p.id
-            WHERE n.saude > 0 AND (
+            WHERE n.saude > 0 
+              AND n.estagio_vida NOT IN ('bebe', 'crianca')
+              AND n.profissao != 'dependente'
+              AND (
                 n.local_trabalho_id IS NULL 
                 OR n.local_trabalho_id NOT IN (SELECT id FROM locais WHERE status = 1 AND tipo != 'Casa')
-            )
+              )
         """).fetchall()
-
 
         if not desempregados:
             conn.close()
@@ -88,7 +89,6 @@ class JobMarket:
             if not sucesso:
                 cursor.execute("UPDATE npcs SET local_trabalho_id = NULL WHERE id = ?", (npc['id'],))
                 WorldLogger.info(f"🕵️  DESEMPREGADO: {npc['nome']} agora está buscando oportunidades.", npc=npc['id'])
-
 
         conn.commit()
         conn.close()

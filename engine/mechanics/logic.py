@@ -1,5 +1,5 @@
 import json
-from .models import Acao, NPC, HumorNPC
+from ..models import Acao, NPC, HumorNPC
 from typing import Dict, List
 
 class NPCBrain:
@@ -7,7 +7,8 @@ class NPCBrain:
     def calcular_utilidade(npc: NPC, hora_atual: int, cfg: Dict, eventos_globais: List = []) -> Dict[Acao, float]:
         utilidades = {acao: 0.0 for acao in Acao}
 
-        
+        is_dependent = (npc.profissao == "dependente" or getattr(npc, 'estagio_vida', '') in ('bebe', 'crianca'))
+
         # --- GATILHOS DE NECESSIDADE ---
         
         # Comer:
@@ -18,8 +19,9 @@ class NPCBrain:
             valor_fome = npc.fome * 4.0
             if esta_comendo:
                 valor_fome += 100.0  # Bônus massivo para não interromper a refeição na metade
-            # Se não tem dinheiro, a vontade de comer cai (prioriza trabalho)
-            if npc.dinheiro_total_pc < 15:
+            
+            # Se não tem dinheiro, a vontade de comer cai (prioriza trabalho), exceto para dependentes que usam o dinheiro dos pais
+            if not is_dependent and npc.dinheiro_total_pc < 15:
                 valor_fome *= 0.1
             utilidades[Acao.COMER] = valor_fome
             
@@ -51,7 +53,6 @@ class NPCBrain:
                 utilidades[Acao.TRABALHAR] = 150.0 
         else:
             utilidades[Acao.TRABALHAR] = 0.0
-
 
         # Socializar: Bônus GIGANTE no Happy Hour
         if cfg["hora_fim_trabalho"] < hora_atual < cfg["hora_inicio_sono_obrigatorio"]:
@@ -95,6 +96,12 @@ class NPCBrain:
                         utilidades[Acao[acao_str]] += peso
             except: continue
 
+        # --- FORÇAR LIMITES DE DEPENDENTES ---
+        if is_dependent:
+            utilidades[Acao.TRABALHAR] = 0.0
+            utilidades[Acao.SOCIALIZAR] = 0.0
+            utilidades[Acao.CUIDAR_PROLE] = 0.0
+
         if npc.acao_atual in utilidades and utilidades[npc.acao_atual] > 0.0:
             utilidades[npc.acao_atual] += cfg["bonus_persistencia"] 
             
@@ -116,6 +123,3 @@ class NPCBrain:
             loc_trab = locais.get(npc.local_trabalho_id) if locais else None
             if not loc_trab or getattr(loc_trab, 'status', 1) != 1:
                 npc.acao_atual = Acao.OCIOSO
-
-
-

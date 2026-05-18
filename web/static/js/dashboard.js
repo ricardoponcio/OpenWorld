@@ -1,6 +1,10 @@
 let staticData = null;
 let activeView = 'map-view';
 let npcFilter = 'vivos';
+let allNpcs = [];
+let allRels = [];
+let activeModalTab = 'profile';
+let activeNpcId = null;
 
 function switchView(btn, id) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -45,6 +49,17 @@ async function init() {
         
         const mapEl = document.getElementById('world-map');
         mapEl.innerHTML = '';
+        
+        // Suporte a mapas dinâmicos
+        const mapSize = staticData.mapa.length || 20;
+        const tileSize = mapSize > 25 ? 15 : 30;
+        const mapPx = mapSize * tileSize;
+        
+        mapEl.style.gridTemplateColumns = `repeat(${mapSize}, ${tileSize}px)`;
+        mapEl.style.gridTemplateRows = `repeat(${mapSize}, ${tileSize}px)`;
+        mapEl.style.width = `${mapPx}px`;
+        mapEl.style.height = `${mapPx}px`;
+
         staticData.mapa.forEach(row => {
             row.forEach(tile => {
                 const div = document.createElement('div');
@@ -75,6 +90,9 @@ async function update() {
     try {
         const res = await fetch('/api/update');
         const data = await res.json();
+        
+        if (data.npcs) allNpcs = data.npcs;
+        if (data.rels) allRels = data.rels;
 
         if (data.error) {
             statusMsg.innerText = data.error;
@@ -111,8 +129,11 @@ async function update() {
         }
 
         const mapContainer = document.getElementById('map-container');
-        
-        if (data.locs) {
+        if (activeView === 'map-view' && data.locs) {
+            const mapSize = staticData.mapa ? staticData.mapa.length : 20;
+            const pct = 100 / mapSize;
+            const halfPct = pct / 2;
+
             Object.entries(data.locs).forEach(([id, loc]) => {
                 let b = document.getElementById(`b-${id}`);
                 if (!b) {
@@ -122,8 +143,8 @@ async function update() {
                 }
                 const isHome = loc.t === 'Casa';
                 b.className = `building-marker ${isHome ? 'b-home' : 'b-work'}`;
-                b.style.left = `${(loc.c[0] * 5) + 2.5}%`;
-                b.style.top = `${(loc.c[1] * 5) + 2.5}%`;
+                b.style.left = `${(loc.c[0] * pct) + halfPct}%`;
+                b.style.top = `${(loc.c[1] * pct) + halfPct}%`;
                 b.style.opacity = loc.s === 1 ? '1' : '0.3';
                 b.style.filter = loc.s === 1 ? 'none' : 'grayscale(100%) brightness(0.5)';
                 b.innerHTML = `<span class="marker-label">${loc.n}${loc.s === 0 ? ' (DESTRUÍDO)' : ''}</span>`;
@@ -158,8 +179,12 @@ async function update() {
                 locationCounts[key] = (locationCounts[key] || 0) + 1;
                 const offset = (locationCounts[key] - 1) * 6;
 
-                m.style.left = `calc(${(npc.coords[0] * 5) + 2.5}% + ${offset}px)`;
-                m.style.top = `calc(${(npc.coords[1] * 5) + 2.5}% + ${offset}px)`;
+                const mapSize = staticData.mapa ? staticData.mapa.length : 20;
+                const pct = 100 / mapSize;
+                const halfPct = pct / 2;
+
+                m.style.left = `calc(${(npc.coords[0] * pct) + halfPct}% + ${offset}px)`;
+                m.style.top = `calc(${(npc.coords[1] * pct) + halfPct}% + ${offset}px)`;
             });
         } else {
             document.querySelectorAll('.npc-marker').forEach(m => m.style.display = 'none');
@@ -176,32 +201,43 @@ async function update() {
                 filteredNpcs = data.npcs.filter(n => n.status.h <= 0);
             }
 
-            grid.innerHTML = filteredNpcs.map(n => `
-                <div class="npc-card" style="${n.status.h <= 0 ? 'opacity: 0.6; filter: grayscale(50%);' : ''}">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-                        <h3 style="font-family:'Outfit'">${n.nome} ${n.status.h <= 0 ? '💀' : ''}</h3>
-                        <span style="font-size:0.7rem; background:rgba(56,189,248,0.1); padding:2px 8px; border-radius:10px; color:var(--accent)">${n.status.h <= 0 ? 'FALECIDO' : n.acao}</span>
+            grid.innerHTML = filteredNpcs.map(n => {
+                const avatar = getNPCAvatar(n.bio.g, n.bio.ev);
+                const stageLabel = n.bio.ev === 'bebe' ? '🍼 Bebê' : (n.bio.ev === 'crianca' ? '🧸 Criança' : n.profissao);
+                const pregnantBadge = n.bio.gr > 0 ? `
+                    <div style="margin-top: 0.5rem; font-size: 0.65rem; color: #ff007f; background: rgba(255,0,127,0.08); border: 1px dashed #ff007f; padding: 2px 8px; border-radius: 6px; display: inline-block;">
+                        🤰 Gestante (${n.bio.gr} ticks)
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <span style="font-size:0.8rem; color:var(--text-dim)">${n.profissao}</span>
-                        <span style="font-size:0.7rem; color:var(--warning)">${n.status.h <= 0 ? 'Sem Humor' : n.status.m}</span>
-                    </div>
+                ` : '';
 
-                    <div class="health-bar">
-                        <div class="health-fill" style="width:${n.status.h}%; background:${n.status.h > 30 ? 'var(--success)' : 'var(--danger)'}"></div>
+                return `
+                    <div class="npc-card" style="${n.status.h <= 0 ? 'opacity: 0.6; filter: grayscale(50%);' : ''}">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                            <h3 style="font-family:'Outfit'">${avatar} ${n.nome} ${n.status.h <= 0 ? '💀' : ''}</h3>
+                            <span style="font-size:0.7rem; background:rgba(56,189,248,0.1); padding:2px 8px; border-radius:10px; color:var(--accent)">${n.status.h <= 0 ? 'FALECIDO' : n.acao}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
+                            <span style="font-size:0.8rem; color:var(--text-dim)">${stageLabel}</span>
+                            <span style="font-size:0.7rem; color:var(--warning)">${n.status.h <= 0 ? 'Sem Humor' : n.status.m}</span>
+                        </div>
+                        ${pregnantBadge}
+
+                        <div class="health-bar" style="margin-top:0.8rem;">
+                            <div class="health-fill" style="width:${n.status.h}%; background:${n.status.h > 30 ? 'var(--success)' : 'var(--danger)'}"></div>
+                        </div>
+                        <p style="font-size:0.6rem; color:var(--text-dim); margin-bottom:1rem; text-align:right">SAÚDE: ${n.status.h}%</p>
+                        <div class="status-row">
+                            ${renderStatus('⚡', n.status.e, 'var(--accent)')}
+                            ${renderStatus('🍗', n.status.f, 'var(--danger)')}
+                            ${renderStatus('💬', n.status.s, 'var(--success)')}
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                            <div style="font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
+                            <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" onclick="abrirHistorico('${n.id}', '${n.nome.replace(/'/g, "\\'")}')">👤 Perfil</button>
+                        </div>
                     </div>
-                    <p style="font-size:0.6rem; color:var(--text-dim); margin-bottom:1rem; text-align:right">SAÚDE: ${n.status.h}%</p>
-                    <div class="status-row">
-                        ${renderStatus('⚡', n.status.e, 'var(--accent)')}
-                        ${renderStatus('🍗', n.status.f, 'var(--danger)')}
-                        ${renderStatus('💬', n.status.s, 'var(--success)')}
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
-                        <div style="font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
-                        <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" onclick="abrirHistorico('${n.id}', '${n.nome.replace(/'/g, "\\'")}')">📜 Logs</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         if (data.evs) {
@@ -240,14 +276,158 @@ function updatePauseUI(isPaused) {
     btn.style.boxShadow = `0 0 10px ${isPaused ? "var(--success)" : "var(--accent)"}`;
 }
 
+function getNPCAvatar(genero, estagio_vida) {
+    if (estagio_vida === 'bebe') return '👶';
+    if (estagio_vida === 'crianca') return genero === 'M' ? '👦' : '👧';
+    if (estagio_vida === 'idoso') return genero === 'M' ? '👴' : '👵';
+    if (estagio_vida === 'morto') return '💀';
+    return genero === 'M' ? '👨' : '👩';
+}
+
+function getNPCNameById(npcId) {
+    if (!npcId) return null;
+    const found = allNpcs.find(n => n.id === npcId);
+    return found ? found.nome : "Desconhecido";
+}
+
+function getNPCChildren(npcId) {
+    return allNpcs.filter(n => n.bio.pai === npcId || n.bio.mae === npcId);
+}
+
+function getNPCRelationships(npcId) {
+    return allRels.filter(r => r.a === npcId);
+}
+
+function switchModalNPC(newNpcId) {
+    const found = allNpcs.find(n => n.id === newNpcId);
+    if (found) {
+        abrirHistorico(found.id, found.nome);
+    }
+}
+
+function switchModalTab(tab) {
+    activeModalTab = tab;
+    
+    // Atualizar UI dos botões das abas
+    document.getElementById('tab-profile-btn').classList.toggle('active', tab === 'profile');
+    document.getElementById('tab-logs-btn').classList.toggle('active', tab === 'logs');
+    
+    // Atualizar exibição dos blocos de conteúdo
+    document.getElementById('modal-tab-profile').style.display = tab === 'profile' ? 'block' : 'none';
+    document.getElementById('modal-tab-logs').style.display = tab === 'logs' ? 'block' : 'none';
+}
+
+function renderNPCProfile(npc) {
+    const avatar = getNPCAvatar(npc.bio.g, npc.bio.ev);
+    const generoStr = npc.bio.g === 'M' ? 'Masculino ♂️' : 'Feminino ♀️';
+    const estagioStr = npc.bio.ev === 'bebe' ? 'Bebê 👶' : 
+                       (npc.bio.ev === 'crianca' ? 'Criança 👦' : 
+                       (npc.bio.ev === 'idoso' ? 'Idoso(a) 👴👵' : 
+                       (npc.bio.ev === 'morto' ? 'Falecido(a) 💀' : 'Adulto(a) 🧑')));
+    
+    // Pais
+    const maeNome = getNPCNameById(npc.bio.mae);
+    const paiNome = getNPCNameById(npc.bio.pai);
+    
+    const maeLink = npc.bio.mae ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.mae}')">👩 ${maeNome}</a>` : '<span style="color: var(--text-dim)">Desconhecida</span>';
+    const paiLink = npc.bio.pai ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.pai}')">👨 ${paiNome}</a>` : '<span style="color: var(--text-dim)">Desconhecido</span>';
+    
+    // Filhos
+    const filhos = getNPCChildren(npc.id);
+    const filhosList = filhos.length > 0 ? filhos.map(f => `
+        <li style="list-style: none; margin-bottom: 0.3rem;">
+            <a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${f.id}')">👶 ${f.nome} (${f.bio.ev === 'bebe' ? 'Bebê' : 'Criança'})</a>
+        </li>
+    `).join('') : '<span style="color: var(--text-dim)">Nenhum filho registrado.</span>';
+    
+    // Círculo Social
+    const rels = getNPCRelationships(npc.id);
+    const relsList = rels.length > 0 ? rels.map(r => {
+        const outroNome = getNPCNameById(r.b);
+        const afinidadeCor = r.af > 60 ? 'var(--success)' : (r.af < 30 ? 'var(--danger)' : 'var(--warning)');
+        return `
+            <div style="display:flex; justify-content:space-between; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 0.4rem; font-size: 0.8rem; border-left: 3px solid ${afinidadeCor};">
+                <span style="font-weight: 600; color: var(--text);">${outroNome}</span>
+                <span style="color: var(--text-dim)">${r.v} (<strong style="color: ${afinidadeCor}">${r.af} afinidade</strong>)</span>
+            </div>
+        `;
+    }).join('') : '<span style="color: var(--text-dim)">Sem conexões sociais expressivas.</span>';
+
+    // Gestão de gravidez
+    const gravidezHtml = npc.bio.gr > 0 ? `
+        <div style="background: rgba(255,0,127,0.08); border: 1px dashed #ff007f; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; color: #ff007f; display:flex; align-items:center; gap: 0.8rem;">
+            <span style="font-size: 1.5rem;">🤰</span>
+            <div>
+                <strong style="display:block">Período de Gestação Ativo</strong>
+                <span style="font-size: 0.75rem; color: var(--text-dim);">Faltam ${npc.bio.gr} ticks virtuais para o nascimento do bebê!</span>
+            </div>
+        </div>
+    ` : '';
+
+    return `
+        ${gravidezHtml}
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+            <!-- Informações Básicas -->
+            <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
+                <h4 style="color: var(--accent); font-family: 'Outfit'; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(56,189,248,0.1); padding-bottom: 0.4rem;">👤 Identidade</h4>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem;">
+                    <div><span style="color: var(--text-dim)">Gênero:</span> <strong>${generoStr}</strong></div>
+                    <div><span style="color: var(--text-dim)">Fase da Vida:</span> <strong>${estagioStr}</strong></div>
+                    <div><span style="color: var(--text-dim)">Idade Biológica:</span> <strong style="color: var(--accent)">${npc.bio.idade || 0} anos</strong></div>
+                    <div><span style="color: var(--text-dim)">Profissão:</span> <strong>${npc.profissao}</strong></div>
+                    <div><span style="color: var(--text-dim)">Ação Atual:</span> <strong>${npc.acao}</strong></div>
+                    <div><span style="color: var(--text-dim)">Saúde:</span> <strong style="color: ${npc.status.h > 40 ? 'var(--success)' : 'var(--danger)'}">${npc.status.h}%</strong></div>
+                    <div><span style="color: var(--text-dim)">Humor:</span> <strong style="color: var(--warning)">${npc.status.m}</strong></div>
+                    <div><span style="color: var(--text-dim)">Finanças:</span> <strong style="color: var(--success)">💰 ${npc.status.d}</strong></div>
+                    <div><span style="color: var(--text-dim)">Data Nascimento:</span> <span>${npc.bio.dn.split('T')[0] || "Era Inicial"}</span></div>
+                </div>
+            </div>
+            
+            <!-- Família e Árvore Genealógica -->
+            <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
+                <h4 style="color: var(--accent); font-family: 'Outfit'; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(56,189,248,0.1); padding-bottom: 0.4rem;">👨‍👩‍👧 Árvore Genealógica</h4>
+                <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.8rem;">
+                    <div><span style="color: var(--text-dim)">Mãe:</span> ${maeLink}</div>
+                    <div><span style="color: var(--text-dim)">Pai:</span> ${paiLink}</div>
+                    <div style="margin-top: 0.4rem;">
+                        <span style="color: var(--text-dim); display:block; margin-bottom:0.3rem">Filhos:</span>
+                        <ul style="padding-left: 0; margin: 0;">${filhosList}</ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Relações Sociais -->
+            <div style="grid-column: 1 / -1; background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
+                <h4 style="color: var(--accent); font-family: 'Outfit'; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(56,189,248,0.1); padding-bottom: 0.4rem;">💬 Círculo de Relacionamentos</h4>
+                <div style="max-height: 140px; overflow-y: auto; padding-right: 0.3rem;">
+                    ${relsList}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 async function abrirHistorico(npcId, npcNome) {
+    activeNpcId = npcId;
     const modal = document.getElementById('npc-log-modal');
     const title = document.getElementById('modal-npc-nome');
+    const profileContainer = document.getElementById('modal-profile-details');
     const list = document.getElementById('modal-log-list');
 
-    title.innerText = `Histórico de ${npcNome}`;
+    title.innerText = `Ficha de ${npcNome}`;
     list.innerHTML = `<p style="text-align: center; color: var(--text-dim);">Carregando logs...</p>`;
+    profileContainer.innerHTML = `<p style="text-align: center; color: var(--text-dim);">Carregando ficha...</p>`;
     modal.classList.add('active');
+    
+    // Resetar aba padrão para Perfil
+    switchModalTab('profile');
+
+    // Renderizar perfil imediatamente a partir da memória
+    const foundNpc = allNpcs.find(n => n.id === npcId);
+    if (foundNpc) {
+        profileContainer.innerHTML = renderNPCProfile(foundNpc);
+    }
 
     try {
         const res = await fetch(`/api/npc_logs/${npcId}`);
@@ -258,7 +438,7 @@ async function abrirHistorico(npcId, npcNome) {
         }
 
         if (!data.logs || data.logs.length === 0) {
-            list.innerHTML = `<p style="color: var(--text-dim); text-align: center;">Nenhum registro encontrado para este habitante.</p>`;
+            list.innerHTML = `<p style="color: var(--text-dim); text-align: center;">Nenhum registro de crônica encontrado para este habitante.</p>`;
             return;
         }
 
@@ -284,6 +464,8 @@ function fecharHistorico(event) {
     if (event) event.stopPropagation();
     const modal = document.getElementById('npc-log-modal');
     modal.classList.remove('active');
+    activeNpcId = null;
 }
 
 init();
+

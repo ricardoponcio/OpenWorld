@@ -4,8 +4,8 @@
 echo "🧨 Iniciando Reset Total do Mundo..."
 rm -f database/openworld.db
 
-echo "🏗️  Construindo novo mundo com IA (15 NPCs)..."
-python3 builder/manager.py --npcs 15 --ia
+echo "🏗️  Construindo novo mundo com IA..."
+python3 builder/manager.py --npcs 20 --ia --map-size 40 --ia-max-thread 3
 
 echo "💼 Configurando Mercado de Trabalho..."
 python3 builder/setup_jobs.py

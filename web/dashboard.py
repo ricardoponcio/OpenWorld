@@ -3,6 +3,12 @@ import sqlite3
 import os
 import sys
 import json
+from datetime import datetime
+
+# Carregar config.json globalmente
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
+with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+    config = json.load(f)
 
 # Adicionar a raiz do projeto ao path para importar a engine
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -67,16 +73,37 @@ def get_update():
         conn = get_db_connection()
         warnings = []
 
+        # Obter data simulada atual
+        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'hora_simulada_iso'").fetchone()
+        data_simulada_iso = meta_hora['valor'] if meta_hora else '1200-01-01T06:00:00'
+        data_simulada = datetime.fromisoformat(data_simulada_iso)
+
         # Mapeamento de Coordenadas
         locais_rows = safe_query(conn, 'SELECT id, coordenadas FROM locais')
         if not locais_rows: warnings.append("Tabela 'locais' ausente.")
         mapa_coords = {r['id']: json.loads(r['coordenadas']) if r['coordenadas'] else [0,0] for r in locais_rows}
+
+        # Carregar limiar de morte da config
+        cfg_bio = config.get("biologia_e_sociedade", {})
+        limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 12)
 
         # NPCs
         npcs_rows = safe_query(conn, 'SELECT * FROM npcs')
         if not npcs_rows: warnings.append("Tabela 'npcs' ausente.")
         npcs = []
         for r in npcs_rows:
+            # Calcular idade biológica em anos reais
+            idade_anos = 0
+            dn_raw = r['data_nascimento'] if 'data_nascimento' in r.keys() else ''
+            if dn_raw:
+                try:
+                    dt_str = dn_raw.replace(' ', 'T')
+                    birth = datetime.fromisoformat(dt_str)
+                    idade_dias = (data_simulada - birth).days
+                    idade_anos = int((idade_dias / limiar_morte) * 80.0)
+                except Exception as e:
+                    pass
+
             npcs.append({
                 "id": r['id'], "nome": r['nome'], "profissao": r['profissao'],
                 "acao": r['acao_atual'], "coords": mapa_coords.get(r['localizacao_atual_id'], [0,0]),
@@ -84,8 +111,16 @@ def get_update():
                     "e": r['energia'], "f": r['fome'], "s": r['social'], 
                     "d": formatar_moeda(r['dinheiro_total_pc']),
                     "h": r['saude'], "m": r['humor']
+                },
+                "bio": {
+                    "g": r['genero'] if 'genero' in r.keys() else 'M',
+                    "ev": r['estagio_vida'] if 'estagio_vida' in r.keys() else 'adulto',
+                    "dn": r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
+                    "pai": r['pai_id'] if 'pai_id' in r.keys() else '',
+                    "mae": r['mae_id'] if 'mae_id' in r.keys() else '',
+                    "gr": r['gravidez_ticks'] if 'gravidez_ticks' in r.keys() else 0,
+                    "idade": idade_anos
                 }
-
             })
 
         # Relacionamentos

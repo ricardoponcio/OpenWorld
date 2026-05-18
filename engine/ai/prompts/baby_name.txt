@@ -1,0 +1,3 @@
+Um bebê do gênero {genero} nasceu. A mãe se chama {mae_nome} e o pai se chama {pai_nome}.
+Gere um nome próprio e sobrenome bonito e condizente (ex: Alistair {sobrenome_bebe}).
+Retorne apenas o nome completo final.

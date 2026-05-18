@@ -2,8 +2,8 @@
     "salvar_logs_npc_no_banco": false,
     "metabolismo": {
         "energia_base_perda": 0.5,
-        "fome_base_ganho_min": 1.5,
-        "fome_base_ganho_max": 3.5,
+        "fome_base_ganho_min": 0.8,
+        "fome_base_ganho_max": 1.6,
         "social_base_perda_min": 0.5,
         "social_base_perda_max": 1.2,
         "_comentario": "Valores base. Aumentei a perda de energia base para 0.5."
@@ -19,7 +19,7 @@
             "custo_pc": 15
         },
         "trabalhar": {
-            "energia_perda": 3.0,
+            "energia_perda": 1.8,
             "salario_pc": 5
         },
         "socializar": {
@@ -55,6 +55,8 @@
         "crescimento_hora": 4,
         "crescimento_dias_bebe_para_crianca": 1,
         "crescimento_dias_crianca_para_adulto": 3,
+        "crescimento_dias_adulto_para_idoso": 100,
+        "crescimento_dias_idoso_para_morte": 120,
         "cuidar_prole_consumo_energia": 2.0,
         "cuidar_prole_ganho_social": 15.0,
         "heranca_afinidade_minima_conjuge": 50,

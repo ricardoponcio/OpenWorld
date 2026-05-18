@@ -9,6 +9,8 @@ import random
 import argparse
 import sys
 import os
+import json
+from datetime import datetime, timedelta
 
 # Ajustar path para importar a engine
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -18,7 +20,7 @@ from engine.database import DatabaseManager
 from builder.generator import AIWorldGenerator
 from builder.cartographer import Cartographer
 
-def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
+def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia_max_thread=1):
     db = DatabaseManager()
     
     print(f"🏗️  Iniciando Construção de Mundo: {tema}")
@@ -65,7 +67,7 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
     num_casas = (num_npcs // 2) + 1
 
     # --- CARTOGRAFIA ---
-    carto = Cartographer(size=20)
+    carto = Cartographer(size=map_size)
     grid = carto.generate_terrain()
     
     locais_ids = [l['id'] for l in profissoes_pool]
@@ -97,19 +99,48 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
 
     # 3. Gerar NPCs
     nomes_gerados = []
+    
+    # Pre-generate parameters
+    npc_params = []
     for i in range(num_npcs):
-        # Decidir gênero de forma balanceada (Alternado)
         genero_alvo = 'M' if i % 2 == 0 else 'F'
-
-        # NPCs trabalham em locais que não são sociais
         loc_trabalho = random.choice([l for l in profissoes_pool if l['tipo'] != 'Social'])
         casa = random.choice(casas_ids)
+        npc_params.append((i, genero_alvo, loc_trabalho, casa))
         
+    def generate_single_npc(params):
+        i, genero_alvo, loc_trabalho, casa = params
         dna = None
         if usar_ia:
             print(f"  🧠 Consultando IA para habitante {i+1} ({genero_alvo}) de {tema}...")
             dna = AIWorldGenerator.generate_npc_dna(tema, loc_trabalho['nome'], loc_trabalho['tipo'], genero_alvo, nomes_gerados)
-        
+        return (params, dna)
+
+    resultados_dna = []
+    if usar_ia and ia_max_thread > 1:
+        import concurrent.futures
+        print(f"⚡ Iniciando geração de NPCs em paralelo com {ia_max_thread} threads...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=ia_max_thread) as executor:
+            resultados_dna = list(executor.map(generate_single_npc, npc_params))
+    else:
+        for params in npc_params:
+            resultados_dna.append(generate_single_npc(params))
+
+    # Carregar config.json uma vez fora do loop
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+    except:
+        config_data = {}
+
+    cfg_bio = config_data.get("biologia_e_sociedade", {})
+    limiar_adulto = cfg_bio.get("crescimento_dias_crianca_para_adulto", 3)
+    limiar_idoso = cfg_bio.get("crescimento_dias_adulto_para_idoso", 100)
+    limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 120)
+
+    for params, dna in resultados_dna:
+        i, genero_alvo, loc_trabalho, casa = params
         if dna:
             nome = dna.get('nome', f"Habitante {i}")
             profissao = dna.get('cargo', f"Trabalhador de {loc_trabalho['nome']}")
@@ -124,15 +155,24 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
         
         nomes_gerados.append(nome)
 
-
-
-        # Sorteia idade inicial (18 a 65 anos) e calcula data_nascimento (começo em 1200)
-        idade_inicial = random.randint(18, 65)
-        ano_nasc = 1200 - idade_inicial
-        mes_nasc = random.randint(1, 12)
-        dia_nasc = random.randint(1, 28)
-        data_nascimento = f"{ano_nasc:04d}-{mes_nasc:02d}-{dia_nasc:02d}T00:00:00"
-        estagio_vida = "adulto" if idade_inicial <= 50 else "idoso"
+        # Sorteia idade em anos de vida real (18 a 65 anos)
+        idade_inicial_anos = random.randint(18, 65)
+        
+        # Converte para dias de simulação proporcionalmente
+        idade_inicial_dias = int((idade_inicial_anos / 80.0) * limiar_morte)
+        
+        # Garante que as fases fiquem perfeitamente sincronizadas com os limiares da simulação
+        if idade_inicial_anos <= 50:
+            idade_inicial_dias = max(limiar_adulto + 1, min(limiar_idoso - 1, idade_inicial_dias))
+            estagio_vida = "adulto"
+        else:
+            idade_inicial_dias = max(limiar_idoso, min(limiar_morte - 2, idade_inicial_dias))
+            estagio_vida = "idoso"
+            
+        # Calcula data_nascimento voltando os dias simulados no tempo (a partir de 1200-01-01)
+        data_inicio = datetime(1200, 1, 1, 0, 0)
+        dt_nasc = data_inicio - timedelta(days=idade_inicial_dias)
+        data_nascimento = dt_nasc.isoformat()
 
         npc = NPC(
             id=f"npc_{i:03d}",
@@ -147,7 +187,7 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False):
             estagio_vida=estagio_vida
         )
         db.salvar_npc(npc)
-        print(f"  ✅ Gerado: {nome} ({genero}) | Idade: {idade_inicial} anos ({estagio_vida}) | Atuação: {profissao}")
+        print(f"  ✅ Gerado: {nome} ({genero}) | Idade Inicial: {idade_inicial_anos} anos (~{idade_inicial_dias} dias virtuais) | Estágio: {estagio_vida} | Atuação: {profissao}")
 
 
 
@@ -159,6 +199,8 @@ if __name__ == "__main__":
     parser.add_argument("--npcs", type=int, default=5)
     parser.add_argument("--tema", type=str, default="Fantasia Medieval")
     parser.add_argument("--ia", action="store_true", help="Usa Ollama para gerar nomes e raças")
+    parser.add_argument("--map-size", type=int, default=20, help="Tamanho do mapa (nxn)")
+    parser.add_argument("--ia-max-thread", type=int, default=1, help="Número máximo de threads para geração de IA em paralelo")
     args = parser.parse_args()
     
-    build_world(args.npcs, args.tema, args.ia)
+    build_world(args.npcs, args.tema, args.ia, args.map_size, args.ia_max_thread)

@@ -4,12 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from .models import NPC, Local, Evento, Acao, EstagioVida, HumorNPC, TipoEvento
 
-from .logic import NPCBrain
+from .mechanics import NPCBrain, NPCBiologyManager, NPCLegacyManager, NPCSocialManager, NPCActionManager
 from .database import DatabaseManager
-from .biology import NPCBiologyManager
-from .finance import NPCLegacyManager
-from .social import NPCSocialManager
-from .actions import NPCActionManager
 from .logger import WorldLogger
 from .utils import NPCUtils
 
@@ -155,7 +151,7 @@ class SimulationEngine:
             npc.saude = max(0, min(100, npc.saude))
             
             if npc.saude <= 0:
-                NPCLegacyManager.processar_morte(self, npc)
+                NPCBiologyManager.processar_morte(self, npc)
                 continue
             
             self.db.salvar_npc(npc)

@@ -1,6 +1,6 @@
 import time
 from engine.core import SimulationEngine
-from engine.market import JobMarket
+from engine.mechanics import JobMarket
 
 def start_simulation():
     engine = SimulationEngine()

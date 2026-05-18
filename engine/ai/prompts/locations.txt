@@ -1,0 +1,6 @@
+Você é um arquiteto de mundos lendários. Com base no tema '{tema}', invente EXATAMENTE {quantidade} locais urbanos únicos.
+
+REGRAS:
+1. Distribua entre locais de trabalho (indústria, comércio, magia) e pelo menos 2 locais sociais.
+2. Tipos permitidos: Campo, Oficina, Social, Magia, Mar, Loja, Defesa.
+3. Retorne um JSON com a lista de objetos: {{"nome": "Nome", "tipo": "Tipo", "descricao": "desc"}}.

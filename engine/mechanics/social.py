@@ -1,9 +1,9 @@
 import time
 import random
 from datetime import datetime
-from .models import NPC, Evento, Acao, TipoEvento, EstagioVida
-from .logger import WorldLogger
-from .utils import NPCUtils
+from ..models import NPC, Evento, Acao, TipoEvento, EstagioVida
+from ..logger import WorldLogger
+from ..utils import NPCUtils
 
 class NPCSocialManager:
     @staticmethod

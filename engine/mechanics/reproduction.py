@@ -1,13 +1,12 @@
 import time
 import random
-import re
 from datetime import datetime
-from typing import List
-from .models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento
-from .logger import WorldLogger
-from .utils import NPCUtils
+from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao
+from ..logger import WorldLogger
+from ..utils import NPCUtils
+from ..ai import AIBiographyClient
 
-class NPCBiologyManager:
+class NPCReproductionManager:
     @staticmethod
     def processar_concepcao(engine):
         """Varredura noturna para concepção em casais que dividem a mesma casa e têm alta afinidade."""
@@ -16,7 +15,6 @@ class NPCBiologyManager:
         for npc in engine.npcs:
             if not npc.casa_id:
                 continue
-            from .models import Acao
             if npc.acao_atual != Acao.DORMIR:
                 continue
             if npc.casa_id not in por_casa:
@@ -76,10 +74,14 @@ class NPCBiologyManager:
             homens.sort(key=lambda h: mae.relacionamentos.get(h.id, 0), reverse=True)
             pai = homens[0]
             
-        # 2. Gerar o nome e gênero do bebê
+        # 2. Gerar o nome temporário e gênero do bebê
         genero_bebe = random.choice(['M', 'F'])
         nome_mae = mae.nome
         nome_pai = pai.nome if pai else "Desconhecido"
+        
+        nome_mae_curto = nome_mae.split()[0]
+        nome_pai_curto = nome_pai.split()[0] if pai else "Desconhecido"
+        nome_temp_bebe = f"Bebê de {nome_mae_curto} e {nome_pai_curto}" if pai else f"Bebê de {nome_mae_curto}"
         
         def extrair_sobrenome(nome):
             partes = nome.split()
@@ -95,34 +97,15 @@ class NPCBiologyManager:
         if sobrenome_mae and sobrenome_pai and sobrenome_mae != sobrenome_pai:
             sobrenome_bebe = f"{sobrenome_pai} {sobrenome_mae}" if random.random() < 0.5 else sobrenome_pai
             
-        prompt = f"Um bebê do gênero {genero_bebe} nasceu. A mãe se chama {nome_mae} e o pai se chama {nome_pai}. Gere um nome próprio e sobrenome bonito e condizente (ex: Alistair {sobrenome_bebe}). Retorne apenas o nome completo final."
-        
-        nome_bebe = ""
-        try:
-            from builder.generator import AIWorldGenerator
-            res_ia = AIWorldGenerator.ask_ai(prompt).strip()
-            res_ia = re.sub(r'["\'`\n\r]', '', res_ia)
-            if res_ia and len(res_ia) < 50 and "Erro" not in res_ia:
-                nome_bebe = res_ia
-        except Exception as e:
-            pass
-            
-        if not nome_bebe:
-            nomes_masculinos = ["Arthur", "Alistair", "Tristan", "Cedric", "Edric", "Kaelen", "Gareth", "Rowan", "Elian", "Lucas"]
-            nomes_femininos = ["Lyra", "Elora", "Sylvia", "Aria", "Eliana", "Maeve", "Seraphina", "Isolde", "Clara", "Fiona"]
-            primeiro_nome = random.choice(nomes_masculinos) if genero_bebe == 'M' else random.choice(nomes_femininos)
-            nome_bebe = f"{primeiro_nome} {sobrenome_bebe}"
-            
-        # 3. Criar e salvar o bebê no banco
+        # 3. Criar e salvar o bebê com nome temporário no banco
         dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
         timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
         
         bebe_id = f"npc_bebe_{int(time.time())}_{random.randint(0, 999)}"
-        from .models import Acao
         
         novo_bebe = NPC(
             id=bebe_id,
-            nome=nome_bebe,
+            nome=nome_temp_bebe,
             profissao="dependente",
             profissao_id="ocioso",
             casa_id=mae.casa_id,
@@ -162,85 +145,65 @@ class NPCBiologyManager:
         # Recarregar os NPCs na engine para incluir o novo bebê na memória
         engine.npcs = engine.db.carregar_npcs()
         
-        # Registrar evento de parto
+        # Registrar evento de parto com nome temporário
         pais_str = f"{mae.nome} e {pai.nome}" if pai else mae.nome
-        resumo = f"Nascimento na Vila! Nasceu o bebê {nome_bebe} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+        resumo_temp = f"Nascimento na Vila! Nasceu o bebê {nome_temp_bebe} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+        evento_id = f"evt_parto_{int(time.time())}_{random.randint(0,999)}"
         
         evento = Evento(
-            id=f"evt_parto_{int(time.time())}_{random.randint(0,999)}",
+            id=evento_id,
             timestamp=timestamp_rpg,
             local_id=mae.casa_id,
             envolvidos=[mae.id, bebe_id] + ([pai.id] if pai else []),
             tipo_evento=TipoEvento.NASCIMENTO.value,
             modificador_afinidade=20,
-            resumo_estruturado=resumo
+            resumo_estruturado=resumo_temp
         )
         engine.db.salvar_evento(evento)
-        WorldLogger.info(f"👶 [PARTO] {resumo}", npc=mae)
+        WorldLogger.info(f"👶 [PARTO] {resumo_temp}", npc=mae)
+
+        # 5. Batizado Assíncrono via IA rodando em Thread isolada (Estratégia C)
+        NPCReproductionManager._iniciar_batizado_assincrono(
+            engine, bebe_id, genero_bebe, sobrenome_bebe,
+            nome_mae, nome_pai, nome_temp_bebe, pais_str, evento_id
+        )
 
     @staticmethod
-    def processar_crescimento(engine):
-        """Varredura diária para processar o crescimento e transição de estágios de vida dos NPCs."""
-        cfg_bio = engine.config.get("biologia_e_sociedade", {})
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+    def _iniciar_batizado_assincrono(engine, bebe_id: str, genero_bebe: str, sobrenome_bebe: str, 
+                                     nome_mae: str, nome_pai: str, nome_temp_bebe: str, 
+                                     pais_str: str, evento_id: str):
+        """
+        Dispara uma thread separada para gerar o nome do bebê via IA
+        e atualizar o banco de dados e a memória em execução de forma assíncrona.
+        """
+        import threading
+        import sqlite3
 
-        for npc in engine.npcs:
-            if not npc.esta_vivo() or not npc.data_nascimento:
-                continue
-            
+        def batizar_bebe_thread():
             try:
-                dt_str = npc.data_nascimento.replace(' ', 'T')
-                birth = datetime.fromisoformat(dt_str)
-                idade_dias = (engine.data_simulada - birth).days
+                # 1. Consulta o LLM em background (sem travar os ticks principais)
+                nome_gerado = AIBiographyClient.gerar_nome_bebe(genero_bebe, sobrenome_bebe, nome_mae, nome_pai)
+                
+                # 2. Persiste o nome final no banco de dados (Thread-Safe)
+                conn = sqlite3.connect(engine.db.db_path)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE npcs SET nome = ? WHERE id = ?", (nome_gerado, bebe_id))
+                
+                # 3. Atualiza a descrição do evento de nascimento
+                resumo_final = f"Nascimento na Vila! Nasceu o bebê {nome_gerado} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+                cursor.execute("UPDATE eventos SET resumo_estruturado = ? WHERE id = ?", (resumo_final, evento_id))
+                conn.commit()
+                conn.close()
+                
+                # 4. Sincroniza o novo nome na lista ativa de NPCs da Engine
+                for n in engine.npcs:
+                    if n.id == bebe_id:
+                        n.nome = nome_gerado
+                        break
+                        
+                WorldLogger.info(f"👶 [IA-NOME] O bebê '{nome_temp_bebe}' foi batizado com sucesso como: '{nome_gerado}'!")
             except Exception as e:
-                continue
+                WorldLogger.error(f"❌ Erro ao batizar bebê de forma assíncrona: {e}")
 
-            # Bebê -> Criança
-            limiar_crianca = cfg_bio.get("crescimento_dias_bebe_para_crianca", 1)
-            if npc.estagio_vida == EstagioVida.BEBE.value and idade_dias >= limiar_crianca:
-                npc.estagio_vida = EstagioVida.CRIANCA.value
-                
-                resumo = f"Crescimento: O pequeno bebê {npc.nome} deu seus primeiros passos e agora é uma linda criança!"
-                WorldLogger.info(f"🌱 [CRESCIMENTO] {resumo}", npc=npc)
-                
-                evento = Evento(
-                    id=f"evt_crescer_{int(time.time())}_{random.randint(0,999)}",
-                    timestamp=timestamp_rpg,
-                    local_id=npc.casa_id or "rua",
-                    envolvidos=[npc.id],
-                    tipo_evento=TipoEvento.CRESCIMENTO.value,
-                    modificador_afinidade=15,
-                    resumo_estruturado=resumo
-                )
-                engine.db.salvar_evento(evento)
-                engine.db.salvar_npc(npc)
-
-            # Criança -> Adulto
-            elif npc.estagio_vida == EstagioVida.CRIANCA.value and idade_dias >= cfg_bio.get("crescimento_dias_crianca_para_adulto", 3):
-                npc.estagio_vida = EstagioVida.ADULTO.value
-                
-                # Procura emprego no mercado de trabalho
-                locais_trabalho = [l_id for l_id, l in engine.locais.items() if l.tipo not in ('Casa', 'Social') and getattr(l, 'status', 1) == 1]
-                if locais_trabalho:
-                    npc.local_trabalho_id = random.choice(locais_trabalho)
-                    loc_trab = engine.locais[npc.local_trabalho_id]
-                    npc.profissao = f"Auxiliar de {loc_trab.nome}"
-                else:
-                    npc.local_trabalho_id = ""
-                    npc.profissao = "Trabalhador Autônomo"
-
-                resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e assumindo o papel de {npc.profissao}!"
-                WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}", npc=npc)
-
-                evento = Evento(
-                    id=f"evt_adulto_{int(time.time())}_{random.randint(0,999)}",
-                    timestamp=timestamp_rpg,
-                    local_id=npc.casa_id or "rua",
-                    envolvidos=[npc.id],
-                    tipo_evento=TipoEvento.MAIORIDADE.value,
-                    modificador_afinidade=20,
-                    resumo_estruturado=resumo
-                )
-                engine.db.salvar_evento(evento)
-                engine.db.salvar_npc(npc)
+        # Disparar thread daemon
+        threading.Thread(target=batizar_bebe_thread, daemon=True).start()

@@ -1,6 +1,6 @@
 import random
-from .models import NPC, Acao
-from .logger import WorldLogger
+from ..models import NPC, Acao
+from ..logger import WorldLogger
 
 class NPCMovementManager:
     @staticmethod
@@ -8,6 +8,10 @@ class NPCMovementManager:
         """Move o NPC para um local específico com validação de segurança."""
         locais = engine.locais
         
+        # Se for bebê ou dependente, ele deve SEMPRE ficar em sua própria residência!
+        if getattr(npc, 'estagio_vida', '') == 'bebe' or npc.profissao == 'dependente':
+            local_id = npc.casa_id
+            
         # Se o local de destino não existe ou está inativo (status=0), volta para casa
         local_destino = locais.get(local_id) if locais else None
         if not local_destino or getattr(local_destino, 'status', 1) != 1:
@@ -64,5 +68,19 @@ class NPCMovementManager:
         
         if restaurantes:
             NPCMovementManager.mover_para(engine, npc, random.choice(restaurantes))
+        else:
+            NPCMovementManager.mover_para_casa(engine, npc)
+
+    @staticmethod
+    def mover_para_local_social(engine, npc: NPC):
+        """Redireciona para mover_para_social para compatibilidade externa."""
+        NPCMovementManager.mover_para_social(engine, npc)
+
+    @staticmethod
+    def mover_aleatoriamente(engine, npc: NPC):
+        """Move o NPC aleatoriamente entre locais ativos."""
+        locais = [l_id for l_id, l in engine.locais.items() if getattr(l, 'status', 1) == 1] if engine.locais else []
+        if locais:
+            NPCMovementManager.mover_para(engine, npc, random.choice(locais))
         else:
             NPCMovementManager.mover_para_casa(engine, npc)

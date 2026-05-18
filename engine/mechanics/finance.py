@@ -1,43 +1,17 @@
 import time
 import random
 from datetime import datetime
-from .models import NPC, Evento, Acao, EstagioVida, TipoEvento
-from .logger import WorldLogger
-from .utils import NPCUtils
+from ..models import NPC, Evento, Acao, EstagioVida, TipoEvento
+from ..logger import WorldLogger
+from ..utils import NPCUtils
 
 class NPCLegacyManager:
     @staticmethod
-    def processar_morte(engine, npc: NPC):
-        """Processa o falecimento de um NPC, liberando seus recursos e registrando o óbito."""
+    def processar_heranca(engine, npc: NPC, timestamp_rpg: str):
+        """Processa o testamento e a herança financeira de um NPC recém-falecido."""
         cfg_bio = engine.config.get("biologia_e_sociedade", {})
-        # 1. Registrar o evento no banco para consistência histórica
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
         
-        idade_anos = 0
-        if npc.data_nascimento:
-            try:
-                ano_nasc = int(npc.data_nascimento.split('-')[0])
-                idade_anos = engine.data_simulada.year - ano_nasc
-            except:
-                pass
-                
-        idade_str = f" aos {idade_anos} anos" if idade_anos > 0 else ""
-        resumo = f"Luto na Vila: O habitante {npc.nome} faleceu{idade_str} devido a problemas de saúde/inanição."
-        
-        evento = Evento(
-            id=f"evt_morte_{int(time.time())}_{random.randint(0,999)}",
-            timestamp=timestamp_rpg,
-            local_id=npc.casa_id or "rua",
-            envolvidos=[npc.id],
-            tipo_evento=TipoEvento.OBITO.value,
-            modificador_afinidade=0,
-            resumo_estruturado=resumo
-        )
-        engine.db.salvar_evento(evento)
-        WorldLogger.info(f"💀 [ÓBITO] {resumo}", npc=npc)
-        
-        # --- FASE 5: Testamento Automático (Herança) ---
+        # --- Testamento Automático (Herança) ---
         herdeiros = []
         # 1. Procurar filhos vivos em qualquer lugar do mundo
         for n in engine.npcs:
@@ -96,14 +70,3 @@ class NPCLegacyManager:
                 engine.db.salvar_evento(evt_reino)
                 
             npc.dinheiro_total_pc = 0
-
-        # 2. Desvincular de casa e trabalho para liberar capacidade no mercado
-        npc.casa_id = ""
-        npc.local_trabalho_id = ""
-        npc.localizacao_atual_id = ""
-        npc.acao_atual = Acao.OCIOSO
-        npc.estagio_vida = EstagioVida.MORTO.value
-        npc.saude = 0
-        
-        # 3. Salvar as alterações finais do NPC falecido no banco de dados
-        engine.db.salvar_npc(npc)
