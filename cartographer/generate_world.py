@@ -3,14 +3,14 @@ import os
 import sys
 
 # Garante que a raiz do projeto esteja no sys.path para importações globais
-raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if raiz not in sys.path:
     sys.path.append(raiz)
 
-from world_manager import WorldManager
+from cartographer.world_manager import WorldManager
 
 def gerar_mundo_composto():
-    # 1. Configurações base (Mesmas do seu teste anterior)
+    # 1. Configurações base
     CONFIG = {
         "frequencia": 200.0,
         "oitavas": 8,
@@ -32,8 +32,8 @@ def gerar_mundo_composto():
 
     print("=== Gerando Região Composta ===")
     
-    # 3. Define a área (Ex: Começar no tile 0,0 e gerar uma grade de 3x3 tiles)
-    # Isso vai gerar os tiles (0,0), (1,0), (2,0), (0,1)... até (2,2)
+    # 3. Define a área (Começar no tile 0,0 e gerar uma grade de 3x3 tiles)
+    # Isso gera os tiles (0,0), (1,0), (2,0), (0,1)... até (2,2)
     mapa_composto = manager.get_full_map_region(
         tx_start=0, 
         ty_start=0, 
@@ -41,8 +41,7 @@ def gerar_mundo_composto():
         height_tiles=3
     )
 
-    # 4. Salva o resultado final (O "Arquivão" de sempre)
-    # O formato .npz continua o mesmo, seu simulador nem percebe que foi feito em pedaços
+    # 4. Salva o resultado final
     np.savez_compressed("database/mapa_composto.npz", mapa=mapa_composto)
     
     print(f"Mundo composto gerado! Tamanho final: {mapa_composto.shape}")

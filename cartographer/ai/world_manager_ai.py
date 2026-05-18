@@ -3,7 +3,7 @@ import os
 import sys
 
 # Garante que a raiz do projeto esteja no sys.path para importações globais
-raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.append(raiz)
 
