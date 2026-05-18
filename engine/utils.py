@@ -51,3 +51,11 @@ class NPCUtils:
             and n.casa_id == npc.casa_id 
             and n.is_adulto()
         ]
+
+    @staticmethod
+    def tem_conjuge(npc: NPC) -> bool:
+        """
+        Verifica se o NPC é formalmente casado com alguém usando o novo status civil.
+        """
+        from .models import EstadoCivil
+        return npc.estado_civil == EstadoCivil.CASADO.value and npc.conjuge_id != ""

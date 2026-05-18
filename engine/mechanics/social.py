@@ -1,7 +1,7 @@
 import time
 import random
 from datetime import datetime
-from ..models import NPC, Evento, Acao, TipoEvento, EstagioVida
+from ..models import NPC, Evento, Acao, TipoEvento, EstagioVida, EstadoCivil
 from ..logger import WorldLogger
 from ..utils import NPCUtils
 
@@ -32,9 +32,8 @@ class NPCSocialManager:
         adultos_ferteis = [n for n in engine.npcs if n.esta_vivo() and n.pode_procriar()]
         
         for n1 in adultos_ferteis:
-            # Utiliza o helper para obter parceiros adultos na mesma moradia
-            parceiros_adultos = NPCUtils.obter_parceiros_adultos_na_casa(engine.npcs, n1)
-            if len(parceiros_adultos) > 0:
+            # Verificar se n1 já tem um parceiro 
+            if NPCUtils.tem_conjuge(n1):
                 continue
                 
             # Encontrar potenciais parceiros do gênero oposto com alta afinidade
@@ -42,9 +41,8 @@ class NPCSocialManager:
                 if n1.id == n2.id or n1.genero == n2.genero:
                     continue
                 
-                # Se n2 também já divide a casa com outro adulto, pula
-                parceiros_adultos_2 = NPCUtils.obter_parceiros_adultos_na_casa(engine.npcs, n2)
-                if len(parceiros_adultos_2) > 0:
+                # Verificar se n2 já tem um parceiro 
+                if NPCUtils.tem_conjuge(n2):
                     continue
                 
                 # Verificar afinidade
@@ -62,7 +60,14 @@ class NPCSocialManager:
                         n2.casa_id = casa_escolhida
                         n2.localizacao_atual_id = casa_escolhida
                         
+                        # Formalizar casamento
+                        n1.estado_civil = EstadoCivil.CASADO.value
+                        n1.conjuge_id = n2.id
+                        n2.estado_civil = EstadoCivil.CASADO.value
+                        n2.conjuge_id = n1.id
+                        
                         # Salvar no banco
+                        engine.db.salvar_npc(n1)
                         engine.db.salvar_npc(n2)
                         
                         # Registrar Evento de União
@@ -70,7 +75,7 @@ class NPCSocialManager:
                         timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
                         
                         nome_casa = engine.locais[casa_escolhida].nome if casa_escolhida in engine.locais else "uma nova moradia"
-                        resumo = f"❤️ Amor na Vila! {n1.nome} e {n2.nome} decidiram morar juntos em {nome_casa}."
+                        resumo = f"💍 Casamento! {n1.nome} e {n2.nome} trocaram votos e decidiram morar juntos em {nome_casa}."
                         
                         evento = Evento(
                             id=f"evt_uniao_{int(time.time())}_{random.randint(0,999)}",
@@ -130,11 +135,8 @@ class NPCSocialManager:
         # --- ROMANCE FÍSICO: Decisão de coabitação durante conversa real ---
         if n1.esta_vivo() and n1.pode_procriar() and n2.esta_vivo() and n2.pode_procriar():
             if n1.genero != n2.genero and n1.casa_id != n2.casa_id:
-                # Utiliza o helper para contar parceiros adultos nas respectivas casas
-                parceiros_1 = NPCUtils.obter_parceiros_adultos_na_casa(engine.npcs, n1)
-                parceiros_2 = NPCUtils.obter_parceiros_adultos_na_casa(engine.npcs, n2)
-                
-                if len(parceiros_1) == 0 and len(parceiros_2) == 0:
+                # Verificar se já são comprometidos
+                if not NPCUtils.tem_conjuge(n1) and not NPCUtils.tem_conjuge(n2):
                     cfg_bio = engine.config.get("biologia_e_sociedade", {})
                     limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
                     if nova_afinidade >= limiar_uniao:
@@ -144,10 +146,17 @@ class NPCSocialManager:
                             if casa_escolhida:
                                 n2.casa_id = casa_escolhida
                                 n2.localizacao_atual_id = casa_escolhida
+                                # Formalizar casamento
+                                n1.estado_civil = EstadoCivil.CASADO.value
+                                n1.conjuge_id = n2.id
+                                n2.estado_civil = EstadoCivil.CASADO.value
+                                n2.conjuge_id = n1.id
+
+                                engine.db.salvar_npc(n1)
                                 engine.db.salvar_npc(n2)
                                 
                                 nome_casa = engine.locais[casa_escolhida].nome if casa_escolhida in engine.locais else "uma nova moradia"
-                                resumo_uniao = f"❤️ AMOR NA VILA! {n1.nome} e {n2.nome} aproximaram-se tanto durante a conversa que decidiram morar juntos em {nome_casa}!"
+                                resumo_uniao = f"💍 CASAMENTO SURPRESA! {n1.nome} e {n2.nome} apaixonaram-se tanto durante a conversa que se casaram e vão morar juntos em {nome_casa}!"
                                 
                                 # Aumentar afinidade pela união
                                 n1.relacionamentos[n2.id] = min(1000, nova_afinidade + 50)

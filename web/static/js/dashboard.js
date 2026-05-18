@@ -332,6 +332,13 @@ function renderNPCProfile(npc) {
     const maeLink = npc.bio.mae ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.mae}')">👩 ${maeNome}</a>` : '<span style="color: var(--text-dim)">Desconhecida</span>';
     const paiLink = npc.bio.pai ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.pai}')">👨 ${paiNome}</a>` : '<span style="color: var(--text-dim)">Desconhecido</span>';
     
+    // Cônjuge
+    let conjugeLink = '<span style="color: var(--text-dim)">Nenhum</span>';
+    if (npc.bio.ec === 'casado' && npc.bio.cj) {
+        const conjugeNome = getNPCNameById(npc.bio.cj);
+        conjugeLink = `<a href="#" style="color: var(--success); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.cj}')">💍 ${conjugeNome}</a>`;
+    }
+    
     // Filhos
     const filhos = getNPCChildren(npc.id);
     const filhosList = filhos.length > 0 ? filhos.map(f => `
@@ -374,6 +381,7 @@ function renderNPCProfile(npc) {
                 <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem;">
                     <div><span style="color: var(--text-dim)">Gênero:</span> <strong>${generoStr}</strong></div>
                     <div><span style="color: var(--text-dim)">Fase da Vida:</span> <strong>${estagioStr}</strong></div>
+                    <div><span style="color: var(--text-dim)">Estado Civil:</span> <strong style="text-transform: capitalize;">${npc.bio.ec || 'solteiro'}</strong></div>
                     <div><span style="color: var(--text-dim)">Idade Biológica:</span> <strong style="color: var(--accent)">${npc.bio.idade || 0} anos</strong></div>
                     <div><span style="color: var(--text-dim)">Profissão:</span> <strong>${npc.profissao}</strong></div>
                     <div><span style="color: var(--text-dim)">Ação Atual:</span> <strong>${npc.acao}</strong></div>
@@ -390,6 +398,7 @@ function renderNPCProfile(npc) {
                 <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.8rem;">
                     <div><span style="color: var(--text-dim)">Mãe:</span> ${maeLink}</div>
                     <div><span style="color: var(--text-dim)">Pai:</span> ${paiLink}</div>
+                    <div><span style="color: var(--text-dim)">Cônjuge:</span> ${conjugeLink}</div>
                     <div style="margin-top: 0.4rem;">
                         <span style="color: var(--text-dim); display:block; margin-bottom:0.3rem">Filhos:</span>
                         <ul style="padding-left: 0; margin: 0;">${filhosList}</ul>

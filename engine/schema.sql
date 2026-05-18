@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS npcs (
     genero TEXT DEFAULT 'M',
     estagio_vida TEXT DEFAULT 'adulto',
     data_nascimento TEXT,
+    estado_civil TEXT DEFAULT 'solteiro',
+    conjuge_id TEXT,
     pai_id TEXT,
     mae_id TEXT,
     genealogia TEXT,

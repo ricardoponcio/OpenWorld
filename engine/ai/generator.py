@@ -55,8 +55,8 @@ class AIGeneratorClient:
                 loc_nome=loc_nome,
                 loc_tipo=loc_tipo,
                 genero=genero
-            )
-            res = AIClient.query(prompt, json_format=True, timeout=30.0)
+            )            # Aumentado de 30s para 120s para suportar chamadas pesadas via ThreadPool
+            res = AIClient.query(prompt, json_format=True, timeout=120.0)
             
             data = AIUtils.parse_json_safely(res)
             if data and isinstance(data, dict) and "nome" in data and "genero" in data:

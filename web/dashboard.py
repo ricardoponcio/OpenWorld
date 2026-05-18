@@ -118,6 +118,8 @@ def get_update():
                     "dn": r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
                     "pai": r['pai_id'] if 'pai_id' in r.keys() else '',
                     "mae": r['mae_id'] if 'mae_id' in r.keys() else '',
+                    "ec": r['estado_civil'] if 'estado_civil' in r.keys() else 'solteiro',
+                    "cj": r['conjuge_id'] if 'conjuge_id' in r.keys() else '',
                     "gr": r['gravidez_ticks'] if 'gravidez_ticks' in r.keys() else 0,
                     "idade": idade_anos
                 }

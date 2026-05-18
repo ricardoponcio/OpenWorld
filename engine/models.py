@@ -17,6 +17,11 @@ class EstagioVida(Enum):
     IDOSO = "idoso"
     MORTO = "morto"
 
+class EstadoCivil(Enum):
+    SOLTEIRO = "solteiro"
+    CASADO = "casado"
+    VIUVO = "viuvo"
+
 class HumorNPC(Enum):
     NEUTRO = "Neutro"
     ALEGRE = "Alegre"
@@ -74,6 +79,8 @@ class NPC:
     # Atributos Biológicos e Ciclo de Vida
     genero: str = "M"  # 'M' ou 'F'
     estagio_vida: str = "adulto" # 'bebe', 'crianca', 'adulto', 'idoso'
+    estado_civil: str = EstadoCivil.SOLTEIRO.value
+    conjuge_id: str = ""
     data_nascimento: str = ""
     pai_id: str = ""
     mae_id: str = ""

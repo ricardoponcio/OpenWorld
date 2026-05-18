@@ -1,7 +1,7 @@
 import sqlite3
 import json
 import os
-from .models import NPC, Local, Evento, Acao
+from .models import NPC, Local, Evento, Acao, EstadoCivil
 from .logger import WorldLogger
 
 class DatabaseManager:
@@ -115,15 +115,14 @@ class DatabaseManager:
     def salvar_npc(self, npc: NPC):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute('''INSERT OR REPLACE INTO npcs 
-                          (id, nome, profissao, profissao_id, casa_id, local_trabalho_id, localizacao_atual_id, 
+        cursor.execute('''INSERT OR REPLACE INTO npcs                           (id, nome, profissao, profissao_id, casa_id, local_trabalho_id, localizacao_atual_id, 
                            acao_atual, energia, dinheiro_total_pc, social, fome, saude, humor, 
-                           genero, estagio_vida, data_nascimento, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+                           genero, estagio_vida, data_nascimento, estado_civil, conjuge_id, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
             npc.id, npc.nome, npc.profissao, npc.profissao_id, npc.casa_id, npc.local_trabalho_id,
             npc.localizacao_atual_id, npc.acao_atual.value, npc.energia, npc.dinheiro_total_pc,
             npc.social, npc.fome, npc.saude, npc.humor, 
-            npc.genero, npc.estagio_vida, npc.data_nascimento, npc.pai_id, npc.mae_id,
+            npc.genero, npc.estagio_vida, npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
             json.dumps(npc.genealogia), json.dumps(npc.relacionamentos), json.dumps(npc.memoria_eventos),
             npc.gravidez_ticks
         ))
@@ -161,6 +160,8 @@ class DatabaseManager:
                     genero=r['genero'] if 'genero' in r.keys() else 'M',
                     estagio_vida=r['estagio_vida'] if 'estagio_vida' in r.keys() else 'adulto',
                     data_nascimento=r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
+                    estado_civil=r['estado_civil'] if 'estado_civil' in r.keys() else EstadoCivil.SOLTEIRO.value,
+                    conjuge_id=r['conjuge_id'] if 'conjuge_id' in r.keys() else '',
                     pai_id=r['pai_id'] if 'pai_id' in r.keys() else '',
                     mae_id=r['mae_id'] if 'mae_id' in r.keys() else '',
                     genealogia=self._safe_json_load(r['genealogia'], []), 
