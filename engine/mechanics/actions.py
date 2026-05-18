@@ -23,6 +23,8 @@ class NPCActionManager:
             NPCActionManager._executar_socializar(engine, npc, cfg_acoes)
         elif acao == Acao.CUIDAR_PROLE:
             NPCActionManager._executar_cuidar_prole(engine, npc, cfg_bio)
+        elif acao == Acao.CONSTRUIR:
+            NPCActionManager._executar_construir(engine, npc)
         elif acao == Acao.OCIOSO:
             NPCActionManager._executar_ocioso(engine, npc)
 
@@ -188,3 +190,38 @@ class NPCActionManager:
         npc.social -= 0.5
         if npc.social < 0.0:
             npc.social = 0.0
+
+    @staticmethod
+    def _executar_construir(engine, npc: NPC):
+        obra = NPCUtils.obter_obra_do_npc(engine.locais, npc)
+                    
+        if not obra:
+            npc.acao_atual = Acao.OCIOSO
+            return
+            
+        NPCMovementManager.mover_para_obra(engine, npc, obra.id)
+        
+        npc.energia -= 1.5
+        npc.fome += 0.5
+        obra.integridade += 2  # ~12 horas in-game para finalizar
+        
+        if engine.tick_count % 4 == 0:
+            WorldLogger.debug(f"🔨 [CONSTRUÇÃO] {npc.nome} está construindo a casa! (Integridade: {obra.integridade}%)", npc=npc)
+            
+        if obra.integridade >= 100:
+            obra.integridade = 100
+            obra.status = 1
+            nome_familia = obra.nome.replace("Obra de ", "")
+            obra.nome = f"Residência {nome_familia}"
+            
+            # Muda a família para a nova casa
+            moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, npc.casa_id, apenas_vivos=True)
+            for m in moradores:
+                if m.id == npc.id or m.id == npc.conjuge_id or m.pai_id in [npc.id, npc.conjuge_id] or m.mae_id in [npc.id, npc.conjuge_id]:
+                    m.casa_id = obra.id
+                    m.localizacao_atual_id = obra.id
+                    engine.db.salvar_npc(m)
+            
+            engine.db.salvar_local(obra)
+            WorldLogger.info(f"🏡 [MUDANÇA] A família de {npc.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=npc)
+            npc.acao_atual = Acao.OCIOSO

@@ -1,5 +1,5 @@
 from typing import List, Dict
-from .models import NPC
+from .models import NPC, Local
 
 class NPCUtils:
     @staticmethod
@@ -21,6 +21,20 @@ class NPCUtils:
                 por_local[loc_id] = []
             por_local[loc_id].append(npc)
         return por_local
+
+    @staticmethod
+    def agrupar_por_casa(npcs: List[NPC]) -> Dict[str, List[NPC]]:
+        """
+        Agrupa todos os NPCs vivos pelas suas respectivas casas (onde moram).
+        """
+        por_casa = {}
+        for npc in npcs:
+            if not npc.esta_vivo() or not npc.casa_id:
+                continue
+            if npc.casa_id not in por_casa:
+                por_casa[npc.casa_id] = []
+            por_casa[npc.casa_id].append(npc)
+        return por_casa
 
     @staticmethod
     def obter_moradores_da_casa(npcs: List[NPC], casa_id: str, apenas_vivos: bool = True) -> List[NPC]:
@@ -80,7 +94,20 @@ class NPCUtils:
         pais_n2 = set(n2.genealogia + ([n2.pai_id, n2.mae_id]))
         pais_n2.discard("")
         
+        
         if len(pais_n1.intersection(pais_n2)) > 0:
             return True
             
         return False
+
+    @staticmethod
+    def obter_obra_do_npc(locais: Dict[str, 'Local'], npc: NPC):
+        """
+        Retorna a obra (Local em construção) que pertence ao NPC ou seu cônjuge.
+        """
+        if not locais: return None
+        for l in locais.values():
+            if l.tipo == "Casa" and l.status == 0:
+                if npc.id in getattr(l, 'descricao', '') or (npc.conjuge_id and npc.conjuge_id in getattr(l, 'descricao', '')):
+                    return l
+        return None

@@ -11,24 +11,17 @@ class NPCReproductionManager:
     def processar_concepcao(engine):
         """Varredura noturna para concepção em casais que dividem a mesma casa e têm alta afinidade."""
         cfg_bio = engine.config.get("biologia_e_sociedade", {})
-        por_casa = {}
-        for npc in engine.npcs:
-            if not npc.casa_id:
-                continue
-            # Verifica apenas se estão na mesma casa de madrugada, independente se estão dormindo ou ociosos
-            if npc.localizacao_atual_id != npc.casa_id:
-                continue
-            if npc.casa_id not in por_casa:
-                por_casa[npc.casa_id] = []
-            por_casa[npc.casa_id].append(npc)
+        por_casa = NPCUtils.agrupar_por_casa(engine.npcs)
             
         for casa_id, moradores in por_casa.items():
-            if len(moradores) < 2:
+            # Verifica apenas quem está na mesma casa de madrugada, independente se estão dormindo ou ociosos
+            presentes = [m for m in moradores if m.localizacao_atual_id == casa_id]
+            if len(presentes) < 2:
                 continue
             
             # Procurar pares (M/F) férteis e com alta afinidade
-            homens = [m for m in moradores if m.genero == 'M' and m.pode_procriar()]
-            mulheres = [m for m in moradores if m.genero == 'F' and m.pode_procriar() and m.gravidez_ticks == 0]
+            homens = [m for m in presentes if m.genero == 'M' and m.pode_procriar()]
+            mulheres = [m for m in presentes if m.genero == 'F' and m.pode_procriar() and m.gravidez_ticks == 0]
             
             for h in homens:
                 for m in mulheres:

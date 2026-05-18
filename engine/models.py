@@ -9,6 +9,7 @@ class Acao(Enum):
     COMER = "Comer"
     OCIOSO = "Ocioso"
     CUIDAR_PROLE = "Cuidar da Prole"
+    CONSTRUIR = "Construindo"
 
 class EstagioVida(Enum):
     BEBE = "bebe"

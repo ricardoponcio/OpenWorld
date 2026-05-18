@@ -4,8 +4,9 @@ from typing import Dict, List
 
 class NPCBrain:
     @staticmethod
-    def calcular_utilidade(npc: NPC, hora_atual: int, cfg: Dict, eventos_globais: List = []) -> Dict[Acao, float]:
+    def calcular_utilidade(npc: NPC, hora_atual: int, cfg: Dict, locais: Dict = None, eventos_globais: List = []) -> Dict[Acao, float]:
         utilidades = {acao: 0.0 for acao in Acao}
+        if Acao.CONSTRUIR not in utilidades: utilidades[Acao.CONSTRUIR] = 0.0
 
         is_dependent = (npc.profissao == "dependente" or getattr(npc, 'estagio_vida', '') in ('bebe', 'crianca'))
 
@@ -79,6 +80,13 @@ class NPCBrain:
             utilidades[Acao.CUIDAR_PROLE] = vontade_cuidar
         else:
             utilidades[Acao.CUIDAR_PROLE] = 0.0
+            
+        # Construir casa: Se o NPC ou o cônjuge forem donos de uma obra inacabada
+        utilidades[Acao.CONSTRUIR] = 0.0
+        if locais and not is_dependent and npc.energia >= 30 and not (cfg["hora_inicio_trabalho"] <= hora_atual <= cfg["hora_fim_trabalho"]) and not (hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < cfg["hora_inicio_trabalho"]):
+            from ..utils import NPCUtils
+            if NPCUtils.obter_obra_do_npc(locais, npc):
+                utilidades[Acao.CONSTRUIR] = 200.0  # Foco altíssimo para terminar a casa
         
         utilidades[Acao.OCIOSO] = 10.0
 
@@ -115,7 +123,7 @@ class NPCBrain:
             if casas_disponiveis:
                 npc.casa_id = casas_disponiveis[0]
 
-        utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, cfg, eventos_globais)
+        utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, cfg, locais, eventos_globais)
         npc.acao_atual = max(utilidades, key=utilidades.get)
 
         # Validação de Segurança do Trabalho

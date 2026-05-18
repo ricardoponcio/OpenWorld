@@ -13,5 +13,7 @@ __all__ = [
     "NPCSocialManager",
     "NPCMovementManager",
     "JobMarket",
-    "NPCBrain"
+    "NPCBrain",
+    "NPCHousingManager"
 ]
+from .housing import NPCHousingManager

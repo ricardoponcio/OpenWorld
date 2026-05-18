@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from engine.models import NPC, Local
 from engine.database import DatabaseManager
 from builder.generator import AIWorldGenerator
-from builder.cartographer import Cartographer
+from engine.world.cartographer import Cartographer
 
 def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia_max_thread=1):
     db = DatabaseManager()

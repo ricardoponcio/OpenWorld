@@ -35,6 +35,19 @@ class NPCMovementManager:
         NPCMovementManager.mover_para(engine, npc, npc.casa_id)
 
     @staticmethod
+    def mover_para_obra(engine, npc: NPC, obra_id: str):
+        """Move o NPC para uma obra em andamento (status 0)."""
+        if getattr(npc, 'estagio_vida', '') == 'bebe' or npc.profissao == 'dependente':
+            local_id = npc.casa_id
+        else:
+            local_id = obra_id
+            
+        if npc.localizacao_atual_id != local_id:
+            nome_local = engine.locais[local_id].nome if engine.locais and local_id in engine.locais else local_id
+            WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para a {nome_local}.", npc=npc)
+            npc.localizacao_atual_id = local_id
+
+    @staticmethod
     def mover_para_trabalho(engine, npc: NPC):
         """Move o NPC para seu local de trabalho se ativo, senão vai para casa e fica ocioso."""
         locais = engine.locais

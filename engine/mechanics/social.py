@@ -145,40 +145,40 @@ class NPCSocialManager:
                     if not NPCUtils.sao_parentes(n1, n2):
                         cfg_bio = engine.config.get("biologia_e_sociedade", {})
                         limiar_uniao = cfg_bio.get("concepcao_afinidade_minima", 80)
-                    if nova_afinidade >= limiar_uniao:
-                        # Chance de 15% de decidir morar junto durante a conversa real
-                        if random.random() < 0.15:
-                            casa_escolhida = n1.casa_id or n2.casa_id
-                            if casa_escolhida:
-                                n2.casa_id = casa_escolhida
-                                n2.localizacao_atual_id = casa_escolhida
-                                # Formalizar casamento
-                                n1.estado_civil = EstadoCivil.CASADO.value
-                                n1.conjuge_id = n2.id
-                                n2.estado_civil = EstadoCivil.CASADO.value
-                                n2.conjuge_id = n1.id
+                        if nova_afinidade >= limiar_uniao:
+                            # Chance de 15% de decidir morar junto durante a conversa real
+                            if random.random() < 0.15:
+                                casa_escolhida = n1.casa_id or n2.casa_id
+                                if casa_escolhida:
+                                    n2.casa_id = casa_escolhida
+                                    n2.localizacao_atual_id = casa_escolhida
+                                    # Formalizar casamento
+                                    n1.estado_civil = EstadoCivil.CASADO.value
+                                    n1.conjuge_id = n2.id
+                                    n2.estado_civil = EstadoCivil.CASADO.value
+                                    n2.conjuge_id = n1.id
 
-                                engine.db.salvar_npc(n1)
-                                engine.db.salvar_npc(n2)
-                                
-                                nome_casa = engine.locais[casa_escolhida].nome if casa_escolhida in engine.locais else "uma nova moradia"
-                                resumo_uniao = f"💍 CASAMENTO SURPRESA! {n1.nome} e {n2.nome} apaixonaram-se tanto durante a conversa que se casaram e vão morar juntos em {nome_casa}!"
-                                
-                                # Aumentar afinidade pela união
-                                n1.relacionamentos[n2.id] = min(1000, nova_afinidade + 50)
-                                n2.relacionamentos[n1.id] = min(1000, nova_afinidade + 50)
-                                engine.db.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], "Aliado")
-                                
-                                evento_uniao = Evento(
-                                    id=f"evt_uniao_{int(time.time())}_{random.randint(0,999)}",
-                                    timestamp=timestamp_rpg,
-                                    local_id=casa_escolhida,
-                                    envolvidos=[n1.id, n2.id],
-                                    tipo_evento=TipoEvento.CONVERSA.value,
-                                    modificador_afinidade=50,
-                                    resumo_estruturado=resumo_uniao
-                                )
-                                engine.db.salvar_evento(evento_uniao)
-                                
-                                WorldLogger.info(f"❤️ [UNIÃO] {resumo_uniao}", npc=n1)
-                                WorldLogger.queue_db_log(n2, "INFO", f"❤️ [UNIÃO] {resumo_uniao}")
+                                    engine.db.salvar_npc(n1)
+                                    engine.db.salvar_npc(n2)
+                                    
+                                    nome_casa = engine.locais[casa_escolhida].nome if casa_escolhida in engine.locais else "uma nova moradia"
+                                    resumo_uniao = f"💍 CASAMENTO SURPRESA! {n1.nome} e {n2.nome} apaixonaram-se tanto durante a conversa que se casaram e vão morar juntos em {nome_casa}!"
+                                    
+                                    # Aumentar afinidade pela união
+                                    n1.relacionamentos[n2.id] = min(1000, nova_afinidade + 50)
+                                    n2.relacionamentos[n1.id] = min(1000, nova_afinidade + 50)
+                                    engine.db.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], "Aliado")
+                                    
+                                    evento_uniao = Evento(
+                                        id=f"evt_uniao_{int(time.time())}_{random.randint(0,999)}",
+                                        timestamp=timestamp_rpg,
+                                        local_id=casa_escolhida,
+                                        envolvidos=[n1.id, n2.id],
+                                        tipo_evento=TipoEvento.CONVERSA.value,
+                                        modificador_afinidade=50,
+                                        resumo_estruturado=resumo_uniao
+                                    )
+                                    engine.db.salvar_evento(evento_uniao)
+                                    
+                                    WorldLogger.info(f"❤️ [UNIÃO] {resumo_uniao}", npc=n1)
+                                    WorldLogger.queue_db_log(n2, "INFO", f"❤️ [UNIÃO] {resumo_uniao}")

@@ -34,9 +34,8 @@ class Cartographer:
     def assign_coordinates(self, locais_ids):
         """Distribui os locais na grade evitando a água."""
         posicoes = {}
-        tentativas = 0
-        
         for loc_id in locais_ids:
+            tentativas = 0
             colocado = False
             while not colocado and tentativas < 100:
                 x = random.randint(1, self.size - 2)
