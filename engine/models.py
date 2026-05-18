@@ -109,6 +109,9 @@ class NPC:
     def is_adulto(self) -> bool:
         return self.estagio_vida == EstagioVida.ADULTO.value or self.estagio_vida == EstagioVida.ADULTO
 
+    def is_idoso(self) -> bool:
+        return self.estagio_vida == EstagioVida.IDOSO.value or self.estagio_vida == EstagioVida.IDOSO
+
     def pode_procriar(self) -> bool:
         return self.is_adulto() and self.saude > 0
 

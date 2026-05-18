@@ -1,3 +1,6 @@
 # Arquivo: requirements.txt
 flask
 pydantic
+numpy
+noise
+pillow

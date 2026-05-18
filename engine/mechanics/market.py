@@ -22,7 +22,7 @@ class JobMarket:
         # Uma vaga está aberta se (capacidade - ocupacao atual) > 0
         locais = cursor.execute("""
             SELECT l.id, l.categoria, l.capacidade, 
-            (SELECT COUNT(*) FROM npcs WHERE local_trabalho_id = l.id) as ocupacao
+            (SELECT COUNT(*) FROM npcs WHERE local_trabalho_id = l.id AND saude > 0) as ocupacao
             FROM locais l
             WHERE l.status = 1 AND l.tipo != 'Casa'
         """).fetchall()
@@ -49,13 +49,13 @@ class JobMarket:
 
         # 2. Encontrar NPCs Desempregados ou em locais destruídos
         # (local_trabalho_id IS NULL ou local de trabalho com status = 0)
-        # Filtra bebês, crianças e dependentes para não entrarem no mercado de trabalho
+        # Filtra bebês, crianças, dependentes, idosos e mortos para não entrarem no mercado de trabalho
         desempregados = cursor.execute("""
             SELECT n.id, n.nome, n.profissao_id, p.categoria_local_id
             FROM npcs n
             JOIN profissoes p ON n.profissao_id = p.id
             WHERE n.saude > 0 
-              AND n.estagio_vida NOT IN ('bebe', 'crianca')
+              AND n.estagio_vida NOT IN ('bebe', 'crianca', 'idoso', 'morto')
               AND n.profissao != 'dependente'
               AND (
                 n.local_trabalho_id IS NULL 

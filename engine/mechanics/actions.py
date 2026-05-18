@@ -3,6 +3,7 @@ from ..models import NPC, Acao, EstagioVida, HumorNPC
 from ..logger import WorldLogger
 from .movement import NPCMovementManager
 from ..utils import NPCUtils
+from .kingdom import KingdomManager
 
 class NPCActionManager:
     @staticmethod
@@ -111,7 +112,9 @@ class NPCActionManager:
                 WorldLogger.warning(f"⚠️  [SUBNUTRIÇÃO PROGRESSIVA] {npc.nome} comeu uma porção parcial (gastou {custo_pago} PC, reduziu fome em {fome_rec:.1f})", npc=npc)
         else:
             # NPC tentou comer mas não tinha dinheiro
-            if engine.tick_count % 4 == 0:
+            sopao_ok = KingdomManager.fornecer_sopao(engine, npc, fome_rec_do_tick, energia_ganho_do_tick)
+            
+            if not sopao_ok and engine.tick_count % 4 == 0:
                 if is_dependent:
                     WorldLogger.warning(f"⚠️  [ECONOMIA] O dependente {npc.nome} está com fome, mas seu responsável {pagador.nome} não tem dinheiro!", npc=npc)
                 else:
@@ -204,6 +207,7 @@ class NPCActionManager:
         npc.energia -= 1.5
         npc.fome += 0.5
         obra.integridade += 2  # ~12 horas in-game para finalizar
+        engine.db.salvar_local(obra)
         
         if engine.tick_count % 4 == 0:
             WorldLogger.debug(f"🔨 [CONSTRUÇÃO] {npc.nome} está construindo a casa! (Integridade: {obra.integridade}%)", npc=npc)

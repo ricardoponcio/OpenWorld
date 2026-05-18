@@ -53,15 +53,20 @@
         "gravidez_multiplicador_ganho_fome": 1.5,
         "parto_afinidade_inicial_pais": 100,
         "crescimento_hora": 4,
-        "crescimento_dias_bebe_para_crianca": 1,
-        "crescimento_dias_crianca_para_adulto": 3,
-        "crescimento_dias_adulto_para_idoso": 100,
-        "crescimento_dias_idoso_para_morte": 120,
+        "crescimento_dias_bebe_para_crianca": 5,
+        "crescimento_dias_crianca_para_adulto": 15,
+        "crescimento_dias_adulto_para_idoso": 75,
+        "crescimento_dias_idoso_para_morte": 90,
         "cuidar_prole_consumo_energia": 2.0,
         "cuidar_prole_ganho_social": 15.0,
         "heranca_afinidade_minima_conjuge": 50,
         "heranca_evento_modificador_afinidade": 10,
         "inaniacao_perda_saude": 5,
         "dormir_ganho_saude": 2
+    },
+    "reino": {
+        "pensao_aposentadoria": 8,
+        "fornecer_sopao": true,
+        "custo_sopao_ao_reino": 5
     }
 }

@@ -21,8 +21,8 @@ class NPCBrain:
             if esta_comendo:
                 valor_fome += 100.0  # Bônus massivo para não interromper a refeição na metade
             
-            # Se não tem dinheiro, a vontade de comer cai (prioriza trabalho), exceto para dependentes que usam o dinheiro dos pais
-            if not is_dependent and npc.dinheiro_total_pc < 15:
+            # Se não tem dinheiro, a vontade de comer cai (prioriza trabalho), exceto para dependentes, idosos (que têm sopão) ou desempregados
+            if not is_dependent and not npc.is_idoso() and npc.local_trabalho_id and npc.dinheiro_total_pc < 15:
                 valor_fome *= 0.1
             utilidades[Acao.COMER] = valor_fome
             

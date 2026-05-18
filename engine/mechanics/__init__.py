@@ -6,6 +6,8 @@ from .movement import NPCMovementManager
 from .market import JobMarket
 from .logic import NPCBrain
 
+from .kingdom import KingdomManager
+
 __all__ = [
     "NPCActionManager",
     "NPCBiologyManager",
@@ -14,6 +16,7 @@ __all__ = [
     "NPCMovementManager",
     "JobMarket",
     "NPCBrain",
-    "NPCHousingManager"
+    "NPCHousingManager",
+    "KingdomManager"
 ]
 from .housing import NPCHousingManager

@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from .models import NPC, Local, Evento, Acao, EstagioVida, HumorNPC, TipoEvento
 
-from .mechanics import NPCBrain, NPCBiologyManager, NPCLegacyManager, NPCSocialManager, NPCActionManager, NPCHousingManager
+from .mechanics import NPCBrain, NPCBiologyManager, NPCLegacyManager, NPCSocialManager, NPCActionManager, NPCHousingManager, KingdomManager
 from .database import DatabaseManager
 from .logger import WorldLogger
 from .utils import NPCUtils
@@ -88,6 +88,10 @@ class SimulationEngine:
         # 0.7. Expansão Imobiliária
         if self.data_simulada.hour == 6 and self.data_simulada.minute == 0:
             NPCHousingManager.processar_habitacao(self)
+
+        # 0.8. Pagamento de Aposentadorias
+        if self.data_simulada.hour == 8 and self.data_simulada.minute == 0:
+            KingdomManager.processar_pagamentos_reino(self)
 
         maes_parto = []
 

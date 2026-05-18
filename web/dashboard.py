@@ -5,6 +5,11 @@ import sys
 import json
 from datetime import datetime
 
+# Importações de módulos do projeto
+from web.cartographer_routes import cartographer_bp
+from web.composed_routes import composed_bp
+
+
 # Carregar config.json globalmente
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
@@ -212,6 +217,10 @@ def get_npc_logs(npc_id):
         return jsonify({"logs": logs})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# --- REGISTRO DO CARTÓGRAFO PRO (MÓDULO SEPARADO) ---
+app.register_blueprint(cartographer_bp)
+app.register_blueprint(composed_bp)
 
 if __name__ == '__main__':
 

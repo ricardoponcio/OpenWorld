@@ -139,6 +139,7 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
     limiar_idoso = cfg_bio.get("crescimento_dias_adulto_para_idoso", 100)
     limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 120)
 
+    npcs_gerados = []
     for params, dna in resultados_dna:
         i, genero_alvo, loc_trabalho, casa = params
         if dna:
@@ -155,8 +156,13 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
         
         nomes_gerados.append(nome)
 
-        # Sorteia idade em anos de vida real (18 a 65 anos)
-        idade_inicial_anos = random.randint(18, 65)
+        # Sorteia idade em anos de vida real
+        # 85% de jovens adultos (18 a 35 anos) para garantir janela reprodutiva activa
+        # 15% de anciões (55 a 70 anos) para representação da comunidade
+        if random.random() < 0.85:
+            idade_inicial_anos = random.randint(18, 35)
+        else:
+            idade_inicial_anos = random.randint(55, 70)
         
         # Converte para dias de simulação proporcionalmente
         idade_inicial_dias = int((idade_inicial_anos / 80.0) * limiar_morte)
@@ -188,11 +194,34 @@ def build_world(num_npcs=5, tema="Vila Medieval", usar_ia=False, map_size=20, ia
         )
         db.salvar_npc(npc)
         print(f"  ✅ Gerado: {nome} ({genero}) | Idade Inicial: {idade_inicial_anos} anos (~{idade_inicial_dias} dias virtuais) | Estágio: {estagio_vida} | Atuação: {profissao}")
+        
+        npcs_gerados.append(npc)
 
-
-
-
-    print(f"\n✨ Mundo populado com {num_npcs} habitantes!")
+    # --- RELACIONAMENTOS INICIAIS (PONTO 2) ---
+    print("\n💞 Estabelecendo laços sociais e amizades prévias na comunidade...")
+    for npc_a in npcs_gerados:
+        # Sorteia de 2 a 4 vizinhos/amigos iniciais
+        qtd_amigos = random.randint(2, min(4, len(npcs_gerados) - 1))
+        alvos = random.sample([n for n in npcs_gerados if n.id != npc_a.id], k=qtd_amigos)
+        
+        for npc_b in alvos:
+            # Se já houver afinidade (definida pela via inversa), mantém
+            if npc_b.id in npc_a.relacionamentos:
+                continue
+                
+            # Sorteia afinidade inicial amigável (15 a 55)
+            af = random.randint(15, 55)
+            npc_a.relacionamentos[npc_b.id] = af
+            npc_b.relacionamentos[npc_a.id] = af
+            
+            # Persiste nos dois NPCs e na tabela de relacionamentos
+            db.salvar_npc(npc_a)
+            db.salvar_npc(npc_b)
+            
+            vinculo = "Amigo" if af >= 30 else "Conhecido"
+            db.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
+            
+    print(f"\n✨ Mundo populado com {num_npcs} habitantes! Laços de amizade gerados com sucesso.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
