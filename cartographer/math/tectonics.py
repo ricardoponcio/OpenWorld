@@ -1,5 +1,4 @@
 import numpy as np
-from noise import pnoise2
 
 class TectonicsProcessor:
     """
@@ -12,23 +11,15 @@ class TectonicsProcessor:
         Calcula a distância euclidiana de cada ponto da grade ao centro (cx, cy)
         aplicando Domain Warping de alta intensidade para distorcer a forma circular.
         """
-        # Geramos ruído Perlin para o warp dos eixos X e Y
-        # Usamos uma base diferente para x e y para que as distorções não sejam correlacionadas
-        v_noise_x = np.vectorize(lambda x, y: pnoise2(
-            x / scale, 
-            y / scale, 
-            octaves=3, 
-            base=(seed + 7777) % 50000
-        ))
-        v_noise_y = np.vectorize(lambda x, y: pnoise2(
-            x / scale, 
-            y / scale, 
-            octaves=3, 
-            base=(seed + 9999) % 50000
-        ))
+        from cartographer.math.noise import NoiseGenerator
         
-        warp_x = v_noise_x(grid_x, grid_y) * amplitude
-        warp_y = v_noise_y(grid_x, grid_y) * amplitude
+        # Geramos ruído Perlin vetorizado normalizado na faixa [0, 1]
+        noise_x = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=7777)
+        noise_y = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=9999)
+        
+        # Trazemos o ruído para a faixa [-1, 1] para aplicar distorção bidirecional (Domain Warping)
+        warp_x = (noise_x * 2.0 - 1.0) * amplitude
+        warp_y = (noise_y * 2.0 - 1.0) * amplitude
         
         dx = grid_x + warp_x - cx
         dy = grid_y + warp_y - cy
@@ -75,14 +66,8 @@ class TectonicsProcessor:
                 relevo_base
             )
         elif perfil_nome == "Arquipélago":
-            from noise import pnoise2
-            v_noise_arqui = np.vectorize(lambda x, y: pnoise2(
-                x / 18.0, 
-                y / 18.0, 
-                octaves=3, 
-                base=(seed + 8888) % 50000
-            ))
-            ruido_arqui = (v_noise_arqui(grid_x, grid_y) + 1.0) / 2.0
+            from cartographer.math.noise import NoiseGenerator
+            ruido_arqui = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=18.0, octaves=3, seed=seed, offset=8888)
             relevo_perfil = relevo_base * np.where(ruido_arqui > 0.45, 1.0, 0.1)
         elif perfil_nome == "Erosivo":
             relevo_perfil = np.sqrt(relevo_base) * 0.8
