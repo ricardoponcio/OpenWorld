@@ -65,7 +65,7 @@ class TileCartographer:
             perfil = cont.get("perfil_geologico", "Alpino")
             
             # Distância euclidiana e raio modulado dinamicamente pelas correntes tectônicas
-            distancia = TectonicsProcessor.calculate_distance_grid(grid_x, grid_y, cx, cy)
+            distancia = TectonicsProcessor.calculate_distance_grid(grid_x, grid_y, cx, cy, seed=self.seed)
             raio_dinamico = TectonicsProcessor.calculate_tectonic_radius(R, ruido_macro)
             
             # Distorção costeira

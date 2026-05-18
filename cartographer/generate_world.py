@@ -44,8 +44,11 @@ def gerar_mundo_composto():
     # 4. Salva o resultado final
     np.savez_compressed("database/mapa_composto.npz", mapa=mapa_composto)
     
+    # 5. Gera e salva o manifesto de continentes
+    manager.save_world_manifest(mapa_composto, "database/world_manifest.json")
+    
     print(f"Mundo composto gerado! Tamanho final: {mapa_composto.shape}")
-    print("O arquivo 'mapa_composto.npz' está pronto para o dashboard.")
+    print("O arquivo 'mapa_composto.npz' e o 'world_manifest.json' estão prontos para uso.")
 
 if __name__ == "__main__":
     gerar_mundo_composto()

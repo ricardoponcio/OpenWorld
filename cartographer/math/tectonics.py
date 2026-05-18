@@ -1,4 +1,5 @@
 import numpy as np
+from noise import pnoise2
 
 class TectonicsProcessor:
     """
@@ -6,12 +7,31 @@ class TectonicsProcessor:
     modulações de relevo continental.
     """
     @staticmethod
-    def calculate_distance_grid(grid_x, grid_y, cx, cy):
+    def calculate_distance_grid(grid_x, grid_y, cx, cy, seed=0, scale=120.0, amplitude=65.0):
         """
-        Calcula a distância euclidiana de cada ponto da grade ao centro (cx, cy).
+        Calcula a distância euclidiana de cada ponto da grade ao centro (cx, cy)
+        aplicando Domain Warping de alta intensidade para distorcer a forma circular.
         """
-        dx = grid_x - cx
-        dy = grid_y - cy
+        # Geramos ruído Perlin para o warp dos eixos X e Y
+        # Usamos uma base diferente para x e y para que as distorções não sejam correlacionadas
+        v_noise_x = np.vectorize(lambda x, y: pnoise2(
+            x / scale, 
+            y / scale, 
+            octaves=3, 
+            base=(seed + 7777) % 50000
+        ))
+        v_noise_y = np.vectorize(lambda x, y: pnoise2(
+            x / scale, 
+            y / scale, 
+            octaves=3, 
+            base=(seed + 9999) % 50000
+        ))
+        
+        warp_x = v_noise_x(grid_x, grid_y) * amplitude
+        warp_y = v_noise_y(grid_x, grid_y) * amplitude
+        
+        dx = grid_x + warp_x - cx
+        dy = grid_y + warp_y - cy
         return np.sqrt(dx**2 + dy**2)
 
     @staticmethod
@@ -25,8 +45,9 @@ class TectonicsProcessor:
     def apply_coastal_distortion(distancia, ruido_costa, irregularidade, base_radius):
         """
         Aplica perturbação de alta frequência à distância euclidiana para simular costões rochosos.
+        Aumentamos a amplitude significativamente para criar bordas muito mais recortadas e interessantes.
         """
-        return distancia + (ruido_costa * irregularidade * base_radius * 0.35)
+        return distancia + (ruido_costa * irregularidade * base_radius * 0.85)
 
     @staticmethod
     def normalize_profile(relevo_perfil):
