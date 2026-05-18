@@ -3,6 +3,7 @@ import random
 from datetime import datetime
 from .models import NPC, Evento, Acao, EstagioVida, TipoEvento
 from .logger import WorldLogger
+from .utils import NPCUtils
 
 class NPCLegacyManager:
     @staticmethod
@@ -34,7 +35,7 @@ class NPCLegacyManager:
             resumo_estruturado=resumo
         )
         engine.db.salvar_evento(evento)
-        WorldLogger.info(f"💀 [ÓBITO] {resumo}")
+        WorldLogger.info(f"💀 [ÓBITO] {resumo}", npc=npc)
         
         # --- FASE 5: Testamento Automático (Herança) ---
         herdeiros = []
@@ -46,8 +47,9 @@ class NPCLegacyManager:
         # 2. Se não houver filhos vivos, procurar parceiro/cônjuge na mesma casa com alta afinidade
         if not herdeiros and npc.casa_id:
             parceiros = []
-            for n in engine.npcs:
-                if n.id != npc.id and n.esta_vivo() and n.casa_id == npc.casa_id:
+            moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, npc.casa_id, apenas_vivos=True)
+            for n in moradores:
+                if n.id != npc.id:
                     afinidade = npc.relacionamentos.get(n.id, 0)
                     limiar_conjuge = cfg_bio.get("heranca_afinidade_minima_conjuge", 50)
                     if afinidade >= limiar_conjuge:
@@ -66,7 +68,7 @@ class NPCLegacyManager:
                     engine.db.salvar_npc(h) # Persistir o dinheiro herdado no banco
                 
                 resumo_heranca = f"Testamento de {npc.nome}: A herança de {npc.dinheiro_formatado} foi dividida entre os herdeiros vivos ({nomes_herdeiros})."
-                WorldLogger.info(f"💰 [HERANÇA] {resumo_heranca}")
+                WorldLogger.info(f"💰 [HERANÇA] {resumo_heranca}", npc=npc)
                 
                 evt_heranca = Evento(
                     id=f"evt_heranca_{int(time.time())}_{random.randint(0,999)}",
@@ -80,7 +82,7 @@ class NPCLegacyManager:
                 engine.db.salvar_evento(evt_heranca)
             else:
                 resumo_heranca = f"O dinheiro de {npc.nome} ({npc.dinheiro_formatado}) foi recolhido pelo reino, pois não há herdeiros vivos."
-                WorldLogger.info(f"👑 [REINO] {resumo_heranca}")
+                WorldLogger.info(f"👑 [REINO] {resumo_heranca}", npc=npc)
                 
                 evt_reino = Evento(
                     id=f"evt_reino_{int(time.time())}_{random.randint(0,999)}",

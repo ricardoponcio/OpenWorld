@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List
 from .models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento
 from .logger import WorldLogger
+from .utils import NPCUtils
 
 class NPCBiologyManager:
     @staticmethod
@@ -56,7 +57,7 @@ class NPCBiologyManager:
                                 resumo_estruturado=resumo
                             )
                             engine.db.salvar_evento(evento)
-                            WorldLogger.info(f"🤰 [GESTANTE] {resumo}")
+                            WorldLogger.info(f"🤰 [GESTANTE] {resumo}", npc=m)
                             
                             # Uma mulher só pode engravidar de um parceiro por vez
                             break
@@ -67,7 +68,9 @@ class NPCBiologyManager:
         cfg_bio = engine.config.get("biologia_e_sociedade", {})
         # 1. Encontrar o pai (o morador masculino com quem a mãe tem maior afinidade)
         pai = None
-        moradores = [n for n in engine.npcs if n.casa_id == mae.casa_id and n.id != mae.id]
+        moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, mae.casa_id, apenas_vivos=True)
+        # Excluir a própria mãe da lista
+        moradores = [n for n in moradores if n.id != mae.id]
         homens = [m for m in moradores if m.genero == 'M' and m.is_adulto()]
         if homens:
             homens.sort(key=lambda h: mae.relacionamentos.get(h.id, 0), reverse=True)
@@ -173,7 +176,7 @@ class NPCBiologyManager:
             resumo_estruturado=resumo
         )
         engine.db.salvar_evento(evento)
-        WorldLogger.info(f"👶 [PARTO] {resumo}")
+        WorldLogger.info(f"👶 [PARTO] {resumo}", npc=mae)
 
     @staticmethod
     def processar_crescimento(engine):
@@ -199,7 +202,7 @@ class NPCBiologyManager:
                 npc.estagio_vida = EstagioVida.CRIANCA.value
                 
                 resumo = f"Crescimento: O pequeno bebê {npc.nome} deu seus primeiros passos e agora é uma linda criança!"
-                WorldLogger.info(f"🌱 [CRESCIMENTO] {resumo}")
+                WorldLogger.info(f"🌱 [CRESCIMENTO] {resumo}", npc=npc)
                 
                 evento = Evento(
                     id=f"evt_crescer_{int(time.time())}_{random.randint(0,999)}",
@@ -228,7 +231,7 @@ class NPCBiologyManager:
                     npc.profissao = "Trabalhador Autônomo"
 
                 resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e assumindo o papel de {npc.profissao}!"
-                WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}")
+                WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}", npc=npc)
 
                 evento = Evento(
                     id=f"evt_adulto_{int(time.time())}_{random.randint(0,999)}",

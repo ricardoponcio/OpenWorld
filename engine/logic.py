@@ -59,6 +59,10 @@ class NPCBrain:
         elif hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < cfg["hora_inicio_trabalho"]:
             utilidades[Acao.SOCIALIZAR] = (100 - npc.social) * 1.5
             
+        # Debuff de Socialização: se o NPC tiver menos de 50 PC (pouco dinheiro), ele não sai para socializar
+        if npc.dinheiro_total_pc < 50:
+            utilidades[Acao.SOCIALIZAR] = 0.0
+            
         # Se tem dependentes, reduz a utilidade de socializar em 50%
         num_dep = getattr(npc, 'num_dependentes', 0)
         if num_dep > 0:
@@ -91,60 +95,27 @@ class NPCBrain:
                         utilidades[Acao[acao_str]] += peso
             except: continue
 
-        if npc.acao_atual in utilidades:
+        if npc.acao_atual in utilidades and utilidades[npc.acao_atual] > 0.0:
             utilidades[npc.acao_atual] += cfg["bonus_persistencia"] 
             
         return utilidades
 
     @staticmethod
     def decidir_acao(npc: NPC, hora_atual: int, cfg: Dict, locais: Dict = None, eventos_globais: List = []):
-        import random
-        
         # --- REDE DE SEGURANÇA: Habitação ---
         if locais and (npc.casa_id not in locais):
             casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or getattr(l, 'categoria', '') == 'residencia']
             if casas_disponiveis:
                 npc.casa_id = casas_disponiveis[0]
-                # print(f"🏠 [REABILITAÇÃO] {npc.nome} foi realocado para {npc.casa_id}")
 
         utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, cfg, eventos_globais)
-
         npc.acao_atual = max(utilidades, key=utilidades.get)
 
-        # Filtrar apenas locais ATIVOS (status=1)
-        sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and getattr(l, 'status', 1) == 1] if locais else []
-        restaurantes = [l_id for l_id, l in locais.items() if l.tipo in ['Social', 'Loja'] and getattr(l, 'status', 1) == 1] if locais else []
-
-        if npc.acao_atual == Acao.DORMIR:
-            npc.localizacao_atual_id = npc.casa_id
-        elif npc.acao_atual == Acao.TRABALHAR:
-            # Verifica se o local de trabalho ainda existe
+        # Validação de Segurança do Trabalho
+        if npc.acao_atual == Acao.TRABALHAR:
             loc_trab = locais.get(npc.local_trabalho_id) if locais else None
-            if loc_trab and getattr(loc_trab, 'status', 1) == 1:
-                npc.localizacao_atual_id = npc.local_trabalho_id
-            else:
-                npc.localizacao_atual_id = npc.casa_id # Fica em casa se o trabalho sumiu
+            if not loc_trab or getattr(loc_trab, 'status', 1) != 1:
                 npc.acao_atual = Acao.OCIOSO
-        elif npc.acao_atual == Acao.SOCIALIZAR:
-            num_dep = getattr(npc, 'num_dependentes', 0)
-            if num_dep > 0 and random.random() < 0.50:
-                # 50% de chance de socializar em casa por ter dependentes
-                npc.localizacao_atual_id = npc.casa_id
-            else:
-                # Escolhe um local social aleatório ativo
-                npc.localizacao_atual_id = random.choice(sociais) if sociais else npc.casa_id
-        elif npc.acao_atual == Acao.CUIDAR_PROLE:
-            npc.localizacao_atual_id = npc.casa_id
-        elif npc.acao_atual == Acao.COMER:
-            # Tenta restaurante, se não houver ou se o ID for inválido, tenta casa
-            if restaurantes:
-                npc.localizacao_atual_id = random.choice(restaurantes)
-            else:
-                npc.localizacao_atual_id = npc.casa_id
-        
-        # Validação Final de Segurança: Se por algum motivo o local não existe, volta pra casa
-        if npc.localizacao_atual_id not in locais and npc.localizacao_atual_id != npc.casa_id:
-            npc.localizacao_atual_id = npc.casa_id
 
 
 

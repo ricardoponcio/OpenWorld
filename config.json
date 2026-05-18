@@ -1,4 +1,5 @@
 {
+    "salvar_logs_npc_no_banco": false,
     "metabolismo": {
         "energia_base_perda": 0.5,
         "fome_base_ganho_min": 1.5,
@@ -13,7 +14,7 @@
             "fome_ganho": 0.5
         },
         "comer": {
-            "fome_perda": 25.0,
+            "fome_perda": 40.0,
             "energia_ganho": 1.0,
             "custo_pc": 15
         },
@@ -24,7 +25,7 @@
         "socializar": {
             "energia_perda": 1.6,
             "social_ganho": 15.0,
-            "custo_pc": 30
+            "custo_pc": 20
         },
         "ocioso": {
             "energia_ganho": 0.1

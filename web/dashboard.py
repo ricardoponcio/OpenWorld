@@ -165,6 +165,17 @@ def set_speed(speed):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/npc_logs/<npc_id>')
+def get_npc_logs(npc_id):
+    try:
+        conn = get_db_connection()
+        logs_rows = safe_query(conn, 'SELECT timestamp, level, message FROM npc_logs WHERE npc_id = ? ORDER BY id DESC LIMIT 100', (npc_id,))
+        logs = [{"t": r['timestamp'], "l": r['level'], "m": r['message']} for r in logs_rows]
+        conn.close()
+        return jsonify({"logs": logs})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
 
 

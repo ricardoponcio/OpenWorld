@@ -306,3 +306,94 @@ header {
 .status-ok { background: rgba(34, 197, 94, 0.1); color: var(--success); border-top: 1px solid rgba(34, 197, 94, 0.2); }
 .status-warn { background: rgba(245, 158, 11, 0.1); color: var(--warning); border-top: 1px solid rgba(245, 158, 11, 0.2); }
 .status-error { background: rgba(239, 68, 68, 0.1); color: var(--danger); border-top: 1px solid rgba(239, 68, 68, 0.2); }
+
+/* Modal de Logs e Histórico */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+.modal-container {
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 650px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    overflow: hidden;
+}
+.modal-overlay.active .modal-container {
+    transform: scale(1);
+}
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+}
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.modal-close:hover {
+    color: var(--danger);
+}
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    background: #090e17;
+}
+.npc-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+.npc-log-item {
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    border-left: 4px solid var(--accent);
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+.npc-log-item.level-info { border-left-color: var(--accent); }
+.npc-log-item.level-warning { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.03); }
+.npc-log-item.level-error { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.03); }
+.npc-log-item.level-debug { border-left-color: var(--text-dim); }
+.npc-log-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-bottom: 0.3rem;
+}
+

@@ -1,0 +1,68 @@
+import random
+from .models import NPC, Acao
+from .logger import WorldLogger
+
+class NPCMovementManager:
+    @staticmethod
+    def mover_para(engine, npc: NPC, local_id: str):
+        """Move o NPC para um local específico com validação de segurança."""
+        locais = engine.locais
+        
+        # Se o local de destino não existe ou está inativo (status=0), volta para casa
+        local_destino = locais.get(local_id) if locais else None
+        if not local_destino or getattr(local_destino, 'status', 1) != 1:
+            local_id = npc.casa_id
+            
+        # Garante que a casa existe, caso contrário tenta a primeira casa ativa
+        if local_id not in locais:
+            casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or getattr(l, 'categoria', '') == 'residencia']
+            if casas_disponiveis:
+                local_id = casas_disponiveis[0]
+                
+        # Se mudou de localização, atualiza
+        if npc.localizacao_atual_id != local_id:
+            nome_local = locais[local_id].nome if local_id in locais else local_id
+            WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para {nome_local}.", npc=npc)
+            npc.localizacao_atual_id = local_id
+
+    @staticmethod
+    def mover_para_casa(engine, npc: NPC):
+        """Move o NPC para sua residência oficial."""
+        NPCMovementManager.mover_para(engine, npc, npc.casa_id)
+
+    @staticmethod
+    def mover_para_trabalho(engine, npc: NPC):
+        """Move o NPC para seu local de trabalho se ativo, senão vai para casa e fica ocioso."""
+        locais = engine.locais
+        loc_trab = locais.get(npc.local_trabalho_id) if locais else None
+        
+        if loc_trab and getattr(loc_trab, 'status', 1) == 1:
+            NPCMovementManager.mover_para(engine, npc, npc.local_trabalho_id)
+        else:
+            NPCMovementManager.mover_para_casa(engine, npc)
+            npc.acao_atual = Acao.OCIOSO
+
+    @staticmethod
+    def mover_para_social(engine, npc: NPC):
+        """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local."""
+        locais = engine.locais
+        sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and getattr(l, 'status', 1) == 1] if locais else []
+        
+        num_dep = getattr(npc, 'num_dependentes', 0)
+        if num_dep > 0 and random.random() < 0.50:
+            NPCMovementManager.mover_para_casa(engine, npc)
+        elif sociais:
+            NPCMovementManager.mover_para(engine, npc, random.choice(sociais))
+        else:
+            NPCMovementManager.mover_para_casa(engine, npc)
+
+    @staticmethod
+    def mover_para_restaurante(engine, npc: NPC):
+        """Move o NPC para um restaurante/loja ativo, ou casa em último caso."""
+        locais = engine.locais
+        restaurantes = [l_id for l_id, l in locais.items() if l.tipo in ['Social', 'Loja'] and getattr(l, 'status', 1) == 1] if locais else []
+        
+        if restaurantes:
+            NPCMovementManager.mover_para(engine, npc, random.choice(restaurantes))
+        else:
+            NPCMovementManager.mover_para_casa(engine, npc)

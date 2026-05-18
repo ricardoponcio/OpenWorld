@@ -90,3 +90,15 @@ CREATE TABLE IF NOT EXISTS mapeamento_categorias_trabalho (
     termo TEXT PRIMARY KEY,
     categoria_sistema TEXT
 );
+
+-- Tabela de Logs Individuais de NPCs (Para Auditoria/UI)
+CREATE TABLE IF NOT EXISTS npc_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    npc_id TEXT,
+    timestamp TEXT DEFAULT (datetime('now', 'localtime')),
+    level TEXT,
+    message TEXT,
+    FOREIGN KEY(npc_id) REFERENCES npcs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_npc_logs_npc_id ON npc_logs(npc_id);

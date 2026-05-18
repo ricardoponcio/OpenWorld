@@ -55,8 +55,10 @@ class JobMarket:
             SELECT n.id, n.nome, n.profissao_id, p.categoria_local_id
             FROM npcs n
             JOIN profissoes p ON n.profissao_id = p.id
-            WHERE n.local_trabalho_id IS NULL 
-            OR n.local_trabalho_id NOT IN (SELECT id FROM locais WHERE status = 1 AND tipo != 'Casa')
+            WHERE n.saude > 0 AND (
+                n.local_trabalho_id IS NULL 
+                OR n.local_trabalho_id NOT IN (SELECT id FROM locais WHERE status = 1 AND tipo != 'Casa')
+            )
         """).fetchall()
 
 
@@ -78,14 +80,14 @@ class JobMarket:
                 local_vaga['vagas'] -= 1
                 if local_vaga['vagas'] <= 0:
                     vagas_por_categoria[cat_desejada].pop(0)
-                WorldLogger.info(f"✅ CONTRATADO: {npc['nome']} começou a trabalhar em {local_vaga['id']}!")
+                WorldLogger.info(f"✅ CONTRATADO: {npc['nome']} começou a trabalhar em {local_vaga['id']}!", npc=npc['id'])
                 contratacoes += 1
                 sucesso = True
             
             # Se não conseguiu emprego novo e o antigo era inválido, limpa o campo
             if not sucesso:
                 cursor.execute("UPDATE npcs SET local_trabalho_id = NULL WHERE id = ?", (npc['id'],))
-                WorldLogger.info(f"🕵️  DESEMPREGADO: {npc['nome']} agora está buscando oportunidades.")
+                WorldLogger.info(f"🕵️  DESEMPREGADO: {npc['nome']} agora está buscando oportunidades.", npc=npc['id'])
 
 
         conn.commit()

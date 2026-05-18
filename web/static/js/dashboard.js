@@ -196,7 +196,10 @@ async function update() {
                         ${renderStatus('🍗', n.status.f, 'var(--danger)')}
                         ${renderStatus('💬', n.status.s, 'var(--success)')}
                     </div>
-                    <div style="margin-top:1rem; font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                        <div style="font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
+                        <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" onclick="abrirHistorico('${n.id}', '${n.nome.replace(/'/g, "\\'")}')">📜 Logs</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -235,6 +238,52 @@ function updatePauseUI(isPaused) {
     btn.innerText = isPaused ? "▶️" : "⏸️";
     btn.style.background = isPaused ? "var(--success)" : "var(--accent)";
     btn.style.boxShadow = `0 0 10px ${isPaused ? "var(--success)" : "var(--accent)"}`;
+}
+
+async function abrirHistorico(npcId, npcNome) {
+    const modal = document.getElementById('npc-log-modal');
+    const title = document.getElementById('modal-npc-nome');
+    const list = document.getElementById('modal-log-list');
+
+    title.innerText = `Histórico de ${npcNome}`;
+    list.innerHTML = `<p style="text-align: center; color: var(--text-dim);">Carregando logs...</p>`;
+    modal.classList.add('active');
+
+    try {
+        const res = await fetch(`/api/npc_logs/${npcId}`);
+        const data = await res.json();
+        if (data.error) {
+            list.innerHTML = `<p style="color: var(--danger); text-align: center;">Erro: ${data.error}</p>`;
+            return;
+        }
+
+        if (!data.logs || data.logs.length === 0) {
+            list.innerHTML = `<p style="color: var(--text-dim); text-align: center;">Nenhum registro encontrado para este habitante.</p>`;
+            return;
+        }
+
+        list.innerHTML = data.logs.map(log => {
+            const levelClass = `level-${log.l.toLowerCase()}`;
+            return `
+                <div class="npc-log-item ${levelClass}">
+                    <div class="npc-log-meta">
+                        <span>[${log.l}]</span>
+                        <span>${log.t}</span>
+                    </div>
+                    <div>${log.m}</div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Error loading NPC logs:", e);
+        list.innerHTML = `<p style="color: var(--danger); text-align: center;">Falha ao carregar os dados.</p>`;
+    }
+}
+
+function fecharHistorico(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('npc-log-modal');
+    modal.classList.remove('active');
 }
 
 init();

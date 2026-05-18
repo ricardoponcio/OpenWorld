@@ -11,6 +11,7 @@ from .finance import NPCLegacyManager
 from .social import NPCSocialManager
 from .actions import NPCActionManager
 from .logger import WorldLogger
+from .utils import NPCUtils
 
 import json
 import os
@@ -118,8 +119,9 @@ class SimulationEngine:
             # 2. Decisão (Agora com Eventos Globais)
             # Contar dependentes na mesma casa
             npc.num_dependentes = 0
-            for n in self.npcs:
-                if n.casa_id == npc.casa_id and n.id != npc.id and n.esta_vivo():
+            moradores = NPCUtils.obter_moradores_da_casa(self.npcs, npc.casa_id, apenas_vivos=True)
+            for n in moradores:
+                if n.id != npc.id:
                     if n.mae_id == npc.id or n.pai_id == npc.id:
                         if n.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value) or n.profissao == 'dependente':
                             npc.num_dependentes += 1
@@ -131,7 +133,7 @@ class SimulationEngine:
 
             
             if npc.acao_atual != acao_anterior:
-                WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}")
+                WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}", npc=npc)
 
             # 3. Execução (Vindo do Config)
             NPCActionManager.executar_acao(self, npc)
@@ -140,7 +142,7 @@ class SimulationEngine:
             if npc.fome > 90:
                 perda_saude = cfg_bio.get("inaniacao_perda_saude", 5)
                 npc.saude -= perda_saude
-                WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})")
+                WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})", npc=npc)
             elif npc.fome < 20 and npc.acao_atual == Acao.DORMIR:
                 if npc.saude < 100:
                     ganho_saude = cfg_bio.get("dormir_ganho_saude", 2)
