@@ -200,8 +200,8 @@ class ROIZoomGenerator:
         # Ruído de alta frequência: micro-fraturas e costões
         ruido_hf = NoiseGenerator.generate_noise_field(
             grid_x, grid_y,
-            scale=30.0,
-            octaves=6,
+            scale=self.config["zoom_micro_hf_escala"],
+            octaves=self.config["zoom_micro_hf_oitavas"],
             seed=self.seed,
             offset=cont_seed_offset + 11111,
         )
@@ -209,14 +209,17 @@ class ROIZoomGenerator:
         # Ruído de média frequência: vales e colinas regionais
         ruido_mf = NoiseGenerator.generate_noise_field(
             grid_x, grid_y,
-            scale=120.0,
-            octaves=4,
+            scale=self.config["zoom_micro_mf_escala"],
+            octaves=self.config["zoom_micro_mf_oitavas"],
             seed=self.seed,
             offset=cont_seed_offset + 22222,
         )
 
         # Ruído composto normalizado em [-0.5, 0.5]
-        ruido_composto = (0.60 * ruido_hf + 0.40 * ruido_mf) - 0.5
+        ruido_composto = (
+            self.config["zoom_micro_hf_peso"] * ruido_hf 
+            + self.config["zoom_micro_mf_peso"] * ruido_mf
+        ) - 0.5
 
         # Máscara de modulação: aplica mais detalhe onde há terra e altitude
         nivel_mar = self.config["nivel_mar"]
@@ -228,10 +231,11 @@ class ROIZoomGenerator:
         # Permite perturbação apenas perto da costa e na terra
         mask_proxima_costa = np.clip((alt_macro - 0.22) / 0.13, 0.0, 1.0)
 
-        # Amplitude do ruído: base constante de 0.024 na costa + modulação por altitude (máximo ±11%)
-        # Adicionar a base de 0.024 dissolve completamente o efeito "escada" de pixels da linha costeira,
-        # gerando cômoros, pequenas enseadas e praias de aparência extremamente natural e orgânica.
-        amplitude = mask_proxima_costa * (0.024 + mask_terra * 0.086)
+        # Amplitude do ruído: base constante na costa + modulação por altitude
+        amplitude = mask_proxima_costa * (
+            self.config["zoom_micro_amp_base"] 
+            + mask_terra * self.config["zoom_micro_amp_terra"]
+        )
 
         resultado = upscaled.copy()
         resultado[:, :, 0] = np.clip(alt_macro + ruido_composto * amplitude, 0.0, 1.0)

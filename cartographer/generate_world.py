@@ -47,7 +47,18 @@ def gerar_mundo_composto():
         "limiar_temp_deserto": 0.6,
         "limiar_umid_deserto": 0.5,
         "limiar_temp_mediterraneo": 0.4,
-        "limiar_umid_mediterraneo": 0.5
+        "limiar_umid_mediterraneo": 0.5,
+
+        # Parâmetros de Zoom (ROI Zoom) para controle de micro-detalhes e rugosidade
+        # (Ajuste estes para diminuir ou suavizar a textura de "papel amassado")
+        "zoom_micro_hf_escala": 50.0,     # Escala do ruído de alta frequência (menor = mais rugoso/fraturado)
+        "zoom_micro_hf_oitavas": 4,       # Oitavas do ruído HF (diminuir para 2 ou 3 suaviza as rugas microscópicas)
+        "zoom_micro_mf_escala": 120.0,    # Escala do ruído de média frequência (vales e colinas regionais)
+        "zoom_micro_mf_oitavas": 4,       # Oitavas do ruído MF (diminuir para 2 suaviza colinas intermediárias)
+        "zoom_micro_hf_peso": 0.60,       # Peso do ruído de alta frequência na mescla (de 0.0 a 1.0)
+        "zoom_micro_mf_peso": 0.40,       # Peso do ruído de média frequência na mescla (de 0.0 a 1.0)
+        "zoom_micro_amp_base": 0.024,     # Rugosidade mínima de base na linha costeira/praia
+        "zoom_micro_amp_terra": 0.056     # Rugosidade adicional proporcional à altitude (diminuir para 0.02 suaviza a terra firme)
     }
     
     # 2. Instancia o Gerente
