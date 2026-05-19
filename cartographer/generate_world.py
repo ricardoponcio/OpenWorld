@@ -9,58 +9,60 @@ if raiz not in sys.path:
 
 from cartographer.world_manager import WorldManager
 
-def gerar_mundo_composto():
-    # 1. Configurações base
-    CONFIG = {
-        "frequencia": 200.0,
-        "oitavas": 8,
-        "persistencia": 0.5,
-        "lacunariedade": 2.1,
-        "nivel_mar": 0.35,
-        "nivel_montanha": 0.8,
-        
-        # Parâmetros customizados para o ruído do relevo marinho (bancos de areia)
-        "ruido_mar_escala": 80.0,     # Frequência horizontal do ruído (escala menor = mais detalhes de ilhotas/fossas)
-        "ruido_mar_oitavas": 3,       # Complexidade do relevo do mar
-        "ruido_mar_amplitude": 0.14,  # Amplitude do relevo do mar (0.14 garante transições suaves de praia)
-        
-        # Parâmetros adicionais expostos para controle total da cartografia
-        "ruido_macro_escala": 220.0,  # Escala horizontal do relevo base dos continentes (tile_cartographer.py)
-        "ruido_macro_oitavas": 3,     # Detalhamento tectônico do relevo base (tile_cartographer.py)
-        "ruido_costa_escala": 60.0,   # Escala horizontal das reentrâncias das praias e costões (tile_cartographer.py)
-        "ruido_costa_oitavas": 4,     # Rugosidade/irregularidade local das praias e enseadas (tile_cartographer.py)
-
-        # Escala geográfica real
-        "escala_pixel_area_km2": 250, # Área real representada por pixel de terra firme (world_manager.py)
-        
-        # Constantes climáticas (climate.py)
-        "clima_damping_termico": 0.4,     # Resfriamento da temperatura por altitude
-        "clima_umidade_oceano": 0.8,      # Umidade base do oceano
-        "clima_umidade_terra_base": 0.4,  # Umidade base da terra firme
-        
-        # Ruído de dithering para transição de biomas (climate.py)
-        "clima_dithering_escala": 350.0,
-        "clima_dithering_temp_amp": 0.10,
-        "clima_dithering_umid_amp": 0.10,
-        
-        # Limiares de classificação de biomas (climate.py)
-        "limiar_temp_deserto": 0.6,
-        "limiar_umid_deserto": 0.5,
-        "limiar_temp_mediterraneo": 0.4,
-        "limiar_umid_mediterraneo": 0.5,
-
-        # Parâmetros de Zoom (ROI Zoom) para controle de micro-detalhes e rugosidade
-        # (Ajuste estes para diminuir ou suavizar a textura de "papel amassado")
-        "zoom_micro_hf_escala": 50.0,     # Escala do ruído de alta frequência (menor = mais rugoso/fraturado)
-        "zoom_micro_hf_oitavas": 4,       # Oitavas do ruído HF (diminuir para 2 ou 3 suaviza as rugas microscópicas)
-        "zoom_micro_mf_escala": 120.0,    # Escala do ruído de média frequência (vales e colinas regionais)
-        "zoom_micro_mf_oitavas": 4,       # Oitavas do ruído MF (diminuir para 2 suaviza colinas intermediárias)
-        "zoom_micro_hf_peso": 0.60,       # Peso do ruído de alta frequência na mescla (de 0.0 a 1.0)
-        "zoom_micro_mf_peso": 0.40,       # Peso do ruído de média frequência na mescla (de 0.0 a 1.0)
-        "zoom_micro_amp_base": 0.024,     # Rugosidade mínima de base na linha costeira/praia
-        "zoom_micro_amp_terra": 0.056     # Rugosidade adicional proporcional à altitude (diminuir para 0.02 suaviza a terra firme)
-    }
+# ------------------------------------------------------------------
+# CONFIGURAÇÃO CENTRAL DE CARTOGRAFIA & CLIMA
+# ------------------------------------------------------------------
+CONFIG = {
+    "frequencia": 200.0,
+    "oitavas": 8,
+    "persistencia": 0.5,
+    "lacunariedade": 2.1,
+    "nivel_mar": 0.35,
+    "nivel_montanha": 0.8,
     
+    # Parâmetros customizados para o ruído do relevo marinho (bancos de areia)
+    "ruido_mar_escala": 80.0,     # Frequência horizontal do ruído (escala menor = mais detalhes de ilhotas/fossas)
+    "ruido_mar_oitavas": 3,       # Complexidade do relevo do mar
+    "ruido_mar_amplitude": 0.14,  # Amplitude do relevo do mar (0.14 garante transições suaves de praia)
+    
+    # Parâmetros adicionais expostos para controle total da cartografia
+    "ruido_macro_escala": 220.0,  # Escala horizontal do relevo base dos continentes (tile_cartographer.py)
+    "ruido_macro_oitavas": 3,     # Detalhamento tectônico do relevo base (tile_cartographer.py)
+    "ruido_costa_escala": 60.0,   # Escala horizontal das reentrâncias das praias e costões (tile_cartographer.py)
+    "ruido_costa_oitavas": 4,     # Rugosidade/irregularidade local das praias e enseadas (tile_cartographer.py)
+
+    # Escala geográfica real
+    "escala_pixel_area_km2": 250, # Área real representada por pixel de terra firme (world_manager.py)
+    
+    # Constantes climáticas (climate.py)
+    "clima_damping_termico": 0.4,     # Resfriamento da temperatura por altitude
+    "clima_umidade_oceano": 0.8,      # Umidade base do oceano
+    "clima_umidade_terra_base": 0.4,  # Umidade base da terra firme
+    
+    # Ruído de dithering para transição de biomas (climate.py)
+    "clima_dithering_escala": 350.0,
+    "clima_dithering_temp_amp": 0.10,
+    "clima_dithering_umid_amp": 0.10,
+    
+    # Limiares de classificação de biomas (climate.py)
+    "limiar_temp_deserto": 0.6,
+    "limiar_umid_deserto": 0.5,
+    "limiar_temp_mediterraneo": 0.4,
+    "limiar_umid_mediterraneo": 0.5,
+
+    # Parâmetros de Zoom (ROI Zoom) para controle de micro-detalhes e rugosidade
+    # (Ajuste estes para diminuir ou suavizar a textura de "papel amassado")
+    "zoom_micro_hf_escala": 50.0,     # Escala do ruído de alta frequência (menor = mais rugoso/fraturado)
+    "zoom_micro_hf_oitavas": 4,       # Oitavas do ruído HF (diminuir para 2 ou 3 suaviza as rugas microscópicas)
+    "zoom_micro_mf_escala": 120.0,    # Escala do ruído de média frequência (vales e colinas regionais)
+    "zoom_micro_mf_oitavas": 4,       # Oitavas do ruído MF (diminuir para 2 suaviza colinas intermediárias)
+    "zoom_micro_hf_peso": 0.60,       # Peso do ruído de alta frequência na mescla (de 0.0 a 1.0)
+    "zoom_micro_mf_peso": 0.40,       # Peso do ruído de média frequência na mescla (de 0.0 a 1.0)
+    "zoom_micro_amp_base": 0.024,     # Rugosidade mínima de base na linha costeira/praia
+    "zoom_micro_amp_terra": 0.056     # Rugosidade adicional proporcional à altitude (diminuir para 0.02 suaviza a terra firme)
+}
+
+def gerar_mundo_composto():
     # 2. Instancia o Gerente
     # Tile size 256 é um padrão ouro para performance/detalhe
     # Usando uma semente inteira determinística

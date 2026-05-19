@@ -20,11 +20,7 @@ if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
 from cartographer.roi_zoom import ROIZoomGenerator
-
-CONFIG = {
-    "nivel_mar": 0.35,
-    "nivel_montanha": 0.80,
-}
+from cartographer.generate_world import CONFIG
 
 def main():
     if len(sys.argv) < 2:
