@@ -22,7 +22,32 @@ def gerar_mundo_composto():
         # Parâmetros customizados para o ruído do relevo marinho (bancos de areia)
         "ruido_mar_escala": 80.0,     # Frequência horizontal do ruído (escala menor = mais detalhes de ilhotas/fossas)
         "ruido_mar_oitavas": 3,       # Complexidade do relevo do mar
-        "ruido_mar_amplitude": 0.14    # Amplitude do relevo do mar (0.14 garante transições suaves de praia)
+        "ruido_mar_amplitude": 0.14,  # Amplitude do relevo do mar (0.14 garante transições suaves de praia)
+        
+        # Parâmetros adicionais expostos para controle total da cartografia
+        "ruido_macro_escala": 220.0,  # Escala horizontal do relevo base dos continentes (tile_cartographer.py)
+        "ruido_macro_oitavas": 3,     # Detalhamento tectônico do relevo base (tile_cartographer.py)
+        "ruido_costa_escala": 60.0,   # Escala horizontal das reentrâncias das praias e costões (tile_cartographer.py)
+        "ruido_costa_oitavas": 4,     # Rugosidade/irregularidade local das praias e enseadas (tile_cartographer.py)
+
+        # Escala geográfica real
+        "escala_pixel_area_km2": 250, # Área real representada por pixel de terra firme (world_manager.py)
+        
+        # Constantes climáticas (climate.py)
+        "clima_damping_termico": 0.4,     # Resfriamento da temperatura por altitude
+        "clima_umidade_oceano": 0.8,      # Umidade base do oceano
+        "clima_umidade_terra_base": 0.4,  # Umidade base da terra firme
+        
+        # Ruído de dithering para transição de biomas (climate.py)
+        "clima_dithering_escala": 350.0,
+        "clima_dithering_temp_amp": 0.10,
+        "clima_dithering_umid_amp": 0.10,
+        
+        # Limiares de classificação de biomas (climate.py)
+        "limiar_temp_deserto": 0.6,
+        "limiar_umid_deserto": 0.5,
+        "limiar_temp_mediterraneo": 0.4,
+        "limiar_umid_mediterraneo": 0.5
     }
     
     # 2. Instancia o Gerente

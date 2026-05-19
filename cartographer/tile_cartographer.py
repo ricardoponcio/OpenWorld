@@ -30,11 +30,15 @@ class TileCartographer:
         grid_x, grid_y = np.meshgrid(x_range, y_range)
 
         # 1. Geração da base geológica contínua via Perlin noise
-        ruido_macro = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=220.0, octaves=3, seed=self.seed)
+        scale_macro = self.config["ruido_macro_escala"]
+        oct_macro = self.config["ruido_macro_oitavas"]
+        ruido_macro = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale_macro, octaves=oct_macro, seed=self.seed)
         relevo_base = NoiseGenerator.generate_tectonic_base(grid_x, grid_y, seed=self.seed)
 
         # 2. Costa de alta frequência para distorções locais
-        ruido_costa = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=60.0, octaves=4, seed=self.seed, offset=12345)
+        scale_costa = self.config["ruido_costa_escala"]
+        oct_costa = self.config["ruido_costa_oitavas"]
+        ruido_costa = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale_costa, octaves=oct_costa, seed=self.seed, offset=12345)
 
         # Inicializa a máscara de continente vazia e o relevo acumulado
         mask_continente = np.zeros((self.size, self.size), dtype=np.float32)
@@ -103,9 +107,9 @@ class TileCartographer:
         relevo_continentes = relevo_continentes * fator_borda
         
         # Ruído marinho para fossas e bancos de areia
-        f_mar = self.config.get("ruido_mar_escala", 80.0)
-        oct_mar = self.config.get("ruido_mar_oitavas", 3)
-        amp_mar = self.config.get("ruido_mar_amplitude", 0.14)
+        f_mar = self.config["ruido_mar_escala"]
+        oct_mar = self.config["ruido_mar_oitavas"]
+        amp_mar = self.config["ruido_mar_amplitude"]
         
         ruido_mar = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=f_mar, octaves=oct_mar, seed=self.seed, offset=9999)
         max_ruido_mar = min(nivel_mar * 0.90, 0.02 + amp_mar)
@@ -127,7 +131,8 @@ class TileCartographer:
         )
         self.data[:, :, 3] = ClimateProcessor.classify_biomes(
             self.data[:, :, 0], self.data[:, :, 1], self.data[:, :, 2],
-            nivel_mar=nivel_mar, nivel_montanha=nivel_montanha
+            nivel_mar=nivel_mar, nivel_montanha=nivel_montanha,
+            grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )
         
         return self.data

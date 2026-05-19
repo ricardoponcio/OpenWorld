@@ -219,7 +219,7 @@ class ROIZoomGenerator:
         ruido_composto = (0.60 * ruido_hf + 0.40 * ruido_mf) - 0.5
 
         # Máscara de modulação: aplica mais detalhe onde há terra e altitude
-        nivel_mar = self.config.get("nivel_mar", 0.35)
+        nivel_mar = self.config["nivel_mar"]
         alt_macro = upscaled[:, :, 0]
         # Normaliza a altitude acima do nível do mar para [0, 1]
         mask_terra = np.clip((alt_macro - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
@@ -241,19 +241,28 @@ class ROIZoomGenerator:
     # Recálculo de clima e biomas na resolução de zoom
     # ------------------------------------------------------------------
 
-    def _recompute_climate_and_biomes(self, data: np.ndarray, min_y_global: int, max_y_global: int) -> np.ndarray:
+    def _recompute_climate_and_biomes(self, data: np.ndarray, min_x_global: int, max_x_global: int, min_y_global: int, max_y_global: int) -> np.ndarray:
         """
         Classifica os biomas na resolução de zoom com base na altitude micro-detalhada
         e na temperatura/umidade herdadas e interpoladas do mapa global.
         Garante consistência perfeita e 100% de paridade com o Mapa Mundi.
         """
-        nivel_mar = self.config.get("nivel_mar", 0.35)
-        nivel_montanha = self.config.get("nivel_montanha", 0.80)
+        nivel_mar = self.config["nivel_mar"]
+        nivel_montanha = self.config["nivel_montanha"]
 
         result = data.copy()
+        
+        # Geramos a grade de coordenadas perfeitamente mapeadas no espaço global [0, 768]
+        # para alinhar o ruído Perlin de dithering entre o Mapa Mundi e o Zoom
+        H, W, _ = data.shape
+        y_range = np.linspace(min_y_global, max_y_global, H, dtype=np.float32)
+        x_range = np.linspace(min_x_global, max_x_global, W, dtype=np.float32)
+        grid_x, grid_y = np.meshgrid(x_range, y_range)
+
         result[:, :, 3] = ClimateProcessor.classify_biomes(
             data[:, :, 0], result[:, :, 1], result[:, :, 2],
             nivel_mar=nivel_mar, nivel_montanha=nivel_montanha,
+            grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )
         return result
 
@@ -306,9 +315,17 @@ class ROIZoomGenerator:
         print("[ROI-ZOOM] Micro-detalhes geológicos aplicados.")
 
         # 5. Recalcula clima e biomas na nova resolução
+        min_x_global = max(0, bbox["min_x"] - self.BORDER_PADDING)
+        max_x_global = min(global_map.shape[1] - 1, bbox["max_x"] + self.BORDER_PADDING)
         min_y_global = max(0, bbox["min_y"] - self.BORDER_PADDING)
         max_y_global = min(global_map.shape[0] - 1, bbox["max_y"] + self.BORDER_PADDING)
-        final = self._recompute_climate_and_biomes(refined, min_y_global=min_y_global, max_y_global=max_y_global)
+        final = self._recompute_climate_and_biomes(
+            refined, 
+            min_x_global=min_x_global, 
+            max_x_global=max_x_global, 
+            min_y_global=min_y_global, 
+            max_y_global=max_y_global
+        )
         print("[ROI-ZOOM] Clima e biomas recalculados.")
 
         # 6. Persiste o resultado

@@ -1,4 +1,7 @@
 import numpy as np
+import uuid
+import json
+import os
 from cartographer.tile_cartographer import TileCartographer
 from cartographer.ai.world_manager_ai import WorldManagerAIClient
 
@@ -60,11 +63,7 @@ class WorldManager:
         Analisa a região composta gerada e cria um manifesto estruturado dos continentes,
         mapeando cada um para um UUID e calculando suas estatísticas geográficas reais.
         """
-        import uuid
-        import json
-        import os
-        
-        nivel_mar = self.config.get("nivel_mar", 0.35) if self.config else 0.35
+        nivel_mar = self.config["nivel_mar"]
         continentes_list = self.layout_continentes.get("continentes", [])
         
         manifest = {
@@ -75,18 +74,11 @@ class WorldManager:
         }
         
         biomas_nomes = {
-            0: "Oceano Abissal",
-            1: "Mar Raso",
-            2: "Praia",
-            3: "Deserto",
-            4: "Savana",
-            5: "Floresta Tropical",
-            6: "Estepes",
-            7: "Floresta Temperada",
-            8: "Taiga",
-            9: "Tundra",
-            10: "Gelo/Glacial",
-            11: "Montanha Alpina"
+            1: "Oceano",
+            2: "Deserto",
+            3: "Mediterrâneo",
+            4: "Floresta Temperada",
+            5: "Montanha Rochosa"
         }
         
         continentes_stats = {}
@@ -122,17 +114,22 @@ class WorldManager:
                 bioma_id = int(full_map[p[1], p[0], 3])
                 continentes_stats[c_nome]["biomas"][bioma_id] = continentes_stats[c_nome]["biomas"].get(bioma_id, 0) + 1
                 
-        for c_nome, stats in continentes_stats.items():
+        for c_nome, stats in sorted(continentes_stats.items()):
             pixels = stats["pixels"]
             num_pixels = len(pixels)
             
+            # FILTRO: Ignora continentes inexistentes (0 pixels) que não possuem nenhuma terra firme mapeada.
+            if num_pixels == 0:
+                print(f"⚠️ [WORLD-MANIFEST] Ignorando '{c_nome}': continente inexistente ou completamente submerso (0 pixels de terra).")
+                continue
+                
             if num_pixels > 0:
                 pixels_arr = np.array(pixels)
                 min_x, min_y = np.min(pixels_arr, axis=0)
                 max_x, max_y = np.max(pixels_arr, axis=0)
                 
-                # Escala estimada: 1 pixel representará cerca de 250 km² na nossa proporção global
-                area_real_km2 = int(num_pixels * 250)
+                # Escala real em km² baseada puramente na configuração explícita
+                area_real_km2 = int(num_pixels * self.config["escala_pixel_area_km2"])
                 
                 bbox = {
                     "min_x": int(min_x),

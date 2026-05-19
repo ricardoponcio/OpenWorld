@@ -1,4 +1,5 @@
 import numpy as np
+from cartographer.math.noise import NoiseGenerator
 
 class TectonicsProcessor:
     """
@@ -11,8 +12,6 @@ class TectonicsProcessor:
         Calcula a distância euclidiana de cada ponto da grade ao centro (cx, cy)
         aplicando Domain Warping de alta intensidade para distorcer a forma circular.
         """
-        from cartographer.math.noise import NoiseGenerator
-        
         # Geramos ruído Perlin vetorizado normalizado na faixa [0, 1]
         noise_x = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=7777)
         noise_y = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=9999)
@@ -66,15 +65,17 @@ class TectonicsProcessor:
                 relevo_base
             )
         elif perfil_nome == "Arquipélago":
-            from cartographer.math.noise import NoiseGenerator
             ruido_arqui = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=18.0, octaves=3, seed=seed, offset=8888)
-            relevo_perfil = relevo_base * np.where(ruido_arqui > 0.45, 1.0, 0.1)
+            # Substituímos a função degrau booleana descontínua por uma função sigmoide contínua e suave.
+            # Isso cria encostas e praias realistas e remove por completo os "aquedutos de concreto" de quina seca no zoom.
+            fator_arqui = 0.1 + 0.9 / (1.0 + np.exp(-15.0 * (ruido_arqui - 0.45)))
+            relevo_perfil = relevo_base * fator_arqui
         elif perfil_nome == "Erosivo":
-            relevo_perfil = np.sqrt(relevo_base) * 0.8
+            relevo_perfil = np.sqrt(relevo_base)
         else:
             relevo_perfil = relevo_base
             
-        return TectonicsProcessor.normalize_profile(relevo_perfil)
+        return relevo_perfil
 
     @staticmethod
     def apply_cosine_vignette(grid_x, grid_y, map_size=768.0, margem_segura=40.0, largura_fade=80.0):

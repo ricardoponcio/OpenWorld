@@ -62,6 +62,14 @@ class NoiseGenerator:
     """
     Gerador e manipulador de campos de ruído Perlin multi-frequência (fBm) puramente vetorizado.
     """
+    # ------------------------------------------------------------------
+    # Constantes de Ruído Parametrizadas e Documentadas
+    # ------------------------------------------------------------------
+    DEFAULT_TECTONIC_MACRO_SCALE = 220.0
+    DEFAULT_TECTONIC_MACRO_OCTAVES = 3
+    DEFAULT_TECTONIC_DETAIL_SCALE = 60.0
+    DEFAULT_TECTONIC_DETAIL_OCTAVES = 4
+
     @staticmethod
     def generate_noise_field(grid_x, grid_y, scale, octaves=4, seed=0, offset=0):
         """
@@ -96,6 +104,17 @@ class NoiseGenerator:
         """
         Gera a base geológica unindo macro-formas tectônicas e micro-detalhes de alta frequência.
         """
-        ruido_macro = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=220.0, octaves=3, seed=seed)
-        ruido_detalhe = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=60.0, octaves=4, seed=seed, offset=500)
-        return 0.65 * ruido_macro + 0.35 * ruido_detalhe
+        ruido_macro = NoiseGenerator.generate_noise_field(
+            grid_x, grid_y, 
+            scale=NoiseGenerator.DEFAULT_TECTONIC_MACRO_SCALE, 
+            octaves=NoiseGenerator.DEFAULT_TECTONIC_MACRO_OCTAVES, 
+            seed=seed
+        )
+        ruido_detalhe = NoiseGenerator.generate_noise_field(
+            grid_x, grid_y, 
+            scale=NoiseGenerator.DEFAULT_TECTONIC_DETAIL_SCALE, 
+            octaves=NoiseGenerator.DEFAULT_TECTONIC_DETAIL_OCTAVES, 
+            seed=seed, 
+            offset=500
+        )
+        return ruido_macro * 0.7 + ruido_detalhe * 0.3

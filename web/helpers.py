@@ -48,7 +48,10 @@ def render_npz_map_to_bytes(npz_path):
                 img_rgb[mask_b, 2] = b_c[mask_b]
                 
     # 3. Sombreamento 3D de Relevo (Hillshading) vindo de Noroeste
-    fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, escala_terreno=48.0)
+    # Escalamos a escala_terreno de forma perfeitamente proporcional à resolução da imagem (width)
+    # para garantir que os gradientes de relevo permaneçam dramáticos e visíveis tanto em 768px quanto em 3000px.
+    escala_dinamica = 48.0 * (width / 256.0)
+    fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, escala_terreno=escala_dinamica)
     
     if np.any(mask_terra):
         for c in range(3):
