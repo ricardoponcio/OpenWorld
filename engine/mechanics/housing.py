@@ -85,6 +85,13 @@ class NPCHousingManager:
             if len(moradores) <= casa.capacidade:
                 continue  # Casa não superlotada, nada a fazer
 
+            # Impede a superlotação-nômade: Apenas constrói se houver mais de 2 adultos/idosos na casa.
+            # Se houver 2 ou menos adultos, qualquer superlotação é decorrente de excesso de filhos dependentes
+            # da única família residente, que se moveriam em bloco e causariam superlotação na nova casa.
+            adultos_vivos = [m for m in moradores if m.is_adulto() or m.is_idoso()]
+            if len(adultos_vivos) <= 2:
+                continue
+
             # Bug C: filtrar apenas adultos com cônjuge
             casais = [
                 m for m in moradores
