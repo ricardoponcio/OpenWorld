@@ -9,6 +9,28 @@ composed_bp = Blueprint('composed', __name__)
 
 MAPA_COMPOSTO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
 
+# Cache em memória autoinvalidável por mtime do arquivo para evitar I/O redundante de disco
+_MAP_DATA_CACHE = {}
+
+def obter_mapa_do_cache(caminho_arquivo):
+    """Carrega o array de dados 'mapa' do NPZ usando cache em memória autoinvalidável."""
+    caminho_abs = os.path.abspath(caminho_arquivo)
+    if not os.path.exists(caminho_abs):
+        return None
+    try:
+        mtime = os.path.getmtime(caminho_abs)
+        if caminho_abs in _MAP_DATA_CACHE:
+            cached_mtime, mapa = _MAP_DATA_CACHE[caminho_abs]
+            if cached_mtime == mtime:
+                return mapa
+        dados = np.load(caminho_abs)
+        mapa = dados["mapa"]
+        _MAP_DATA_CACHE[caminho_abs] = (mtime, mapa)
+        return mapa
+    except Exception as e:
+        print(f"[CACHE] Erro ao carregar mapa {caminho_abs}: {e}")
+        return None
+
 @composed_bp.route('/mapa_composto')
 def mapa_composto_view():
     return render_template('mapa_composto.html')
@@ -26,11 +48,9 @@ def api_mapa_composto_imagem():
 @composed_bp.route('/api/mapa_composto/info/<int:x>/<int:y>')
 def api_mapa_composto_info(x, y):
     try:
-        if not os.path.exists(MAPA_COMPOSTO_PATH):
+        mapa = obter_mapa_do_cache(MAPA_COMPOSTO_PATH)
+        if mapa is None:
             return jsonify({"error": "Mapa Composto não encontrado"}), 404
-            
-        dados = np.load(MAPA_COMPOSTO_PATH)
-        mapa = dados["mapa"]
         height, width, _ = mapa.shape
         
         if x < 0 or x >= width or y < 0 or y >= height:
@@ -146,11 +166,9 @@ def api_continente_info(uuid, x, y):
         if not continente:
             return jsonify({"error": "Continente não encontrado"}), 404
             
-        if not os.path.exists(npz_path):
+        mapa = obter_mapa_do_cache(npz_path)
+        if mapa is None:
             return jsonify({"error": "Zoom do continente não gerado"}), 404
-            
-        dados = np.load(npz_path)
-        mapa = dados["mapa"]
         height, width, _ = mapa.shape
         
         if x < 0 or x >= width or y < 0 or y >= height:

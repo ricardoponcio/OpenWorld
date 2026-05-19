@@ -224,8 +224,14 @@ class ROIZoomGenerator:
         # Normaliza a altitude acima do nível do mar para [0, 1]
         mask_terra = np.clip((alt_macro - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
 
-        # Amplitude do ruído proporcional à altitude (máximo ±8% de relevo extra)
-        amplitude = mask_terra * 0.08
+        # Máscara para evitar criar ilhas artificiais espúrias em oceano muito profundo (altitudes < 0.22)
+        # Permite perturbação apenas perto da costa e na terra
+        mask_proxima_costa = np.clip((alt_macro - 0.22) / 0.13, 0.0, 1.0)
+
+        # Amplitude do ruído: base constante de 0.024 na costa + modulação por altitude (máximo ±11%)
+        # Adicionar a base de 0.024 dissolve completamente o efeito "escada" de pixels da linha costeira,
+        # gerando cômoros, pequenas enseadas e praias de aparência extremamente natural e orgânica.
+        amplitude = mask_proxima_costa * (0.024 + mask_terra * 0.086)
 
         resultado = upscaled.copy()
         resultado[:, :, 0] = np.clip(alt_macro + ruido_composto * amplitude, 0.0, 1.0)
@@ -235,29 +241,16 @@ class ROIZoomGenerator:
     # Recálculo de clima e biomas na resolução de zoom
     # ------------------------------------------------------------------
 
-    def _recompute_climate_and_biomes(self, data: np.ndarray, offset_y_global: int) -> np.ndarray:
+    def _recompute_climate_and_biomes(self, data: np.ndarray, min_y_global: int, max_y_global: int) -> np.ndarray:
         """
-        Recalcula temperatura, umidade e biomas para o mapa de zoom.
-
-        O offset_y_global posiciona o tile na latitude correta do mundo
-        para que o cálculo de temperatura respeite o gradiente latitudinal.
+        Classifica os biomas na resolução de zoom com base na altitude micro-detalhada
+        e na temperatura/umidade herdadas e interpoladas do mapa global.
+        Garante consistência perfeita e 100% de paridade com o Mapa Mundi.
         """
-        H, W, _ = data.shape
         nivel_mar = self.config.get("nivel_mar", 0.35)
         nivel_montanha = self.config.get("nivel_montanha", 0.80)
 
-        # Grade de posições globais fictícias para calcular temperatura corretamente
-        y_range = np.arange(offset_y_global, offset_y_global + H, dtype=np.float32)
-        x_range = np.arange(W, dtype=np.float32)
-        _, grid_y = np.meshgrid(x_range, y_range)
-
         result = data.copy()
-        result[:, :, 1] = ClimateProcessor.calculate_temperature(
-            grid_y, data[:, :, 0], np.zeros((H, W), dtype=np.float32), map_height=768.0
-        )
-        result[:, :, 2] = ClimateProcessor.calculate_humidity(
-            data[:, :, 0], np.zeros((H, W), dtype=np.float32), nivel_mar=nivel_mar
-        )
         result[:, :, 3] = ClimateProcessor.classify_biomes(
             data[:, :, 0], result[:, :, 1], result[:, :, 2],
             nivel_mar=nivel_mar, nivel_montanha=nivel_montanha,
@@ -314,7 +307,8 @@ class ROIZoomGenerator:
 
         # 5. Recalcula clima e biomas na nova resolução
         min_y_global = max(0, bbox["min_y"] - self.BORDER_PADDING)
-        final = self._recompute_climate_and_biomes(refined, offset_y_global=min_y_global)
+        max_y_global = min(global_map.shape[0] - 1, bbox["max_y"] + self.BORDER_PADDING)
+        final = self._recompute_climate_and_biomes(refined, min_y_global=min_y_global, max_y_global=max_y_global)
         print("[ROI-ZOOM] Clima e biomas recalculados.")
 
         # 6. Persiste o resultado

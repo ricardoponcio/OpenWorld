@@ -97,10 +97,16 @@ class NPCBrain:
             
         # Construir casa: Se o NPC ou o cônjuge forem donos de uma obra inacabada
         utilidades[Acao.CONSTRUIR] = 0.0
-        if locais and not is_dependent and npc.energia >= 30 and not (cfg["hora_inicio_trabalho"] <= hora_atual <= cfg["hora_fim_trabalho"]) and not (hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < cfg["hora_inicio_trabalho"]):
-            from ..utils import NPCUtils
-            if NPCUtils.obter_obra_do_npc(locais, npc):
-                utilidades[Acao.CONSTRUIR] = 200.0  # Foco altíssimo para terminar a casa
+        if locais and not is_dependent and npc.energia >= 25:
+            # Não constrói no horário de trabalho formal
+            tem_trabalho_ativo = (npc.local_trabalho_id is not None and npc.local_trabalho_id != "" and cfg["hora_inicio_trabalho"] <= hora_atual <= cfg["hora_fim_trabalho"])
+            # Não constrói na madrugada silenciosa (sono profundo)
+            hora_sono = (hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < 5)
+            
+            if not tem_trabalho_ativo and not hora_sono:
+                from ..utils import NPCUtils
+                if NPCUtils.obter_obra_do_npc(locais, npc):
+                    utilidades[Acao.CONSTRUIR] = 200.0  # Foco altíssimo para terminar a casa
         
         utilidades[Acao.OCIOSO] = 10.0
 

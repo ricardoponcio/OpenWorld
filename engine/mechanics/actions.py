@@ -213,7 +213,7 @@ class NPCActionManager:
         
         npc.energia -= 1.5
         npc.fome += 0.5
-        obra.integridade += 2  # ~12 horas in-game para finalizar
+        obra.integridade += 10 # Conclui em ~10 ticks (~2.5 horas in-game de trabalho ativo)
         engine.db.salvar_local(obra)
         
         if engine.tick_count % 4 == 0:

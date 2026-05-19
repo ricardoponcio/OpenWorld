@@ -98,7 +98,7 @@ class NPCReproductionManager:
         dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
         timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
         
-        bebe_id = f"npc_bebe_{int(time.time())}_{random.randint(0, 999)}"
+        bebe_id = f"npc_nac_{int(time.time())}_{random.randint(0, 999)}"
         
         novo_bebe = NPC(
             id=bebe_id,

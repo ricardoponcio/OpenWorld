@@ -13,6 +13,7 @@ let startX = 0;
 let startY = 0;
 let lastInspectedX = -1;
 let lastInspectedY = -1;
+let minScale = 1.0;
 
 // Query memory cache
 const apiCache = {};
@@ -25,8 +26,11 @@ img.onload = function() {
     canvas.width = 600;
     canvas.height = 600;
     
-    offsetX = (canvas.width - img.width) / 2;
-    offsetY = (canvas.height - img.height) / 2;
+    minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+    scale = minScale;
+    
+    offsetX = (canvas.width - img.width * scale) / 2;
+    offsetY = (canvas.height - img.height * scale) / 2;
     
     draw();
 };
@@ -41,7 +45,7 @@ function draw() {
 // Zoom calculations
 function adjustZoom(amount, zoomX, zoomY) {
     const oldScale = scale;
-    scale = Math.min(8.0, Math.max(1.0, scale + amount));
+    scale = Math.min(8.0, Math.max(minScale, scale + amount));
 
     offsetX = zoomX - (zoomX - offsetX) * (scale / oldScale);
     offsetY = zoomY - (zoomY - offsetY) * (scale / oldScale);
@@ -72,8 +76,8 @@ canvas.addEventListener('mousemove', function(e) {
         const canvasY = e.clientY - rect.top;
 
         // Map coordinates back to actual image space
-        const originalX = Math.floor((canvasX - offsetX) / (scale * (canvas.width / canvas.width)));
-        const originalY = Math.floor((canvasY - offsetY) / (scale * (canvas.height / canvas.height)));
+        const originalX = Math.floor((canvasX - offsetX) / scale);
+        const originalY = Math.floor((canvasY - offsetY) / scale);
 
         // Validate boundaries
         if (originalX >= 0 && originalX < img.width && originalY >= 0 && originalY < img.height) {
@@ -97,6 +101,9 @@ canvas.addEventListener('wheel', function(e) {
 }, { passive: false });
 
 // Asynchronous details pipeline
+let hoverTimeout = null;
+let abortController = null;
+
 function fetchTerrainInfo(x, y) {
     const cacheKey = `${currentMode}_${currentContinentUuid || 'global'}_${x},${y}`;
     
@@ -105,19 +112,35 @@ function fetchTerrainInfo(x, y) {
         return;
     }
 
-    const url = currentMode === 'global' 
-        ? `/api/mapa_composto/info/${x}/${y}` 
-        : `/api/continente/${currentContinentUuid}/info/${x}/${y}`;
+    if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+    }
 
-    fetch(url)
-        .then(res => res.json())
-        .then(data => {
-            if (!data.error) {
-                apiCache[cacheKey] = data;
-                updateSidebar(data);
-            }
-        })
-        .catch(err => console.error("Erro ao inspecionar coordenada:", err));
+    hoverTimeout = setTimeout(() => {
+        if (abortController) {
+            abortController.abort();
+        }
+        abortController = new AbortController();
+        const signal = abortController.signal;
+
+        const url = currentMode === 'global' 
+            ? `/api/mapa_composto/info/${x}/${y}` 
+            : `/api/continente/${currentContinentUuid}/info/${x}/${y}`;
+
+        fetch(url, { signal })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.error) {
+                    apiCache[cacheKey] = data;
+                    updateSidebar(data);
+                }
+            })
+            .catch(err => {
+                if (err.name !== 'AbortError') {
+                    console.error("Erro ao inspecionar coordenada:", err);
+                }
+            });
+    }, 30); // 30ms debounce
 }
 
 // Sidebar View Update
@@ -216,9 +239,10 @@ function selectContinent(uuid, nome, btnElement) {
         canvas.width = 600;
         canvas.height = 600;
         
-        scale = 1.0;
-        offsetX = (canvas.width - img.width) / 2;
-        offsetY = (canvas.height - img.height) / 2;
+        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        scale = minScale;
+        offsetX = (canvas.width - img.width * scale) / 2;
+        offsetY = (canvas.height - img.height * scale) / 2;
         
         draw();
 
@@ -254,9 +278,10 @@ document.getElementById('btn-global-map').addEventListener('click', function() {
         canvas.width = 600;
         canvas.height = 600;
         
-        scale = 1.0;
-        offsetX = (canvas.width - img.width) / 2;
-        offsetY = (canvas.height - img.height) / 2;
+        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        scale = minScale;
+        offsetX = (canvas.width - img.width * scale) / 2;
+        offsetY = (canvas.height - img.height * scale) / 2;
         
         draw();
 
@@ -283,9 +308,9 @@ document.getElementById('btnZoomOut').addEventListener('click', function() {
 });
 
 document.getElementById('btnZoomReset').addEventListener('click', function() {
-    scale = 1.0;
-    offsetX = (canvas.width - img.width) / 2;
-    offsetY = (canvas.height - img.height) / 2;
+    scale = minScale;
+    offsetX = (canvas.width - img.width * scale) / 2;
+    offsetY = (canvas.height - img.height * scale) / 2;
     draw();
 });
 
