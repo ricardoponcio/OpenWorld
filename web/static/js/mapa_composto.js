@@ -19,6 +19,7 @@ let mouseY = -1;
 let hoveredTooltip = null;
 
 let cityEntities = { locais: [], npcs: [] };
+let cachedContinents = [];
 
 // Query memory cache
 const apiCache = {};
@@ -53,6 +54,14 @@ function draw() {
     ctx.fillStyle = '#060810';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, offsetX, offsetY, img.width * scale, img.height * scale);
+
+    if (currentMode === 'global') {
+        drawGlobalMarkers();
+    }
+
+    if (currentMode === 'continent') {
+        drawContinentMarkers();
+    }
 
     if (currentMode === 'city') {
         drawCityGridAndEntities();
@@ -255,6 +264,13 @@ window.addEventListener('mouseup', function() {
     isDragging = false;
 });
 
+function isClickInCity(x, y, cityX, cityY) {
+    const cx = offsetX + cityX * scale;
+    const cy = offsetY + cityY * scale;
+    const distance = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+    return distance <= 10 * scale; // Area clicável da cidade
+}
+
 canvas.addEventListener('mousemove', function(e) {
     if (isDragging) {
         offsetX = e.clientX - startX;
@@ -419,6 +435,9 @@ function loadContinents() {
     fetch('/api/continentes')
         .then(res => res.json())
         .then(data => {
+            cachedContinents = data.continentes || [];
+            draw(); // Redraw map to show markers
+
             const container = document.getElementById('continents-list-container');
             container.innerHTML = '';
             
@@ -641,3 +660,87 @@ document.getElementById('btnZoomReset').addEventListener('click', function() {
 
 // Start initialization
 loadContinents();
+
+function drawGlobalMarkers() {
+    if (!cachedContinents || cachedContinents.length === 0) return;
+    
+    cachedContinents.forEach(c => {
+        // Label do Continente
+        if (c.bounding_box) {
+            const centerX = (c.bounding_box.min_x + c.bounding_box.max_x) / 2;
+            const centerY = (c.bounding_box.min_y + c.bounding_box.max_y) / 2;
+            
+            const px = offsetX + centerX * scale;
+            const py = offsetY + centerY * scale;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.font = `bold ${Math.max(12, 16 * scale)}px sans-serif`;
+            const textWidth = ctx.measureText(c.nome).width;
+            
+            // Fundo do texto do continente
+            ctx.fillRect(px - textWidth/2 - 6, py - 16 * scale, textWidth + 12, 22 * scale);
+            
+            // Texto do continente
+            ctx.fillStyle = '#FFD700'; // Dourado
+            ctx.textAlign = 'center';
+            ctx.fillText(c.nome, px, py - 2 * scale);
+        }
+        
+        // Marcadores das Cidades
+        if (c.cidades) {
+            c.cidades.forEach(city => {
+                const cx = offsetX + city.x_global * scale;
+                const cy = offsetY + city.y_global * scale;
+                
+                // Pin point minúsculo da cidade no mapa mundi
+                ctx.beginPath();
+                ctx.arc(cx, cy, 1.5 * scale, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ff4444';
+                ctx.fill();
+                
+            });
+        }
+    });
+}
+
+function drawContinentMarkers() {
+    if (!cachedContinents || !currentContinentUuid) return;
+    
+    const cont = cachedContinents.find(c => c.uuid === currentContinentUuid);
+    if (!cont || !cont.cidades) return;
+    
+    const minX = Math.max(0, cont.bounding_box.min_x - 20);
+    const minY = Math.max(0, cont.bounding_box.min_y - 20);
+    const maxX = Math.min(767, cont.bounding_box.max_x + 20);
+    const maxY = Math.min(767, cont.bounding_box.max_y + 20);
+    
+    const globW = maxX - minX;
+    const globH = maxY - minY;
+    
+    cont.cidades.forEach(city => {
+        const relX = (city.x_global - minX) / globW;
+        const relY = (city.y_global - minY) / globH;
+        
+        const cx = offsetX + (relX * img.width * scale);
+        const cy = offsetY + (relY * img.height * scale);
+        
+        // Pin point da cidade
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(4, 5 * scale), 0, 2 * Math.PI);
+        ctx.fillStyle = '#ff4444';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.5, 2 * scale);
+        ctx.stroke();
+        
+        // Sombra do texto da cidade
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.font = `bold ${Math.max(12, 14 * scale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(city.nome, cx + 1, cy - 10 * scale + 1);
+
+        // Texto da cidade
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(city.nome, cx, cy - 10 * scale);
+    });
+}
