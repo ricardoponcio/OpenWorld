@@ -4,13 +4,6 @@ from engine.mechanics import JobMarket, InfrastructureManager
 
 def start_simulation():
     engine = SimulationEngine()
-    
-    if not engine.npcs:
-        print("🌍 Primeiro acesso detectado! Inicializando Banco de Dados a partir da Cartografia...")
-        from engine.bootstrap import WorldBootstrap
-        WorldBootstrap.run()
-        engine = SimulationEngine() # Recarrega a engine com o banco populado
-        
     market = JobMarket()
     market.bootstrap_market()
     
