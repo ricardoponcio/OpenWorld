@@ -1,0 +1,36 @@
+Você é um Gerador Geográfico Estratégico para um simulador de mundo procedural.
+Sua tarefa é projetar a macro-geografia de um planeta com base na semente: {semente}.
+
+Gere um JSON com uma lista de continentes (estritamente de 3 a 5 massas de terra robustas). Cada continente deve seguir estes parâmetros técnicos rígidos para garantir consistência física no Python:
+
+- "nome": Nome fictício único e medieval-fantástico.
+- "centro_x" / "centro_y": Coordenadas globais do centro. Devem ser estritamente entre 180 e 580. NUNCA coloque perto das bordas (0 a 179 ou 581 a 768) para evitar que o continente seja cortado pelo oceano abissal da borda.
+- "area_km2": Área total da massa de terra (deve ser grande e substancial, entre 2.500.000 e 8.000.000 km²). NUNCA gere continentes minúsculos!
+- "raio_visual": Raio em pixels para a máscara de influência (deve ser robusto, entre 180 e 300).
+- "irregularidade": Coeficiente de recorte costeiro (0.1: suave/circular, 0.8: muito recortado/fiordes).
+- "elevacao_maxima": Teto de altitude (0.6 a 1.0). Determina a agressividade dos picos.
+- "perfil_geologico": Escolha um: ["Alpino", "Platô", "Arquipélago", "Erosivo"].
+- "modificadores":
+    - "calor": Offset térmico (-0.3 a +0.3).
+    - "umidade": Offset de chuva (-0.3 a +0.3).
+
+REGRAS DE OURO DE GEOMETRIA:
+1. ESPAÇAMENTO MÍNIMO: Os centros de quaisquer dois continentes devem estar separados por pelo menos 220 pixels de distância na grade de 768x768. Evite aglomerar continentes no mesmo canto!
+2. NUNCA CRIE ILHAS MINÚSCULAS: Todos os continentes precisam ser grandes e conter terra firme em abundância.
+
+Responda ESTRITAMENTE em formato JSON puro, sem markdown, sem comentários, seguindo exatamente esta estrutura:
+{
+    "continentes": [
+        {
+            "nome": "Avalonia",
+            "centro_x": 250,
+            "centro_y": 300,
+            "area_km2": 4500000,
+            "raio_visual": 220,
+            "irregularidade": 0.45,
+            "elevacao_maxima": 0.8,
+            "perfil_geologico": "Alpino",
+            "modificadores": { "calor": 0.05, "umidade": -0.1 }
+        }
+    ]
+}

@@ -1,0 +1,372 @@
+/* Removed conflicting globals */
+
+/* 3-Column Workspace Grid */
+.mapa-composto-layout {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 320px 1fr 380px;
+    gap: 1.5rem;
+    overflow: hidden;
+}
+
+/* Left Panel - Continents Selection */
+.continents-section {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.continents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.continent-btn {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.continent-btn:hover {
+    background: rgba(34, 211, 238, 0.05);
+    border-color: rgba(34, 211, 238, 0.3);
+    transform: translateX(4px);
+}
+
+.continent-btn.active {
+    background: rgba(34, 211, 238, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+    font-weight: 600;
+}
+
+.continent-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.continent-name {
+    font-size: 0.9rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+}
+
+.continent-info-small {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.continent-status {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 2px 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    white-space: nowrap;
+}
+
+.continent-btn.active .continent-status {
+    color: var(--accent);
+    border-color: rgba(34, 211, 238, 0.3);
+}
+
+.continent-btn.loading .continent-status {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+    border-color: var(--warning);
+    animation: pulse-load 1.2s infinite alternate;
+}
+
+@keyframes pulse-load {
+    0% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Center Column - Map Canvas */
+.canvas-section {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+#mapaCanvas {
+    cursor: grab;
+    display: block;
+    image-rendering: auto;
+}
+
+#mapaCanvas:active {
+    cursor: grabbing;
+}
+
+/* Canvas Floating Controls */
+.canvas-controls {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 30px;
+    padding: 6px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+    z-index: 10;
+}
+
+.control-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.control-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.control-divider {
+    width: 1px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Right Panel - Terrain Inspector */
+.inspector-section {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.section-header h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 0.8rem;
+}
+
+.info-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.info-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: 'Outfit', sans-serif;
+}
+
+/* Tile Mosaico Visual Grid in Sidebar */
+.tile-grid-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    transition: all 0.3s;
+}
+
+.tile-grid-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tile-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.tile-cell {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-family: 'Outfit', sans-serif;
+    color: var(--text-dim);
+    transition: all 0.3s;
+}
+
+.tile-cell.active {
+    background: rgba(34, 211, 238, 0.15);
+    border-color: var(--accent);
+    color: var(--text);
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+    font-weight: 600;
+}
+
+/* Progress Metrics */
+.metric-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+}
+
+.metric-name {
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.metric-val {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+}
+
+.progress-container {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Color classes for progress bars */
+.progress-altitude {
+    background: linear-gradient(90deg, #1e3a8a, var(--accent));
+    box-shadow: 0 0 6px rgba(34, 211, 238, 0.4);
+}
+
+.progress-temperature {
+    background: linear-gradient(90deg, #b45309, #ef4444);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+
+.progress-humidity {
+    background: linear-gradient(90deg, #0d9488, #22d3ee);
+    box-shadow: 0 0 6px rgba(34, 211, 238, 0.4);
+}
+
+/* Biome Badges styling */
+.biome-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.biome-1 { background: rgba(28, 107, 160, 0.15); color: #38bdf8; border: 1px solid rgba(28, 107, 160, 0.3); } 
+.biome-2 { background: rgba(224, 192, 114, 0.15); color: #fbbf24; border: 1px solid rgba(224, 192, 114, 0.3); } 
+.biome-3 { background: rgba(114, 166, 102, 0.15); color: #34d399; border: 1px solid rgba(114, 166, 102, 0.3); } 
+.biome-4 { background: rgba(43, 94, 60, 0.15); color: #4ade80; border: 1px solid rgba(43, 94, 60, 0.3); } 
+.biome-5 { background: rgba(110, 110, 110, 0.15); color: #94a3b8; border: 1px solid rgba(110, 110, 110, 0.3); } 
+
+.status-badge {
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--accent);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.instruction-box {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0.8rem;
+    background: rgba(255,255,255,0.01);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+}

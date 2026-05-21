@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWorld Dashboard v4.1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mapa_composto.css') }}">
+</head>
+<body>
+    <header>
+        <div style="display:flex; align-items:center">
+            <div id="clock" style="font-family: 'Outfit'; color: var(--accent); font-weight: bold; background: rgba(56,189,248,0.1); padding: 4px 12px; border-radius: 20px;">
+                Sincronizando...
+            </div>
+            
+            <div class="speed-controls">
+                <button class="speed-btn active" onclick="setSpeed(1)">1x</button>
+                <button class="speed-btn" onclick="setSpeed(2)">2x</button>
+                <button class="speed-btn" onclick="setSpeed(4)">4x</button>
+                <button class="speed-btn" onclick="setSpeed(8)">8x</button>
+            </div>
+
+            <button id="pause-btn" onclick="togglePause()" style="margin-left:1rem; background: var(--accent); border:none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; box-shadow: 0 0 10px var(--accent);">⏸️</button>
+        </div>
+
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="switchView(this, 'map-view')">🗺️ Mapa</button>
+            <button class="tab-btn" onclick="switchView(this, 'npc-view')">👥 Habitantes</button>
+        </nav>
+    </header>
+
+    <div id="status-bar" class="status-ok">
+        <span id="status-icon">🟢</span>
+        <span id="status-msg">Sistema Online</span>
+    </div>
+
+    <div id="content">
+        <!-- Mapa View -->
+        <div id="map-view" class="view active">
+            <div id="event-banner" class="event-banner">
+                <strong id="ev-title" style="color:var(--danger); display:block">EVENTO ATIVO</strong>
+                <span id="ev-desc" style="font-size:0.8rem">...</span>
+            </div>
+            <div class="mapa-composto-layout">
+                <!-- Coluna da Esquerda: Continentes -->
+                <section class="continents-section">
+                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.6rem;">🗺️ Massas Continentais</h2>
+                    
+                    <button class="continent-btn active" id="btn-global-map">
+                        <span class="continent-emoji">🌍</span>
+                        <span class="continent-details">
+                            <span class="continent-name">Mapa Mundi Composto</span>
+                            <span class="continent-info-small">Visualização Global</span>
+                        </span>
+                        <span class="continent-status">768x768</span>
+                    </button>
+
+                    <div class="tile-grid-title" style="margin-top: 0.8rem; font-size: 0.75rem;">🔍 Continentes Encontrados</div>
+                    <div class="continents-list" id="continents-list-container">
+                        <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 1rem;">Carregando continentes...</div>
+                    </div>
+                </section>
+
+                <!-- Coluna do Centro: Canvas Mapa Interativo -->
+                <section class="canvas-section" id="canvasContainer">
+                    <canvas id="mapaCanvas"></canvas>
+                    
+                    <div class="canvas-controls">
+                        <button class="control-btn" id="btnZoomIn" title="Aproximar Zoom">➕</button>
+                        <div class="control-divider"></div>
+                        <button class="control-btn" id="btnZoomOut" title="Afastar Zoom">➖</button>
+                        <div class="control-divider"></div>
+                        <button class="control-btn" id="btnZoomReset" title="Resetar Visualização">🔄</button>
+                    </div>
+                </section>
+
+                <!-- Coluna da Direita: Inspetor Cartográfico -->
+                <section class="inspector-section">
+                    <div class="section-header">
+                        <h2 id="lblInspectorTitle">🔍 Inspetor do Mapa Mundi</h2>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="info-row">
+                            <span class="info-label">📍 Coordenadas</span>
+                            <span class="info-value" id="lblCoord" style="color: var(--accent);">Mouseover</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🗺️ Bioma</span>
+                            <span id="lblBiomeBadge" class="biome-badge biome-1">Aguardando...</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Status</span>
+                            <span id="status-mapa" class="status-badge">🟢 Mapa Mundi Global</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card" id="terrainMetricsContainer">
+                        <h3 style="font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.4rem;">📊 Métricas de Terreno</h3>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Altitude</span><span class="metric-val" id="lblAltitude">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-altitude" id="barAltitude"></div></div>
+                        </div>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Temperatura</span><span class="metric-val" id="lblTemperature">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-temperature" id="barTemperature"></div></div>
+                        </div>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Umidade</span><span class="metric-val" id="lblHumidity">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-humidity" id="barHumidity"></div></div>
+                        </div>
+                    </div>
+
+
+                    <div class="instruction-box">
+                        <span id="lblInstructionTitle" style="font-weight: 600;">💡 Dica Rápida:</span>
+                        <span id="lblInstructionTip1">• Utilize as abas ao lado para navegar.</span>
+                        <span id="lblInstructionTip2">• Acompanhe o relevo passando o mouse.</span>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- NPCs View -->
+        <div id="npc-view" class="view">
+            <div class="npc-filter-bar" style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem; align-items: center;">
+                <span style="font-family: 'Outfit'; font-weight: 600; color: var(--text-dim); margin-right: 0.5rem;">Filtro:</span>
+                <button class="filter-btn active" onclick="setNpcFilter('vivos')">🟢 Vivos</button>
+                <button class="filter-btn" onclick="setNpcFilter('mortos')">💀 Falecidos</button>
+                <button class="filter-btn" onclick="setNpcFilter('todos')">👥 Todos</button>
+            </div>
+            <div id="npc-grid" class="npc-grid"></div>
+        </div>
+    </div>
+
+    <div id="event-log" class="collapsed">
+        <button id="event-log-toggle" onclick="toggleEventLog()">📜 Crônicas</button>
+        <div id="event-log-inner"></div>
+    </div>
+
+    <!-- Modal de Detalhes e Logs do NPC -->
+    <div id="npc-log-modal" class="modal-overlay" onclick="fecharHistorico(event)">
+        <div class="modal-container" onclick="event.stopPropagation()">
+            <div class="modal-header" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 class="modal-title" id="modal-npc-nome">Ficha do Habitante</h3>
+                    <button class="modal-close" onclick="fecharHistorico(event)">&times;</button>
+                </div>
+                <div class="modal-tabs" style="display: flex; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem;">
+                    <button id="tab-profile-btn" class="filter-btn active" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="switchModalTab('profile')">👤 Ficha de Vida</button>
+                    <button id="tab-logs-btn" class="filter-btn" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;" onclick="switchModalTab('logs')">📜 Crônicas Pessoais</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding-top: 0.5rem;">
+                <!-- Tab: Ficha de Vida -->
+                <div id="modal-tab-profile" class="modal-tab-content">
+                    <div id="modal-profile-details">
+                        <!-- Conteúdo da biografia vai entrar aqui via JS -->
+                    </div>
+                </div>
+                <!-- Tab: Logs -->
+                <div id="modal-tab-logs" class="modal-tab-content" style="display: none;">
+                    <div class="npc-log-list" id="modal-log-list">
+                        <p style="text-align: center; color: var(--text-dim);">Carregando histórico...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mapa_composto.js') }}"></script>
+</body>
+</html>

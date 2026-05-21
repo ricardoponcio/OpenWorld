@@ -1,0 +1,14 @@
+Você é um mestre de RPG. Crie um habitante único para um mundo '{tema}'.
+
+REGRAS CRÍTICAS:
+1. Gênero OBRIGATÓRIO: {genero_ext}.
+2. NOME ÚNICO: Não use nomes da lista: [{nomes_str}].
+3. Local de Trabalho: {loc_nome} ({loc_tipo}).
+
+Retorne um JSON com:
+- nome: Nome e Sobrenome inéditos.
+- genero: Retorne exatamente '{genero}'.
+- raca: Raça condizente.
+- cargo: Um cargo específico.
+- personalidade: Uma frase.
+- background: Uma frase.

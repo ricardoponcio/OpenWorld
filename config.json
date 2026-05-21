@@ -1,0 +1,106 @@
+{
+    "salvar_logs_npc_no_banco": false,
+    "metabolismo": {
+        "energia_base_perda": 0.5,
+        "fome_base_ganho_min": 0.4,
+        "fome_base_ganho_max": 0.8,
+        "social_base_perda_min": 0.5,
+        "social_base_perda_max": 1.2,
+        "multiplicador_fome_dormindo": 0.33,
+        "multiplicador_energia_dormindo": 0.0,
+        "_comentario": "Valores base. Reduzi a taxa de fome diária para um nível sustentável (~0.6 por tick average)."
+    },
+    "acoes": {
+        "dormir": {
+            "energia_ganho": 5.0,
+            "fome_ganho": 0.5
+        },
+        "comer": {
+            "fome_perda": 40.0,
+            "energia_ganho": 1.0,
+            "custo_pc": 15
+        },
+        "trabalhar": {
+            "energia_perda": 1.8,
+            "salario_pc": 5
+        },
+        "socializar": {
+            "energia_perda": 1.6,
+            "social_ganho": 15.0,
+            "custo_pc": 20
+        },
+        "ocioso": {
+            "energia_ganho": 0.1
+        },
+        "_comentario": "Socializar agora cansa (1.6) e Ocioso quase não recupera (0.1). Dormir é essencial."
+    },
+    "ia_decisao": {
+        "gatilho_fome_normal": 40,
+        "gatilho_fome_dormindo": 85,
+        "fome_urgente_limiar": 70,
+        "energia_limiar_desmaio": 10,
+        "hora_inicio_trabalho": 8,
+        "hora_fim_trabalho": 18,
+        "hora_inicio_sono_obrigatorio": 22,
+        "hora_fim_sono_obrigatorio": 6,
+        "bonus_happy_hour": 120.0,
+        "bonus_persistencia": 40.0,
+        "limiar_pobreza_pc": 50,
+        "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas."
+    },
+    "biologia_e_sociedade": {
+        "concepcao_hora": 3,
+        "concepcao_afinidade_minima": 90,
+        "concepcao_chance": 0.05,
+        "concepcao_chance_superlotacao": 0.02,
+        "gravidez_duracao_ticks": 192,
+        "gravidez_multiplicador_perda_energia": 1.2,
+        "gravidez_multiplicador_ganho_fome": 1.2,
+        "parto_afinidade_inicial_pais": 100,
+        "crescimento_hora": 4,
+        "crescimento_dias_bebe_para_crianca": 5,
+        "crescimento_dias_crianca_para_adulto": 15,
+        "crescimento_dias_adulto_para_idoso": 75,
+        "crescimento_dias_idoso_para_morte": 90,
+        "cuidar_prole_consumo_energia": 2.0,
+        "cuidar_prole_ganho_social": 15.0,
+        "heranca_afinidade_minima_conjuge": 50,
+        "heranca_evento_modificador_afinidade": 10,
+        "inaniacao_perda_saude": 5,
+        "dormir_ganho_saude": 2,
+        "interacao_chance": 0.5,
+        "casamento_chance_coabitacao": 0.02,
+        "casamento_chance_romance_fisico": 0.15,
+        "interacao_afinidade_ganhos": [-5, 5, 10, 15]
+    },
+    "reino": {
+        "pensao_aposentadoria": 40,
+        "fornecer_sopao": true,
+        "custo_sopao_ao_reino": 5
+    },
+    "infraestrutura": {
+        "_comentario": "Sistema de decadência e manutenção de construções. Valores de integridade em pontos (0-100).",
+        "limiar_desgastado": 75,
+        "limiar_deteriorado": 50,
+        "limiar_critico": 25,
+        "limiar_ruina": 10,
+        "desgaste_por_tipo": {
+            "Oficina": 0.30,
+            "Campo":   0.20,
+            "Mar":     0.25,
+            "Defesa":  0.15,
+            "Magia":   0.20,
+            "Loja":    0.20,
+            "Social":  0.10,
+            "Casa":    0.15
+        },
+        "desgaste_padrao": 0.20,
+        "desgaste_por_excedente": 0.10,
+        "custo_reparo_espontaneo": 30,
+        "reparo_integridade_ganho": 8,
+        "chance_reparo_espontaneo": 0.08,
+        "chance_log_deteriorado": 0.10,
+        "chance_log_desgastado": 0.05,
+        "energia_minima_reparo": 50
+    }
+}

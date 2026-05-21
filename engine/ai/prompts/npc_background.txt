@@ -1,0 +1,2 @@
+Crie uma personalidade (uma frase curta) e um background (uma frase curta) para um NPC do mundo '{tema}' chamado {nome}, da raça {raca} e profissão {profissao}.
+Retorne um JSON com as chaves 'personalidade' and 'background'.
