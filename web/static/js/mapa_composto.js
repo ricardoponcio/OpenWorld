@@ -12,6 +12,7 @@ let offsetY = 0;
 let isDragging = false;
 let startX = 0;
 let startY = 0;
+let lastInspectedX = -1;
 let lastInspectedY = -1;
 let minScale = 1.0;
 let mouseX = -1;
@@ -424,9 +425,7 @@ function updateSidebar(data) {
     document.getElementById('barHumidity').style.width = `${humPct}%`;
 
     if (currentMode === 'global') {
-        document.querySelectorAll('.tile-cell').forEach(cell => cell.classList.remove('active'));
-        const activeCell = document.getElementById(`tile-${data.tile_x}-${data.tile_y}`);
-        if (activeCell) activeCell.classList.add('active');
+        // Deprecated tile functionality removed
     }
 }
 
@@ -537,7 +536,8 @@ function selectContinent(uuid, nome, btnElement) {
         document.getElementById('status-mapa').style.color = 'var(--accent)';
         
         document.getElementById('lblInspectorTitle').innerText = `🔍 Relevo - ${nome}`;
-        document.getElementById('tileGridContainer').style.display = 'none';
+        const terrainMetrics = document.getElementById('terrainMetricsContainer');
+        if(terrainMetrics) terrainMetrics.style.display = 'block';
 
         document.getElementById('lblInstructionTitle').innerText = `🏔️ Alta Resolução (ROI Zoom):`;
         document.getElementById('lblInstructionTip1').innerText = `• Mapa ampliado dinamicamente para 1200x1200px.`;
@@ -593,7 +593,8 @@ function selectCity(nome, btnElement, continenteNome) {
         document.getElementById('status-mapa').style.color = '#00ffcc';
         
         document.getElementById('lblInspectorTitle').innerText = `🔍 Relevo Urbano - ${nome}`;
-        document.getElementById('tileGridContainer').style.display = 'none';
+        const terrainMetrics = document.getElementById('terrainMetricsContainer');
+        if(terrainMetrics) terrainMetrics.style.display = 'none';
 
         document.getElementById('lblInstructionTitle').innerText = `🏰 Alta Resolução (City Zoom):`;
         document.getElementById('lblInstructionTip1').innerText = `• Mapa focado ampliado dinamicamente.`;
@@ -634,7 +635,8 @@ document.getElementById('btn-global-map').addEventListener('click', function() {
         document.getElementById('status-mapa').style.color = 'var(--accent)';
 
         document.getElementById('lblInspectorTitle').innerText = '🔍 Inspetor do Mapa Mundi';
-        document.getElementById('tileGridContainer').style.display = 'flex';
+        const terrainMetrics = document.getElementById('terrainMetricsContainer');
+        if(terrainMetrics) terrainMetrics.style.display = 'block';
 
         document.getElementById('lblInstructionTitle').innerText = '💡 Visualização do Mapa Mundi:';
         document.getElementById('lblInstructionTip1').innerText = '• Cada tile do mapa composto possui tamanho fixo de 256x256 pixels.';
