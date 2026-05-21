@@ -42,7 +42,11 @@ class NPCBrain:
                 utilidades[Acao.DORMIR] = 0.0
         else:
             # Noite: Sono normal
-            if npc.energia < 95 or npc.acao_atual == Acao.DORMIR or (hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < cfg["hora_inicio_trabalho"]):
+            hora_fim_sono = cfg.get("hora_fim_sono_obrigatorio", 6)
+            if hora_atual >= cfg["hora_inicio_sono_obrigatorio"] or hora_atual < hora_fim_sono:
+                # É de madrugada, a vontade de dormir deve ser absoluta para evitar que vagueiem pelas ruas
+                utilidades[Acao.DORMIR] = 200.0
+            elif npc.energia < 95 or npc.acao_atual == Acao.DORMIR:
                 utilidades[Acao.DORMIR] = (100 - npc.energia) * 1.5
 
         # --- AGENDA E TRABALHO ---
