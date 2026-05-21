@@ -13,9 +13,11 @@ O módulo foi projetado sob os mais rigorosos princípios de clean code, separan
 ```
 cartographer/
 ├── README.md                         # Documentação técnica detalhada (Este arquivo)
-├── generate_world.py                 # Script mestre para execução e salvamento do mapa composto (.npz)
-├── tile_cartographer.py              # Classe principal que gera os dados de tiles individuais [256x256]
-├── world_manager.py                  # Gerente de carregamento sob demanda e junção de tiles
+├── reset_cartography.sh              # Script master para recriar continentes e cidades dinamicamente
+├── world/
+│   └── generate_world.py             # Script mestre para execução e salvamento do mapa composto (.npz)
+├── continents/
+│   └── generate_continent_zoom.py    # Geração de ROI Zoom e Perlin Noise para escala micro
 │
 ├── ai/                               # Planejamento Estratégico via IA
 │   ├── prompt/
@@ -98,7 +100,7 @@ Para fornecer ao mapa um aspecto premium, tridimensional e digno de jogos de est
 Para rodar a pipeline mestre e gerar o arquivo de mapa composto para o simulador e dashboard, execute o comando na raiz do projeto:
 
 ```bash
-python3 cartographer/generate_world.py
+./cartographer/reset_cartography.sh
 ```
 
-Isso criará ou atualizará o arquivo compactado `database/mapa_composto.npz` de forma instantânea.
+Isso criará ou atualizará toda a biblioteca de npz (`mapa_composto.npz`, recortes de cidades e zoons de continentes) de forma limpa.

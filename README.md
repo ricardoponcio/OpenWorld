@@ -9,7 +9,7 @@ O projeto evoluiu de uma simulação básica de economia para um ecossistema ger
 ### 🌟 Funcionalidades Principais
 *   **Ciclo de Vida Biológico Autônomo**: NPCs nascem, crescem, envelhecem e morrem de velhice. A simulação lida de forma autônoma com acasalamento, tempo de gestação e passagem de heranças.
 *   **Geração de Conteúdo Paralela (IA)**: Utilização de *Thread Pools* para acionar múltiplos workers no Ollama, destruindo tempos de carregamento durante a criação do mundo.
-*   **Dashboard e Cartografia Dinâmica**: O Frontend se molda automaticamente ao tamanho do mundo gerado (ex: matrizes de terreno de 40x40), realizando auto-zoom e mapeamento percentual de coordenadas sem quebrar o CSS.
+*   **Dashboard e Cartografia Dinâmica**: Renderização de ponta no frontend baseada em matrizes `.npz` de alta resolução geológica (768x768). O dashboard faz auto-zoom dinâmico (ROI Zoom de 1200x1200px) focado em Cidades e Continentes.
 *   **Mercado de Trabalho Inteligente**: Sistema de contratação que vincula NPCs a locais de trabalho baseados em suas características, com penalidades por exaustão.
 *   **Persistência Híbrida de Tempo Real**: Sincronização em tempo real entre o estado em memória (RAM) e o banco de dados (SQLite). O Dashboard lê essas mudanças a cada segundo via Web API.
 *   **Batizado Assíncrono**: Bebês nascem com nomes genéricos e recebem nomes elaborados pela IA no background, sem paralisar a engine física de ticks.
@@ -35,11 +35,11 @@ Se sua metrópole estiver sofrendo um "boom" populacional incontrolável, você 
 *   **Ollama** rodando localmente com o modelo `qwen2.5-coder:7b` (ou o que desejar em seu projeto).
 
 ### 2. Reset e Construção do Mundo
-Para criar um novo mundo com geração multi-thread, digite:
+Para criar um novo mundo (Cartografia Avançada + População IA multi-thread), digite:
 ```bash
 ./builder/reset_world.sh
 ```
-*(O script já possui flags customizáveis para `--map-size` e `--ia-max-thread`. Veja a documentação do builder para mais detalhes).*
+*(O script aciona automaticamente a reconstrução topológica e o script de povoamento em lote com a IA).*
 
 ### 3. Rodar a Simulação & Visualizar
 Em um terminal, rode o motor:
@@ -56,10 +56,11 @@ Acesse `http://127.0.0.1:5000` para ver sua vila ganhar vida em tempo real!
 
 ## 📂 Estrutura do Ecossistema
 
-*   **`engine/` (O Cérebro)**: Motor principal de física, ciclos de vida (`reproduction.py`, `lifecycle.py`) e Utility AI.
-*   **`builder/` (A Gênese)**: Scripts de inicialização, criação e cartografia via CLI.
-*   **`web/` (Os Olhos)**: Interface web em Flask e Vanilla JS/CSS com renderização de grids espaciais.
-*   **`database/`**: Armazenamento do mundo persistente.
+*   **`engine/` (O Cérebro)**: Motor principal de física, ciclos de vida (`reproduction.py`, `lifecycle.py`), mercado de trabalho e Utility AI de movimentos.
+*   **`cartographer/` (A Geologia)**: Pipeline massiva em Python/Numpy para geração de relevo, clima, oceanos e cidades (Perlin Noise e ROI Zoom).
+*   **`builder/` (A População)**: Scripts de inicialização, povoamento com IA (`populate.py`) e batismo (`storyteller.py`).
+*   **`web/` (Os Olhos)**: Interface web em Flask e Vanilla JS/CSS com renderização nativa em canvas 2D.
+*   **`database/`**: Armazenamento do mundo persistente, incluindo SQLite e os mapas baseados em arrays (`.npz`).
 
 ---
 

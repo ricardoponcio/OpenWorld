@@ -12,29 +12,27 @@ O script central para iniciar e reformatar sua simulação é o bash automático
 
 *(Lembre-se de dar permissões de execução: `chmod +x builder/reset_world.sh`)*
 
-Este script executa a limpeza dos dados sujos (apaga o antigo `openworld.db`) e chama o orquestrador `manager.py`, seguido pelos preparos econômicos e auditorias da cidade.
+Este script executa a limpeza dos dados sujos e invoca a pipeline completa: chamando o `reset_cartography.sh` (para modelar toda a geologia) e em seguida o `populate.py` (para dar vida às casas e criar NPCs via Inteligência Artificial).
 
 ### 🔥 Customização de Escala (CLI)
 
-O script construtor suporta parâmetros avançados que definem o hardware e a escala da simulação. Você pode modificar a execução no `reset_world.sh` ou chamar diretamente:
+O script construtor de população suporta threads paralelas diretamente na chamada do Python:
 
 ```bash
-python3 builder/manager.py --npcs 20 --ia --map-size 40 --ia-max-thread 8
+venv/bin/python builder/populate.py --npcs 20 --ia-max-thread 4
 ```
 
-*   `--npcs [INT]`: Define o número base inicial de habitantes na fundação da cidade.
-*   `--ia`: Habilita as consultas ao modelo local do Ollama para gerar histórias ricas. Sem ela, o mundo usará backups genéricos.
-*   `--map-size [INT]`: Define a largura e altura da grade da matriz de terreno. Por padrão é 20, mas o motor e o front-end escalam dinamicamente tamanhos massivos (ex: 40, 50, etc.).
-*   `--ia-max-thread [INT]`: Especifica quantos workers do sistema rodarão em paralelo na geração de IDs da IA. Use isso para acelerar consideravelmente o processo em hardwares mais potentes (Aviso: requer mais VRAM do modelo).
+*   `--npcs [INT]`: Define o número base inicial de habitantes na fundação do mundo.
+*   `--ia-max-thread [INT]`: Especifica quantos workers do sistema rodarão em paralelo na geração de IDs da IA (Ollama). Use isso para acelerar consideravelmente o processo (Aviso: requer mais VRAM do modelo).
 
 ---
 
 ## 🛠️ Arquitetura dos Scripts de Construção
 
-*   **`manager.py`**: O Grande Orquestrador. Cria as fundações do banco SQLite, aciona a formatação do mapa via `Cartographer` e invoca paralelamente a IA para popular o ecossistema.
-*   **`setup_jobs.py`**: O Arquiteto Econômico. Lê as tabelas de locais criados, aplica as taxonomias de vagas de trabalho e garante o alinhamento funcional dos blocos de serviço na matriz econômica.
-*   **`cartographer.py`**: O Mestre Espacial. Responsável pela disposição x,y bidimensional do grid. Usa lógica de geração processual de rios e terrenos e espalha residências e indústrias pelo terreno sem colisões indevidas.
-*   **`generator.py`**: A Matriz Biológica. Módulo de conexão direta (`AIWorldGenerator`) com o serviço do Ollama, onde prompts e JSON parsers dão nomes, gêneros e lore para a vida criada.
+*   **`populate.py`**: O Grande Orquestrador Demográfico. Insere habitantes iniciais na simulação de maneira distribuída por entre as cidades e biomas.
+*   **`generator.py`**: A Matriz Biológica. Módulo de conexão direta (`AIWorldGenerator`) com o serviço do Ollama, onde prompts estruturados definem características orgânicas da vida criada.
+*   **`storyteller.py`**: O Narrador. Lida com chamadas de IA para batizar recém-nascidos e futuramente analisar registros vitais e comportamentais.
+*   **`old/`**: Arquivo morto. Contém os antigos `manager.py` e `cartographer.py` baseados puramente em matrizes bidimensionais em texto/JSON, substituídos pela nova Engine de Numpy.
 
 ---
 
