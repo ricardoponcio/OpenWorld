@@ -1,8 +1,27 @@
--- Locais (Expandido para Mercado de Trabalho)
+-- Tabelas Globais (Geradas pelo Cartógrafo e Importadas no Bootstrap)
+CREATE TABLE IF NOT EXISTS continentes (
+    uuid TEXT PRIMARY KEY,
+    nome TEXT,
+    area_real_km2 REAL
+);
+
+CREATE TABLE IF NOT EXISTS cidades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    continente_uuid TEXT,
+    nome TEXT,
+    tamanho TEXT,
+    tipo TEXT,
+    x_global INTEGER,
+    y_global INTEGER,
+    FOREIGN KEY(continente_uuid) REFERENCES continentes(uuid)
+);
+
+-- Locais (Expandido para Mercado de Trabalho e Escopo da Cidade)
 CREATE TABLE IF NOT EXISTS locais (
     id TEXT PRIMARY KEY,
     nome TEXT,
     tipo TEXT,
+    cidade_id INTEGER,
     categoria TEXT, -- Ex: 'fazenda', 'quartel', 'taverna'
     descricao TEXT,
     coordenadas TEXT,
@@ -25,6 +44,7 @@ CREATE TABLE IF NOT EXISTS npcs (
     nome TEXT,
     profissao TEXT, -- Nome customizado (IA)
     profissao_id TEXT, -- Link com a tabela profissoes
+    cidade_id INTEGER,
     casa_id TEXT,
     local_trabalho_id TEXT,
     localizacao_atual_id TEXT,

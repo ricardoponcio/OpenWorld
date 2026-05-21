@@ -6,6 +6,7 @@
     <title>OpenWorld Dashboard v4.1</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mapa_composto.css') }}">
 </head>
 <body>
     <header>
@@ -27,7 +28,6 @@
         <nav class="tabs">
             <button class="tab-btn active" onclick="switchView(this, 'map-view')">🗺️ Mapa</button>
             <button class="tab-btn" onclick="switchView(this, 'npc-view')">👥 Habitantes</button>
-            <a href="/mapa_composto" class="tab-btn" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; border-color: #22d3ee; color: #22d3ee;">🗺️ Mapa Mundi</a>
         </nav>
     </header>
 
@@ -43,9 +43,97 @@
                 <strong id="ev-title" style="color:var(--danger); display:block">EVENTO ATIVO</strong>
                 <span id="ev-desc" style="font-size:0.8rem">...</span>
             </div>
-            <div id="map-container">
-                <div id="world-map"></div>
-                <!-- Marcadores dinâmicos entram aqui -->
+            <div class="mapa-composto-layout">
+                <!-- Coluna da Esquerda: Continentes -->
+                <section class="continents-section">
+                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.6rem;">🗺️ Massas Continentais</h2>
+                    
+                    <button class="continent-btn active" id="btn-global-map">
+                        <span class="continent-emoji">🌍</span>
+                        <span class="continent-details">
+                            <span class="continent-name">Mapa Mundi Composto</span>
+                            <span class="continent-info-small">Visualização Global</span>
+                        </span>
+                        <span class="continent-status">768x768</span>
+                    </button>
+
+                    <div class="tile-grid-title" style="margin-top: 0.8rem; font-size: 0.75rem;">🔍 Continentes Encontrados</div>
+                    <div class="continents-list" id="continents-list-container">
+                        <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 1rem;">Carregando continentes...</div>
+                    </div>
+                </section>
+
+                <!-- Coluna do Centro: Canvas Mapa Interativo -->
+                <section class="canvas-section" id="canvasContainer">
+                    <canvas id="mapaCanvas"></canvas>
+                    
+                    <div class="canvas-controls">
+                        <button class="control-btn" id="btnZoomIn" title="Aproximar Zoom">➕</button>
+                        <div class="control-divider"></div>
+                        <button class="control-btn" id="btnZoomOut" title="Afastar Zoom">➖</button>
+                        <div class="control-divider"></div>
+                        <button class="control-btn" id="btnZoomReset" title="Resetar Visualização">🔄</button>
+                    </div>
+                </section>
+
+                <!-- Coluna da Direita: Inspetor Cartográfico -->
+                <section class="inspector-section">
+                    <div class="section-header">
+                        <h2 id="lblInspectorTitle">🔍 Inspetor do Mapa Mundi</h2>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="info-row">
+                            <span class="info-label">📍 Coordenadas</span>
+                            <span class="info-value" id="lblCoord" style="color: var(--accent);">Mouseover</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🗺️ Bioma</span>
+                            <span id="lblBiomeBadge" class="biome-badge biome-1">Aguardando...</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Status</span>
+                            <span id="status-mapa" class="status-badge">🟢 Mapa Mundi Global</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <h3 style="font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.4rem;">📊 Métricas de Terreno</h3>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Altitude</span><span class="metric-val" id="lblAltitude">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-altitude" id="barAltitude"></div></div>
+                        </div>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Temperatura</span><span class="metric-val" id="lblTemperature">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-temperature" id="barTemperature"></div></div>
+                        </div>
+                        <div class="metric-group">
+                            <div class="metric-header"><span class="metric-name">Umidade</span><span class="metric-val" id="lblHumidity">0%</span></div>
+                            <div class="progress-container"><div class="progress-bar progress-humidity" id="barHumidity"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="tile-grid-container" id="tileGridContainer">
+                        <div class="tile-grid-title">📦 Grade de Tiles</div>
+                        <div class="tile-grid">
+                            <div class="tile-cell" id="tile-0-0">Tile (0,0)</div>
+                            <div class="tile-cell" id="tile-1-0">Tile (1,0)</div>
+                            <div class="tile-cell" id="tile-2-0">Tile (2,0)</div>
+                            <div class="tile-cell" id="tile-0-1">Tile (0,1)</div>
+                            <div class="tile-cell" id="tile-1-1">Tile (1,1)</div>
+                            <div class="tile-cell" id="tile-2-1">Tile (2,1)</div>
+                            <div class="tile-cell" id="tile-0-2">Tile (0,2)</div>
+                            <div class="tile-cell" id="tile-1-2">Tile (1,2)</div>
+                            <div class="tile-cell" id="tile-2-2">Tile (2,2)</div>
+                        </div>
+                    </div>
+
+                    <div class="instruction-box">
+                        <span id="lblInstructionTitle" style="font-weight: 600;">💡 Dica Rápida:</span>
+                        <span id="lblInstructionTip1">• Utilize as abas ao lado para navegar.</span>
+                        <span id="lblInstructionTip2">• Acompanhe o relevo passando o mouse.</span>
+                    </div>
+                </section>
             </div>
         </div>
 
@@ -97,5 +185,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mapa_composto.js') }}"></script>
 </body>
 </html>

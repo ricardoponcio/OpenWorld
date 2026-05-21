@@ -12,7 +12,7 @@ import numpy as np
 import sys
 
 # Setup sys.path for cartographer module
-raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.insert(0, raiz)
 

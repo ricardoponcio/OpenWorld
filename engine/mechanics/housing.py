@@ -19,8 +19,6 @@ import json
 from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
 from ..utils import NPCUtils
-from ..world.cartographer import Cartographer
-
 
 class NPCHousingManager:
     @staticmethod
@@ -33,19 +31,10 @@ class NPCHousingManager:
         if NPCUtils.obter_obra_do_npc(engine.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(engine.locais, n2)):
             return False
 
-        grid_json = engine.db.carregar_meta("mapa_terreno")
-        if not grid_json:
-            return False
-
-        carto = Cartographer()
-        carto.grid = json.loads(grid_json)
-
         nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
-        coords = carto.assign_coordinates([nova_obra_id])
-        if nova_obra_id not in coords:
-            return False
-
-        engine.db.salvar_meta("mapa_terreno", carto.export_map())
+        # Alocação simples numa grade 40x40 local urbana
+        x = random.randint(5, 35)
+        y = random.randint(5, 35)
 
         sobrenome = n1.nome.split()[-1]
 
@@ -54,8 +43,9 @@ class NPCHousingManager:
             nome=f"Obra de {sobrenome}",
             tipo=TipoLocal.CASA.value,
             categoria=CategoriaLocal.RESIDENCIA.value,
+            cidade_id=n1.cidade_id,
             descricao=f"Dono: {n1.id}",
-            coordenadas=coords[nova_obra_id],
+            coordenadas=[x, y],
             status=0,
             integridade=0,
             capacidade=5,

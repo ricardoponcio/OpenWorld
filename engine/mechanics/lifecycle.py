@@ -47,18 +47,11 @@ class NPCLifecycleManager:
             # Criança -> Adulto
             elif npc.estagio_vida == EstagioVida.CRIANCA.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_crianca_para_adulto"):
                 npc.estagio_vida = EstagioVida.ADULTO.value
-                
-                # Procura emprego no mercado de trabalho
-                locais_trabalho = [l_id for l_id, l in engine.locais.items() if l.tipo not in ('Casa', 'Social') and getattr(l, 'status', 1) == 1]
-                if locais_trabalho:
-                    npc.local_trabalho_id = random.choice(locais_trabalho)
-                    loc_trab = engine.locais[npc.local_trabalho_id]
-                    npc.profissao = f"Auxiliar de {loc_trab.nome}"
-                else:
-                    npc.local_trabalho_id = None
-                    npc.profissao = "Trabalhador Autônomo"
+                npc.local_trabalho_id = None
+                npc.profissao_id = 'ocioso'
+                npc.profissao = 'Desempregado'
 
-                resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e assumindo o papel de {npc.profissao}!"
+                resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e iniciando sua busca por oportunidades!"
                 WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}", npc=npc)
 
                 evento = Evento(

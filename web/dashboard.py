@@ -6,7 +6,6 @@ import json
 from datetime import datetime
 
 # Importações de módulos do projeto
-from web.cartographer_routes import cartographer_bp
 from web.composed_routes import composed_bp
 
 
@@ -83,63 +82,55 @@ def get_update():
         data_simulada_iso = meta_hora['valor'] if meta_hora else '1200-01-01T06:00:00'
         data_simulada = datetime.fromisoformat(data_simulada_iso)
 
-        # Mapeamento de Coordenadas
-        locais_rows = safe_query(conn, 'SELECT id, coordenadas FROM locais')
-        if not locais_rows: warnings.append("Tabela 'locais' ausente.")
-        mapa_coords = {r['id']: json.loads(r['coordenadas']) if r['coordenadas'] else [0,0] for r in locais_rows}
+        # Locais Dinâmicos
+        loc_rows = safe_query(conn, 'SELECT id, nome, tipo, status, integridade, coordenadas FROM locais')
+        mapa_coords = {}
+        locs = {}
+        for r in loc_rows:
+            coords = json.loads(r['coordenadas']) if r['coordenadas'] else [0,0]
+            mapa_coords[r['id']] = coords
+            locs[r['id']] = {
+                "n": r['nome'], "t": r['tipo'], "c": coords,
+                "s": r['status'], "i": r['integridade']
+            }
 
         # Carregar limiar de morte da config
         cfg_bio = config.get("biologia_e_sociedade", {})
         limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 12)
 
         # NPCs
-        npcs_rows = safe_query(conn, 'SELECT * FROM npcs')
+        npcs_rows = safe_query(conn, 'SELECT id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks FROM npcs')
         if not npcs_rows: warnings.append("Tabela 'npcs' ausente.")
         npcs = []
         for r in npcs_rows:
-            # Calcular idade biológica em anos reais
             idade_anos = 0
-            dn_raw = r['data_nascimento'] if 'data_nascimento' in r.keys() else ''
+            dn_raw = r['data_nascimento']
             if dn_raw:
                 try:
                     dt_str = dn_raw.replace(' ', 'T')
                     birth = datetime.fromisoformat(dt_str)
                     idade_dias = (data_simulada - birth).days
                     idade_anos = int((idade_dias / limiar_morte) * 80.0)
-                except Exception as e:
+                except Exception:
                     pass
 
             npcs.append({
                 "id": r['id'], "nome": r['nome'], "profissao": r['profissao'],
                 "acao": r['acao_atual'], "coords": mapa_coords.get(r['localizacao_atual_id'], [0,0]),
+                "loc_id": r['localizacao_atual_id'],
                 "status": {
                     "e": r['energia'], "f": r['fome'], "s": r['social'], 
                     "d": formatar_moeda(r['dinheiro_total_pc']),
                     "h": r['saude'], "m": r['humor']
                 },
                 "bio": {
-                    "g": r['genero'] if 'genero' in r.keys() else 'M',
-                    "ev": r['estagio_vida'] if 'estagio_vida' in r.keys() else 'adulto',
-                    "dn": r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
-                    "pai": r['pai_id'] if 'pai_id' in r.keys() else '',
-                    "mae": r['mae_id'] if 'mae_id' in r.keys() else '',
-                    "ec": r['estado_civil'] if 'estado_civil' in r.keys() else 'solteiro',
-                    "cj": r['conjuge_id'] if 'conjuge_id' in r.keys() else '',
-                    "gr": r['gravidez_ticks'] if 'gravidez_ticks' in r.keys() else 0,
+                    "g": r['genero'], "ev": r['estagio_vida'],
+                    "dn": r['data_nascimento'], "pai": r['pai_id'],
+                    "mae": r['mae_id'], "ec": r['estado_civil'],
+                    "cj": r['conjuge_id'], "gr": r['gravidez_ticks'],
                     "idade": idade_anos
                 }
             })
-
-        # Relacionamentos
-        rel_rows = safe_query(conn, 'SELECT * FROM relacionamentos WHERE afinidade != 0')
-        rels = [{"a": r['npc_a_id'], "b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo']} for r in rel_rows]
-
-        # Locais Dinâmicos (Sincronização de construções/destruições)
-        loc_rows = safe_query(conn, 'SELECT * FROM locais')
-        locs = {r['id']: {
-            "n": r['nome'], "t": r['tipo'], "c": json.loads(r['coordenadas']),
-            "s": r['status'], "i": r['integridade']
-        } for r in loc_rows}
 
         # Evento Global Ativo
         evg_row = safe_query(conn, 'SELECT titulo, descricao, tipo FROM eventos_globais WHERE ticks_restantes > 0 LIMIT 1')
@@ -166,7 +157,6 @@ def get_update():
             "p": meta_pausa['valor'] == "1" if meta_pausa else False,
             "v": float(meta_vel['valor']) if meta_vel else 1.0,
             "npcs": npcs,
-            "rels": rels,
             "evs": cronicas,
             "locs": locs,
             "evg": evg,
@@ -218,8 +208,17 @@ def get_npc_logs(npc_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/npc_rels/<npc_id>')
+def get_npc_rels(npc_id):
+    try:
+        conn = get_db_connection()
+        rel_rows = safe_query(conn, 'SELECT npc_b_id, afinidade, vinculo FROM relacionamentos WHERE npc_a_id = ? AND afinidade != 0', (npc_id,))
+        rels = [{"b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo']} for r in rel_rows]
+        conn.close()
+        return jsonify({"rels": rels})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 # --- REGISTRO DO CARTÓGRAFO PRO (MÓDULO SEPARADO) ---
-app.register_blueprint(cartographer_bp)
 app.register_blueprint(composed_bp)
 
 if __name__ == '__main__':

@@ -31,10 +31,7 @@ def obter_mapa_do_cache(caminho_arquivo):
         print(f"[CACHE] Erro ao carregar mapa {caminho_abs}: {e}")
         return None
 
-@composed_bp.route('/mapa_composto')
-def mapa_composto_view():
-    return render_template('mapa_composto.html')
-
+# Removed /mapa_composto route
 
 @composed_bp.route('/api/mapa_composto/imagem')
 def api_mapa_composto_imagem():
@@ -230,5 +227,47 @@ def api_cidade_imagem(nome):
             
         img_io, mimetype = render_npz_map_to_bytes(npz_path)
         return send_file(img_io, mimetype=mimetype)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@composed_bp.route('/api/cidade/<nome>/entities')
+def api_cidade_entities(nome):
+    """
+    Retorna locais e NPCs para serem renderizados sobre o mapa da cidade na UI.
+    """
+    try:
+        from engine.database import DatabaseManager
+        import os
+        import sqlite3
+        import json
+        
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'openworld.db'))
+        if not os.path.exists(db_path):
+            return jsonify({"locais": [], "npcs": []})
+            
+        db = DatabaseManager(db_path)
+        conn = sqlite3.connect(db.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cidade_row = cursor.execute('SELECT id FROM cidades WHERE nome = ?', (nome,)).fetchone()
+        if not cidade_row:
+            conn.close()
+            return jsonify({"locais": [], "npcs": []})
+            
+        cidade_id = cidade_row['id']
+        
+        locais = []
+        for r in cursor.execute('SELECT id, nome, tipo, categoria, coordenadas FROM locais WHERE cidade_id = ?', (cidade_id,)).fetchall():
+            d = dict(r)
+            d['coordenadas'] = json.loads(d['coordenadas']) if d['coordenadas'] else [0,0]
+            locais.append(d)
+            
+        npcs = []
+        for r in cursor.execute('SELECT id, nome, profissao, genero, localizacao_atual_id, acao_atual FROM npcs WHERE cidade_id = ?', (cidade_id,)).fetchall():
+            npcs.append(dict(r))
+            
+        conn.close()
+        return jsonify({"locais": locais, "npcs": npcs})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

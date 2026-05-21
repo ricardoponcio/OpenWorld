@@ -26,6 +26,8 @@ class WorldLogger:
                     if db_dir:
                         os.makedirs(db_dir, exist_ok=True)
                     conn = sqlite3.connect(WorldLogger._db_path)
+                    conn.execute("PRAGMA journal_mode=WAL;")
+                    conn.execute("PRAGMA synchronous=NORMAL;")
                     cursor = conn.cursor()
                 
                 cursor.execute(

@@ -181,15 +181,13 @@ class NPCReproductionManager:
                 nome_gerado = AIBiographyClient.gerar_nome_bebe(genero_bebe, sobrenome_bebe, nome_mae, nome_pai)
                 
                 # 2. Persiste o nome final no banco de dados (Thread-Safe)
-                conn = sqlite3.connect(engine.db.db_path)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE npcs SET nome = ? WHERE id = ?", (nome_gerado, bebe_id))
-                
-                # 3. Atualiza a descrição do evento de nascimento
-                resumo_final = f"Nascimento na Vila! Nasceu o bebê {nome_gerado} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
-                cursor.execute("UPDATE eventos SET resumo_estruturado = ? WHERE id = ?", (resumo_final, evento_id))
-                conn.commit()
-                conn.close()
+                with engine.db.connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE npcs SET nome = ? WHERE id = ?", (nome_gerado, bebe_id))
+                    
+                    # 3. Atualiza a descrição do evento de nascimento
+                    resumo_final = f"Nascimento na Vila! Nasceu o bebê {nome_gerado} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+                    cursor.execute("UPDATE eventos SET resumo_estruturado = ? WHERE id = ?", (resumo_final, evento_id))
                 
                 # 4. Sincroniza o novo nome na lista ativa de NPCs da Engine
                 for n in engine.npcs:

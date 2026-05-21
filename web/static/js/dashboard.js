@@ -46,27 +46,7 @@ async function init() {
     try {
         const res = await fetch('/api/init');
         staticData = await res.json();
-        
-        const mapEl = document.getElementById('world-map');
-        mapEl.innerHTML = '';
-        
-        // Suporte a mapas dinâmicos
-        const mapSize = staticData.mapa.length || 20;
-        const tileSize = mapSize > 25 ? 15 : 30;
-        const mapPx = mapSize * tileSize;
-        
-        mapEl.style.gridTemplateColumns = `repeat(${mapSize}, ${tileSize}px)`;
-        mapEl.style.gridTemplateRows = `repeat(${mapSize}, ${tileSize}px)`;
-        mapEl.style.width = `${mapPx}px`;
-        mapEl.style.height = `${mapPx}px`;
-
-        staticData.mapa.forEach(row => {
-            row.forEach(tile => {
-                const div = document.createElement('div');
-                div.className = `tile tile-${tile}`;
-                mapEl.appendChild(div);
-            });
-        });
+        // Old map generation removed
 
         update();
         setInterval(update, 1000);
@@ -128,66 +108,9 @@ async function update() {
             banner.style.display = 'none';
         }
 
-        const mapContainer = document.getElementById('map-container');
-        if (activeView === 'map-view' && data.locs) {
-            const mapSize = staticData.mapa ? staticData.mapa.length : 20;
-            const pct = 100 / mapSize;
-            const halfPct = pct / 2;
-
-            Object.entries(data.locs).forEach(([id, loc]) => {
-                let b = document.getElementById(`b-${id}`);
-                if (!b) {
-                    b = document.createElement('div');
-                    b.id = `b-${id}`;
-                    mapContainer.appendChild(b);
-                }
-                const isHome = loc.t === 'Casa';
-                b.className = `building-marker ${isHome ? 'b-home' : 'b-work'}`;
-                b.style.left = `${(loc.c[0] * pct) + halfPct}%`;
-                b.style.top = `${(loc.c[1] * pct) + halfPct}%`;
-                b.style.opacity = loc.s === 1 ? '1' : '0.3';
-                b.style.filter = loc.s === 1 ? 'none' : 'grayscale(100%) brightness(0.5)';
-                b.innerHTML = `<span class="marker-label">${loc.n}${loc.s === 0 ? ' (DESTRUÍDO)' : ''}</span>`;
-            });
-        }
-
-        if (activeView === 'map-view' && data.npcs) {
-            const locationCounts = {};
-            const vivos = data.npcs.filter(npc => npc.status.h > 0);
-            
-            // Ocultar marcadores de NPCs mortos ou inativos na visualização
-            document.querySelectorAll('.npc-marker').forEach(m => {
-                const npcId = m.id.replace('m-', '');
-                const isAlive = vivos.some(n => n.id === npcId);
-                if (!isAlive) {
-                    m.style.display = 'none';
-                }
-            });
-
-            vivos.forEach(npc => {
-                let m = document.getElementById(`m-${npc.id}`);
-                if (!m) {
-                    m = document.createElement('div');
-                    m.id = `m-${npc.id}`;
-                    m.className = 'npc-marker';
-                    mapContainer.appendChild(m);
-                }
-                m.style.display = 'block';
-                m.innerHTML = `<span class="marker-label">${npc.nome}</span>`;
-
-                const key = `${npc.coords[0]},${npc.coords[1]}`;
-                locationCounts[key] = (locationCounts[key] || 0) + 1;
-                const offset = (locationCounts[key] - 1) * 6;
-
-                const mapSize = staticData.mapa ? staticData.mapa.length : 20;
-                const pct = 100 / mapSize;
-                const halfPct = pct / 2;
-
-                m.style.left = `calc(${(npc.coords[0] * pct) + halfPct}% + ${offset}px)`;
-                m.style.top = `calc(${(npc.coords[1] * pct) + halfPct}% + ${offset}px)`;
-            });
-        } else {
-            document.querySelectorAll('.npc-marker').forEach(m => m.style.display = 'none');
+        // Markers rendering logic removed because mapa_composto.js handles it now
+        if (typeof window.updateMapEntities === 'function' && data.npcs) {
+            window.updateMapEntities(data.npcs);
         }
 
         if (activeView === 'npc-view' && data.npcs) {
@@ -432,10 +355,19 @@ async function abrirHistorico(npcId, npcNome) {
     // Resetar aba padrão para Perfil
     switchModalTab('profile');
 
-    // Renderizar perfil imediatamente a partir da memória
-    const foundNpc = allNpcs.find(n => n.id === npcId);
-    if (foundNpc) {
-        profileContainer.innerHTML = renderNPCProfile(foundNpc);
+    try {
+        const resRels = await fetch(`/api/npc_rels/${npcId}`);
+        const dataRels = await resRels.json();
+        if (dataRels.rels) {
+            allRels = dataRels.rels.map(r => ({...r, a: npcId})); // Populate 'a' field to match old logic
+        }
+
+        const foundNpc = allNpcs.find(n => n.id === npcId);
+        if (foundNpc) {
+            profileContainer.innerHTML = renderNPCProfile(foundNpc);
+        }
+    } catch (e) {
+        console.error("Error loading relationships:", e);
     }
 
     try {

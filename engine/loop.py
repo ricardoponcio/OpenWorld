@@ -73,6 +73,11 @@ class GameLoop:
             energia_perda = meta["energia_base_perda"]
             fome_ganho = random.uniform(meta["fome_base_ganho_min"], meta["fome_base_ganho_max"])
             
+            # Se estiver dormindo, reduz o ganho de fome e a perda de energia
+            if npc.acao_atual == Acao.DORMIR:
+                fome_ganho *= meta.get("multiplicador_fome_dormindo", 0.33)
+                energia_perda *= meta.get("multiplicador_energia_dormindo", 0.0)
+            
             # Se for gestante, aumenta consumo de comida e reduz drástica de energia
             if npc.genero == 'F' and npc.gravidez_ticks > 0:
                 mult_energia = cfg_get(cfg_bio, "gravidez_multiplicador_perda_energia")

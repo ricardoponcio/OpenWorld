@@ -7,13 +7,8 @@ rm -f database/openworld.db
 # Resetar e gerar novo mapa
 bash cartographer/reset_cartography.sh
 
-echo "🏗️  Construindo novo mundo com IA..."
-python3 builder/manager.py --npcs 20 --ia --map-size 40 --ia-max-thread 3
+echo "👥 Povoando o mundo com IA..."
+venv/bin/python builder/populate.py --npcs 20 --ia-max-thread 4
 
-echo "💼 Configurando Mercado de Trabalho..."
-python3 builder/setup_jobs.py
-
-echo "📊 Auditando Saúde do Mundo..."
-python3 builder/fix/audit_market.py
-
-echo "✨ PROCESSO CONCLUÍDO! O mundo está pronto para a simulação."
+echo "✨ PROCESSO CONCLUÍDO! O mundo está povoado e pronto."
+echo "💡 Para iniciar a simulação, execute: python3 run_simulation.py"

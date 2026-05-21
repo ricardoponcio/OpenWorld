@@ -6,6 +6,8 @@
         "fome_base_ganho_max": 0.8,
         "social_base_perda_min": 0.5,
         "social_base_perda_max": 1.2,
+        "multiplicador_fome_dormindo": 0.33,
+        "multiplicador_energia_dormindo": 0.0,
         "_comentario": "Valores base. Reduzi a taxa de fome diária para um nível sustentável (~0.6 por tick average)."
     },
     "acoes": {

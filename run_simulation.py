@@ -4,13 +4,16 @@ from engine.mechanics import JobMarket, InfrastructureManager
 
 def start_simulation():
     engine = SimulationEngine()
-    market = JobMarket()
     
     if not engine.npcs:
-        print("❌ Nenhum habitante encontrado no banco de dados!")
-        print("💡 Execute primeiro: python3 world_builder.py --npcs 10")
-        return
-
+        print("🌍 Primeiro acesso detectado! Inicializando Banco de Dados a partir da Cartografia...")
+        from engine.bootstrap import WorldBootstrap
+        WorldBootstrap.run()
+        engine = SimulationEngine() # Recarrega a engine com o banco populado
+        
+    market = JobMarket()
+    market.bootstrap_market()
+    
     print(f"🌍 Mundo carregado com {len(engine.npcs)} habitantes e {len(engine.locais)} locais.")
     print("Simulação em tempo real (2s real = 15min jogo).")
     

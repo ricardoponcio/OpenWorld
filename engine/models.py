@@ -18,16 +18,43 @@ class EstagioVida(Enum):
     IDOSO = "idoso"
     MORTO = "morto"
 
+PROFISSAO_DEPENDENTE = "dependente"
+
 class EstadoCivil(Enum):
     SOLTEIRO = "solteiro"
     CASADO = "casado"
     VIUVO = "viuvo"
 
 class CategoriaLocal(Enum):
-    PUBLICO    = "publico"
-    COMERCIAL  = "comercial"
-    RESIDENCIA = "residencia"
-    GENERIC    = "generic"
+    FAZENDA      = "fazenda"
+    QUARTEL      = "quartel"
+    TAVERNA      = "taverna"
+    UNIVERSIDADE = "universidade"
+    FORJA        = "forja"
+    MERCADO      = "mercado"
+    RESIDENCIA   = "residencia"
+    PUBLICO      = "publico"
+    GENERIC      = "generic"
+
+class ProfissaoID(Enum):
+    FAZENDEIRO  = "fazendeiro"
+    GUARDA      = "guarda"
+    TABERNEIRO  = "taberneiro"
+    PROFESSOR   = "professor"
+    MEDICO      = "medico"
+    COMERCIANTE = "comerciante"
+    OPERARIO    = "operário"
+    OCIOSO      = "ocioso"
+
+class CategoriaSistema(Enum):
+    AGRICULTURA = "agricultura"
+    MILITAR     = "militar"
+    SOCIAL      = "social"
+    EDUCACAO    = "educacao"
+    SAUDE       = "saude"
+    COMERCIO    = "comercio"
+    INDUSTRIA   = "industria"
+    NENHUM      = "nenhum"
 
 class TipoLocal(Enum):
     OFICINA  = "Oficina"
@@ -74,6 +101,7 @@ class Local:
     id: str
     nome: str
     tipo: str
+    cidade_id: int = None
     categoria: str = "generic"
     descricao: str = ""
     coordenadas: List[float] = field(default_factory=lambda: [0.0, 0.0])
@@ -88,10 +116,11 @@ class NPC:
     id: str
     nome: str
     profissao: str
-    casa_id: str
-
     local_trabalho_id: str
     localizacao_atual_id: str
+    
+    cidade_id: int = None
+    casa_id: str = ""
     profissao_id: str = "ocioso"
     acao_atual: Acao = Acao.OCIOSO
     
