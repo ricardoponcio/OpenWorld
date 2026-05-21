@@ -47,8 +47,9 @@
     },
     "biologia_e_sociedade": {
         "concepcao_hora": 3,
-        "concepcao_afinidade_minima": 80,
-        "concepcao_chance": 0.20,
+        "concepcao_afinidade_minima": 90,
+        "concepcao_chance": 0.05,
+        "concepcao_chance_superlotacao": 0.02,
         "gravidez_duracao_ticks": 192,
         "gravidez_multiplicador_perda_energia": 1.2,
         "gravidez_multiplicador_ganho_fome": 1.2,

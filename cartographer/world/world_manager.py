@@ -2,7 +2,7 @@ import numpy as np
 import uuid
 import json
 import os
-from cartographer.tile_cartographer import TileCartographer
+from cartographer.world.tile_cartographer import TileCartographer
 from cartographer.ai.world_manager_ai import WorldManagerAIClient
 
 class WorldManager:

@@ -64,22 +64,44 @@ class NPCMarriageManager:
 
         # Verificar se a casa de destino está cheia
         casa_obj = engine.locais.get(casa_escolhida)
-        moradores_casa = NPCUtils.obter_moradores_da_casa(engine.npcs, casa_escolhida, apenas_vivos=True)
-        casa_cheia = casa_obj and len(moradores_casa) >= casa_obj.capacidade
+        casa_cheia = NPCUtils.is_casa_superlotada(engine.locais, engine.npcs, casa_escolhida)
 
         teve_nova_casa = False
         if casa_cheia:
-            if NPCHousingManager.iniciar_obra_para_casal(engine, n1, n2):
+            # 1. Procurar uma casa totalmente vazia na cidade
+            casas_vazias = NPCUtils.obter_casas_vazias(engine.locais, engine.npcs, ignorar_id=casa_escolhida)
+
+            if casas_vazias:
+                casa_alvo = random.choice(casas_vazias)
+                
+                n1.casa_id = casa_alvo.id
+                n1.localizacao_atual_id = casa_alvo.id
+                n2.casa_id = casa_alvo.id
+                n2.localizacao_atual_id = casa_alvo.id
+                casa_escolhida = casa_alvo.id
                 teve_nova_casa = True
+                casa_obj = casa_alvo # Atualiza para o log abaixo
+                
                 prefixo = "SURPRESA" if surpresa else "PLANEJADO"
                 WorldLogger.info(
-                    f"🏗️ [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} iniciaram a "
-                    f"construção de sua própria casa por falta de espaço na moradia dos pais!",
+                    f"🏠 [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} mudaram-se para {casa_alvo.nome} que tinha espaço disponível!",
                     npc=n1
                 )
+            else:
+                # 2. Se não tem casa com espaço, tenta construir uma nova obra
+                if NPCHousingManager.iniciar_obra_para_casal(engine, n1, n2):
+                    teve_nova_casa = True
+                    prefixo = "SURPRESA" if surpresa else "PLANEJADO"
+                    WorldLogger.info(
+                        f"🏗️ [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} iniciaram a "
+                        f"construção de sua própria casa por falta de espaço na moradia dos pais!",
+                        npc=n1
+                    )
 
         if not teve_nova_casa:
-            # Se a casa tem espaço (ou se falhou a alocação), moram juntos na casa escolhida
+            # Se a casa tem espaço (ou se falhou a alocação e não achou vazia), moram juntos na casa escolhida
+            n1.casa_id = casa_escolhida
+            n1.localizacao_atual_id = casa_escolhida
             n2.casa_id = casa_escolhida
             n2.localizacao_atual_id = casa_escolhida
 

@@ -19,8 +19,8 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
-from cartographer.roi_zoom import ROIZoomGenerator
-from cartographer.generate_world import CONFIG
+from cartographer.continents.roi_zoom import ROIZoomGenerator
+from cartographer.config import CARTOGRAPHER_CONFIG
 
 def main():
     if len(sys.argv) < 2:
@@ -46,7 +46,7 @@ def main():
         output_dir="database/continentes",
         target_resolution=3000,
         seed=1337,
-        config=CONFIG,
+        config=CARTOGRAPHER_CONFIG,
     )
 
     try:

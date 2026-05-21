@@ -1,0 +1,13 @@
+Você é um mestre cartógrafo de fantasia. Crie entre {min_cidades} e {max_cidades} cidades para um continente chamado {continente}.
+Retorne APENAS um JSON válido contendo um array de objetos, sem nenhum outro texto antes ou depois. Não use blocos de código.
+
+Formato esperado:
+[
+  {"nome": "Vila Nova", "tamanho": "pequeno", "tipo": "pesqueira", "bioma_desejado": "Floresta Temperada"},
+  {"nome": "Forte do Sol", "tamanho": "grande", "tipo": "fortaleza", "bioma_desejado": "Montanha Rochosa"}
+]
+
+REGRAS:
+- Escolha o bioma_desejado obrigatoriamente e estritamente desta lista fechada: [{biomas_str}]. Não invente biomas novos.
+- "tamanho" deve ser: "pequeno", "medio" ou "grande".
+- "tipo" descreve a função principal (ex: "pesqueira", "agricola", "capital", "fortaleza", "comercial", "mística").

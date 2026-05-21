@@ -53,6 +53,38 @@ class NPCUtils:
         return moradores
 
     @staticmethod
+    def is_casa_superlotada(locais: Dict[str, 'Local'], npcs: List[NPC], casa_id: str) -> bool:
+        """
+        Retorna True se a quantidade de moradores vivos na casa exceder ou igualar a capacidade do local.
+        """
+        if not casa_id or not locais:
+            return False
+        casa = locais.get(casa_id)
+        if not casa:
+            return False
+        
+        moradores_vivos = NPCUtils.obter_moradores_da_casa(npcs, casa_id, apenas_vivos=True)
+        return len(moradores_vivos) >= casa.capacidade
+
+    @staticmethod
+    def obter_casas_vazias(locais: Dict[str, 'Local'], npcs: List['NPC'], ignorar_id: str = "") -> List['Local']:
+        """
+        Retorna uma lista de residências ativas (status=1) que estão completamente vazias (zero moradores vivos).
+        """
+        if not locais:
+            return []
+        
+        casas_vazias = []
+        for local_id, local in locais.items():
+            if local.categoria.lower() == "residencia" and local.status == 1:
+                if local_id == ignorar_id:
+                    continue
+                moradores = NPCUtils.obter_moradores_da_casa(npcs, local_id, apenas_vivos=True)
+                if len(moradores) == 0:
+                    casas_vazias.append(local)
+        return casas_vazias
+
+    @staticmethod
     def obter_parceiros_adultos_na_casa(npcs: List[NPC], npc: NPC) -> List[NPC]:
         """
         Retorna a lista de outros parceiros adultos vivos que residem na mesma casa do NPC.

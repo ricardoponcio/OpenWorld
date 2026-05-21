@@ -3,8 +3,9 @@ const ctx = canvas.getContext('2d');
 const container = document.getElementById('canvasContainer');
 
 // Mode & State variables
-let currentMode = 'global'; // 'global' ou 'continent'
+let currentMode = 'global'; // 'global', 'continent' ou 'city'
 let currentContinentUuid = null;
+let currentCityNome = null;
 let scale = 1.0;
 let offsetX = 0;
 let offsetY = 0;
@@ -189,6 +190,9 @@ function loadContinents() {
             container.innerHTML = '';
             
             data.continentes.forEach(c => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'continent-wrapper';
+
                 const btn = document.createElement('button');
                 btn.className = 'continent-btn';
                 btn.id = `btn-c-${c.uuid}`;
@@ -206,7 +210,36 @@ function loadContinents() {
                 `;
                 
                 btn.addEventListener('click', () => selectContinent(c.uuid, c.nome, btn));
-                container.appendChild(btn);
+                wrapper.appendChild(btn);
+
+                // Cidades Nested
+                if (c.cidades && c.cidades.length > 0) {
+                    const citiesDiv = document.createElement('div');
+                    citiesDiv.className = 'cities-list';
+                    citiesDiv.style.paddingLeft = '20px';
+                    citiesDiv.style.borderLeft = '2px solid rgba(255,255,255,0.1)';
+                    citiesDiv.style.marginLeft = '12px';
+                    citiesDiv.style.marginBottom = '10px';
+                    
+                    c.cidades.forEach(cid => {
+                        const cidBtn = document.createElement('button');
+                        cidBtn.className = 'continent-btn city-btn';
+                        cidBtn.style.padding = '0.4rem 0.6rem';
+                        cidBtn.style.marginTop = '4px';
+                        cidBtn.innerHTML = `
+                            <span class="continent-emoji">🏰</span>
+                            <span class="continent-details">
+                                <span class="continent-name" style="font-size: 0.85rem">${cid.nome}</span>
+                                <span class="continent-info-small">${cid.tamanho} | ${cid.tipo}</span>
+                            </span>
+                        `;
+                        cidBtn.addEventListener('click', () => selectCity(cid.nome, cidBtn, c.nome));
+                        citiesDiv.appendChild(cidBtn);
+                    });
+                    wrapper.appendChild(citiesDiv);
+                }
+
+                container.appendChild(wrapper);
             });
         })
         .catch(err => console.error("Erro ao carregar continentes:", err));
@@ -257,6 +290,49 @@ function selectContinent(uuid, nome, btnElement) {
         document.getElementById('lblInstructionTitle').innerText = `🏔️ Alta Resolução (ROI Zoom):`;
         document.getElementById('lblInstructionTip1').innerText = `• Mapa ampliado dinamicamente para 1200x1200px.`;
         document.getElementById('lblInstructionTip2').innerText = `• Processamento avançado de micro-fraturas e detalhes costeiros.`;
+    };
+}
+
+// Select City Action
+function selectCity(nome, btnElement, continenteNome) {
+    document.querySelectorAll('.continent-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-global-map').classList.remove('active');
+    btnElement.classList.add('active');
+    btnElement.classList.add('loading');
+    
+    currentMode = 'city';
+    currentCityNome = nome;
+    currentContinentUuid = null;
+
+    document.getElementById('status-mapa').innerText = `⏳ Gerando/Carregando ${nome}...`;
+    document.getElementById('status-mapa').style.borderColor = 'var(--warning)';
+    document.getElementById('status-mapa').style.color = 'var(--warning)';
+
+    img.src = `/api/cidade/${nome}/imagem`;
+    
+    img.onload = function() {
+        btnElement.classList.remove('loading');
+        
+        canvas.width = 600;
+        canvas.height = 600;
+        
+        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        scale = minScale;
+        offsetX = (canvas.width - img.width * scale) / 2;
+        offsetY = (canvas.height - img.height * scale) / 2;
+        
+        draw();
+
+        document.getElementById('status-mapa').innerText = `🏰 Cidade: ${nome} (Zoom ROI)`;
+        document.getElementById('status-mapa').style.borderColor = '#00ffcc';
+        document.getElementById('status-mapa').style.color = '#00ffcc';
+        
+        document.getElementById('lblInspectorTitle').innerText = `🔍 Relevo Urbano - ${nome}`;
+        document.getElementById('tileGridContainer').style.display = 'none';
+
+        document.getElementById('lblInstructionTitle').innerText = `🏰 Alta Resolução (City Zoom):`;
+        document.getElementById('lblInstructionTip1').innerText = `• Mapa focado ampliado dinamicamente.`;
+        document.getElementById('lblInstructionTip2').innerText = `• Preparado para receber marcadores e construções da Engine.`;
     };
 }
 

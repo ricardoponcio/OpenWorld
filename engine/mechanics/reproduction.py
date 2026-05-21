@@ -26,13 +26,15 @@ class NPCReproductionManager:
             homens = [m for m in presentes if m.genero == 'M' and m.pode_procriar()]
             mulheres = [m for m in presentes if m.genero == 'F' and m.pode_procriar() and m.gravidez_ticks == 0]
             
+            casa_superlotada = NPCUtils.is_casa_superlotada(engine.locais, engine.npcs, casa_id)
+            
             for h in homens:
                 for m in mulheres:
                     afinidade = h.relacionamentos.get(m.id, 0)
                     afinidade_minima = cfg_get(cfg_bio, "concepcao_afinidade_minima")
                     if afinidade >= afinidade_minima:
-                        # Sorteio de probabilidade de gravidez
-                        chance_gravidez = cfg_get(cfg_bio, "concepcao_chance")
+                        # Sorteio de probabilidade de gravidez dependendo da superlotação
+                        chance_gravidez = cfg_get(cfg_bio, "concepcao_chance_superlotacao") if casa_superlotada else cfg_get(cfg_bio, "concepcao_chance")
                         if random.random() < chance_gravidez:
                             m.gravidez_ticks = cfg_get(cfg_bio, "gravidez_duracao_ticks")
                             engine.db.salvar_npc(m)

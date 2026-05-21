@@ -15,12 +15,12 @@ class AIClient:
     detailed performance logging, and central configuration.
     """
     @staticmethod
-    def query(prompt: str, json_format: bool = False, max_retries: int = 3, timeout: float = 15.0) -> str:
+    def query(prompt: str, json_format: bool = False, max_retries: int = 3, timeout: float = 15.0, model_name: str = MODEL_NAME) -> str:
         """
         Sends a generic text prompt to the LLM with automatic retries and exponential backoff.
         """
         payload = {
-            "model": MODEL_NAME,
+            "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False
         }

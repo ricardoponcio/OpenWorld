@@ -113,6 +113,7 @@ def api_continentes():
                 "area_real_km2": c.get("area_real_km2", 0),
                 "biomas_predominantes": c.get("biomas_predominantes", []),
                 "bounding_box": c.get("bounding_box", {}),
+                "cidades": c.get("cidades", []),
                 "gerado": gerado
             })
             
@@ -134,7 +135,7 @@ def api_continente_imagem(uuid):
             
         # Geração dinâmica sob demanda se não existir
         if not os.path.exists(npz_path):
-            from cartographer.roi_zoom import ROIZoomGenerator
+            from cartographer.continents.roi_zoom import ROIZoomGenerator
             npz_dir = os.path.dirname(npz_path)
             global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
             manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
@@ -199,5 +200,35 @@ def api_continente_info(uuid, x, y):
             "map_width": width,
             "map_height": height
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@composed_bp.route('/api/cidade/<nome>/imagem')
+def api_cidade_imagem(nome):
+    """
+    Retorna a imagem renderizada da cidade em zoom. Se o arquivo NPZ da cidade
+    ainda não existir, ele é gerado dinamicamente sob demanda.
+    """
+    try:
+        slug = nome.lower().replace(" ", "_")
+        npz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'cidades'))
+        npz_path = os.path.join(npz_dir, f"mapa_{slug}.npz")
+        
+        # Geração dinâmica sob demanda se não existir
+        if not os.path.exists(npz_path):
+            from cartographer.cities.city_roi_zoom import CityROIZoomGenerator
+            global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
+            manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
+            
+            generator = CityROIZoomGenerator(
+                manifest_path=manifest_path,
+                npz_path=global_npz_path,
+                output_dir=npz_dir,
+                target_resolution=800,
+            )
+            generator.generate(nome)
+            
+        img_io, mimetype = render_npz_map_to_bytes(npz_path)
+        return send_file(img_io, mimetype=mimetype)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
