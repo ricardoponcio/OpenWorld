@@ -1,5 +1,9 @@
 # 🌍 OpenWorld Engine: Autonomous City Simulation
 
+| Mapa | NPCs |
+| :---: | :---: |
+| <img src="images/webui-map.png" width="250" /> | <img src="images/webui-npcs.png" width="250" /> |
+
 OpenWorld é um motor de simulação de mundo autônomo e emergente projetado para suporte a RPG de mesa e mundos persistentes. A engine combina **Utility AI** (lógica matemática para decisões) com **Inteligência Artificial Generativa** (LLMs locais via Ollama) para criar uma experiência orgânica onde habitantes vivem, trabalham, envelhecem e formam famílias de forma totalmente independente.
 
 ## 🚀 Estado Atual: Dinâmicas Geracionais & Escala (v9.0)

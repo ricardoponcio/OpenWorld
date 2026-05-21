@@ -4,6 +4,10 @@ Este é o módulo geográfico e climatológico mestre do **OpenWorld**. Ele é r
 
 O sistema gera mapas em formato de mosaico de tiles (fatiamento infinito), renderizando relevo montanhoso tridimensional de alta fidelidade e climatologia baseada nas leis da física terrestre.
 
+| Mapa Mundi | Mapa Continental | Mapa Urbano |
+| :---: | :---: | :---: |
+| <img src="../images/webui-map-full.png" width="250" /> | <img src="../images/webui-map-continent.png" width="250" /> | <img src="../images/webui-map-city.png" width="250" /> |
+
 ---
 
 ## 📁 Arquitetura de Diretórios e Módulos
@@ -18,6 +22,9 @@ cartographer/
 │   └── generate_world.py             # Script mestre para execução e salvamento do mapa composto (.npz)
 ├── continents/
 │   └── generate_continent_zoom.py    # Geração de ROI Zoom e Perlin Noise para escala micro
+├── cities/
+│   ├── generate_cities_metadata.py   # Usa IA para assentar fundações e dados da cidade
+│   └── city_roi_zoom.py              # Micro-zoom de relevo urbano focado
 │
 ├── ai/                               # Planejamento Estratégico via IA
 │   ├── prompt/
