@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Importações de módulos do projeto
 from web.composed_routes import composed_bp
+from web.mestre_routes import mestre_bp
 from config import get_config, cfg_get
 
 # Config único do projeto (config.json, via config/) — não lê mais o arquivo por conta própria
@@ -221,6 +222,7 @@ def get_npc_rels(npc_id):
         return jsonify({"error": str(e)}), 500
 # --- REGISTRO DO CARTÓGRAFO PRO (MÓDULO SEPARADO) ---
 app.register_blueprint(composed_bp)
+app.register_blueprint(mestre_bp)
 
 if __name__ == '__main__':
 

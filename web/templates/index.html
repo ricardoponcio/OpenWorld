@@ -29,6 +29,7 @@
         <nav class="tabs">
             <button class="tab-btn active" onclick="switchView(this, 'map-view')">🗺️ Mapa</button>
             <button class="tab-btn" onclick="switchView(this, 'npc-view')">👥 Habitantes</button>
+            <button class="tab-btn" onclick="switchView(this, 'mestre-view')">🎭 Mestre</button>
         </nav>
     </header>
 
@@ -133,6 +134,32 @@
                 <button class="filter-btn" onclick="setNpcFilter('todos')">👥 Todos</button>
             </div>
             <div id="npc-grid" class="npc-grid"></div>
+        </div>
+
+        <!-- Mestre de IA View -->
+        <div id="mestre-view" class="view">
+            <div style="max-width: 800px; margin: 0 auto;">
+                <div class="info-card" style="margin-bottom: 1rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0 0 0.6rem 0;">
+                        Pause a simulação, converse com o Mestre de IA usando o estado atual do mundo, e avance o tempo quando quiser ver as consequências. Nenhuma ação sugerida é aplicada sem sua confirmação.
+                    </p>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button class="filter-btn" onclick="avancarTempoMestre(15)">⏩ +15 min</button>
+                        <button class="filter-btn" onclick="avancarTempoMestre(60)">⏩ +1h</button>
+                        <button class="filter-btn" onclick="avancarTempoMestre(360)">⏩ +6h</button>
+                        <button class="filter-btn" onclick="avancarTempoMestre(1440)">⏩ +1 dia</button>
+                    </div>
+                </div>
+
+                <div id="mestre-chat-log" style="height: 50vh; overflow-y: auto; background: rgba(0,0,0,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.7rem;"></div>
+
+                <div id="mestre-acoes-pendentes" style="display:none; margin-bottom: 1rem;"></div>
+
+                <div style="display:flex; gap:0.5rem;">
+                    <input id="mestre-input" type="text" placeholder="Fale com o Mestre..." style="flex:1; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: var(--text-main, #fff);" onkeydown="if(event.key==='Enter') enviarMensagemMestre()">
+                    <button class="filter-btn active" onclick="enviarMensagemMestre()">Enviar</button>
+                </div>
+            </div>
         </div>
     </div>
 

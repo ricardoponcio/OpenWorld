@@ -15,13 +15,17 @@ function switchView(btn, id) {
     activeView = id;
     
     const eventLog = document.getElementById('event-log');
-    if (id === 'npc-view') {
+    if (id === 'npc-view' || id === 'mestre-view') {
         eventLog.style.display = 'none';
     } else {
         eventLog.style.display = 'block';
     }
-    
-    update();
+
+    if (id === 'mestre-view') {
+        carregarHistoricoMestre();
+    } else {
+        update();
+    }
 }
 
 function setNpcFilter(filter) {
@@ -406,6 +410,117 @@ function fecharHistorico(event) {
     const modal = document.getElementById('npc-log-modal');
     modal.classList.remove('active');
     activeNpcId = null;
+}
+
+// --- Modo Mestre de IA (Frente 5) ---
+
+function escapeHtmlMestre(str) {
+    const div = document.createElement('div');
+    div.innerText = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+function renderMestreChatLog(historico) {
+    const log = document.getElementById('mestre-chat-log');
+    log.innerHTML = historico.map(h => {
+        const ehJogador = h.autor === 'jogador';
+        return `
+            <div style="align-self:${ehJogador ? 'flex-end' : 'flex-start'}; max-width: 80%; background: ${ehJogador ? 'var(--accent)' : 'rgba(255,255,255,0.06)'}; color: ${ehJogador ? '#04202e' : 'inherit'}; padding: 0.6rem 0.9rem; border-radius: 14px; font-size: 0.85rem; white-space: pre-wrap;">
+                ${escapeHtmlMestre(h.mensagem)}
+            </div>
+        `;
+    }).join('');
+    log.scrollTop = log.scrollHeight;
+
+    // Mostra o painel de confirmação se a última mensagem do Mestre tiver ações pendentes
+    const ultima = historico[historico.length - 1];
+    const painel = document.getElementById('mestre-acoes-pendentes');
+    if (ultima && ultima.autor === 'mestre' && !ultima.aplicada && ultima.acoes_propostas && ultima.acoes_propostas.length > 0) {
+        painel.style.display = 'block';
+        painel.innerHTML = `
+            <div class="info-card" style="border: 1px solid var(--accent);">
+                <strong style="font-size:0.85rem;">⚡ O Mestre propôs ${ultima.acoes_propostas.length} ação(ões) no mundo:</strong>
+                <ul style="font-size:0.8rem; color: var(--text-dim); margin: 0.4rem 0;">
+                    ${ultima.acoes_propostas.map(a => `<li>${escapeHtmlMestre(a.comando)} ${escapeHtmlMestre(a.id || '')}</li>`).join('')}
+                </ul>
+                <button class="filter-btn active" onclick="confirmarAcoesMestre(${ultima.id})">✅ Confirmar</button>
+                <button class="filter-btn" onclick="document.getElementById('mestre-acoes-pendentes').style.display='none'">✋ Ignorar</button>
+            </div>
+        `;
+    } else {
+        painel.style.display = 'none';
+    }
+}
+
+async function carregarHistoricoMestre() {
+    try {
+        const res = await fetch('/api/mestre/historico');
+        const data = await res.json();
+        if (data.historico) renderMestreChatLog(data.historico);
+    } catch (e) { console.error("Erro ao carregar histórico do Mestre:", e); }
+}
+
+async function enviarMensagemMestre() {
+    const input = document.getElementById('mestre-input');
+    const mensagem = input.value.trim();
+    if (!mensagem) return;
+    input.value = '';
+    input.disabled = true;
+    try {
+        const res = await fetch('/api/mestre/mensagem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mensagem })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Erro: ' + data.error);
+        } else {
+            await carregarHistoricoMestre();
+        }
+    } catch (e) {
+        console.error("Erro ao enviar mensagem ao Mestre:", e);
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+async function avancarTempoMestre(minutos) {
+    const log = document.getElementById('mestre-chat-log');
+    log.insertAdjacentHTML('beforeend', `<div id="mestre-aguardando" style="text-align:center; color: var(--text-dim); font-size:0.8rem;">⏳ Avançando ${minutos} minutos de jogo...</div>`);
+    log.scrollTop = log.scrollHeight;
+    try {
+        const res = await fetch('/api/mestre/avancar_tempo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutos })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Erro: ' + data.error);
+        }
+        await carregarHistoricoMestre();
+    } catch (e) {
+        console.error("Erro ao avançar tempo:", e);
+    }
+}
+
+async function confirmarAcoesMestre(conversaId) {
+    try {
+        const res = await fetch('/api/mestre/confirmar_acoes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversa_id: conversaId })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Erro: ' + data.error);
+        } else {
+            document.getElementById('mestre-acoes-pendentes').style.display = 'none';
+            alert('Aplicado:\n' + (data.resultados || []).join('\n'));
+        }
+    } catch (e) { console.error("Erro ao confirmar ações do Mestre:", e); }
 }
 
 init();

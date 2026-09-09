@@ -2,6 +2,20 @@ import time
 from engine.core import SimulationEngine
 from engine.mechanics import JobMarket, InfrastructureManager
 
+def processar_gatilhos_periodicos(engine, market):
+    """Gatilhos baseados no relógio do jogo (não em contagem de ticks — ver Frente 4)."""
+    hora = engine.data_simulada.hour
+    minuto = engine.data_simulada.minute
+    if minuto == 0:
+        if hora % 5 == 0:
+            # A cada 5h de jogo: mercado de trabalho e recarga de habitantes
+            market.processar_contratacoes()
+            engine.recarregar_habitantes()
+        if hora == 2:
+            # 1x por dia de jogo: decadência e reparos de infraestrutura
+            InfrastructureManager.processar_desgaste(engine)
+            InfrastructureManager.processar_reparos_espontaneos(engine)
+
 def start_simulation():
     engine = SimulationEngine()
     market = JobMarket()
@@ -19,25 +33,24 @@ def start_simulation():
             espera = max(0.005, 60.0 / velocidade)
 
             if status_pausa == "1":
+                # Modo Mestre de IA (Frente 5): mesmo pausado, o jogador pode pedir pra
+                # avançar N minutos controlados. run_simulation.py continua sendo o único
+                # processo dono da SimulationEngine — o dashboard só sinaliza via
+                # mundo_meta, nunca instancia uma segunda engine.
+                restante_str = engine.db.carregar_meta("mestre_avancar_minutos_restantes")
+                restante = int(restante_str) if restante_str else 0
+
+                if restante > 0:
+                    engine.tick()
+                    processar_gatilhos_periodicos(engine, market)
+                    engine.db.salvar_meta("mestre_avancar_minutos_restantes", str(restante - 1))
+                    continue  # roda o mais rápido possível, sem o sleep de ritmo normal
+
                 time.sleep(1.0)
                 continue
 
             engine.tick()
-
-            # Gatilhos periódicos baseados no relógio do jogo (não em contagem de ticks —
-            # ticks agora são de 1 minuto; contar "a cada N ticks" dependeria do tamanho do
-            # tick e voltaria a quebrar se ele mudasse de novo. Ver docs/ROADMAP.md, Frente 4.
-            hora = engine.data_simulada.hour
-            minuto = engine.data_simulada.minute
-            if minuto == 0:
-                if hora % 5 == 0:
-                    # A cada 5h de jogo: mercado de trabalho e recarga de habitantes
-                    market.processar_contratacoes()
-                    engine.recarregar_habitantes()
-                if hora == 2:
-                    # 1x por dia de jogo: decadência e reparos de infraestrutura
-                    InfrastructureManager.processar_desgaste(engine)
-                    InfrastructureManager.processar_reparos_espontaneos(engine)
+            processar_gatilhos_periodicos(engine, market)
 
             if velocidade > 1.0:
                 print(f"⏩ Velocidade: {velocidade}x")

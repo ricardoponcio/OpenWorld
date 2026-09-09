@@ -216,3 +216,36 @@ class DatabaseManager:
                            (a_id, b_id, afinidade, vinculo))
             cursor.execute('INSERT OR REPLACE INTO relacionamentos (npc_a_id, npc_b_id, afinidade, vinculo) VALUES (?, ?, ?, ?)',
                            (b_id, a_id, afinidade, vinculo))
+
+    # ------------------------------------------------------------------
+    # Modo Mestre de IA (Frente 5)
+    # ------------------------------------------------------------------
+
+    def salvar_mensagem_mestre(self, autor: str, mensagem: str, acoes_propostas: list = None) -> int:
+        """Persiste um turno de conversa (jogador ou mestre) e retorna o id gerado."""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO mestre_conversas (autor, mensagem, acoes_propostas, aplicada) VALUES (?, ?, ?, 0)',
+                (autor, mensagem, json.dumps(acoes_propostas) if acoes_propostas else None)
+            )
+            return cursor.lastrowid
+
+    def carregar_historico_mestre(self, limite: int = 50) -> list:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM mestre_conversas ORDER BY id DESC LIMIT ?', (limite,))
+            rows = [dict(r) for r in cursor.fetchall()]
+            return list(reversed(rows))
+
+    def carregar_mensagem_mestre(self, conversa_id: int) -> dict:
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM mestre_conversas WHERE id = ?', (conversa_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def marcar_mestre_aplicada(self, conversa_id: int):
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE mestre_conversas SET aplicada = 1 WHERE id = ?', (conversa_id,))

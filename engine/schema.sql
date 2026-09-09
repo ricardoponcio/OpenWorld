@@ -124,3 +124,13 @@ CREATE TABLE IF NOT EXISTS npc_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_npc_logs_npc_id ON npc_logs(npc_id);
+
+-- Tabela de Conversas do Modo Mestre de IA (Frente 5)
+CREATE TABLE IF NOT EXISTS mestre_conversas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT DEFAULT (datetime('now', 'localtime')),
+    autor TEXT, -- 'jogador' ou 'mestre'
+    mensagem TEXT,
+    acoes_propostas TEXT, -- JSON com a lista de ações de mundo propostas pela IA (nullable)
+    aplicada INTEGER DEFAULT 0 -- 1 quando o jogador confirmou e as ações foram aplicadas
+);

@@ -23,7 +23,7 @@
 | 2 | Qualidade e variedade visual da cartografia | 🟡 Em andamento | Seção 2 |
 | 3 | Comportamento dos NPCs (Utility AI) | 🟡 Em andamento | Seção 3 |
 | 4 | Motor de tempo 1:1 real (Rebalanceamento Total) | 🟢 Concluído | Seção 4 (decisão revista: Abordagem 2, não 3 — ver [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md)) |
-| 5 | Modo Mestre de IA (2º modo temporal) | 🔴 Não iniciado | [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md) |
+| 5 | Modo Mestre de IA (2º modo temporal) | 🟢 Concluído (fase 1) | Seção 5 (design original em [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md)) |
 | 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🔴 Não iniciado | [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md) |
 
 **Ordem sugerida de execução: 1 → 2 → 3 → 4 → 5 → 6.**
@@ -428,13 +428,51 @@ interface**, não reconstruir a parte de IA:
 - Depende da Frente 4 (tempo 1:1) para a parte de "avançar o tempo o quanto for decidido" ser
   granular — hoje só dá para avançar em blocos de 15 minutos por tick.
 
-### Decisões tomadas
-- *(nenhuma — este é o design mais em aberto das 6 frentes; ver documento de detalhe)*
+### Decisões tomadas (2026-09-09)
+- **Ações de mundo propostas pela IA exigem confirmação do jogador** antes de aplicar (não aplica
+  direto como o script antigo fazia).
+- **Esta fase entra com backend completo + uma aba simples de chat no dashboard** (não polida
+  visualmente, mas funcional para uso real numa mesa).
+- Arquitetura: o dashboard Flask **não** instancia uma segunda `SimulationEngine` — "avançar N
+  minutos" sinaliza via `mundo_meta` (`mestre_avancar_minutos_restantes`), mesmo padrão já usado por
+  pausa/velocidade, e o `run_simulation.py` (único dono da engine) consome esse contador.
 
-Rascunho de design, perguntas em aberto e proposta de arquitetura em
-**[`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md)**.
+### Implementado
+- `engine/mechanics/mestre.py` (`MestreManager`): extrai a coleta de contexto e a aplicação das 4
+  ações de mundo (`CRIAR_LOCAL`/`DESTRUIR_LOCAL`/`REATRIBUIR_NPC`/`AFETAR_NPC`) de
+  `builder/storyteller.py` para uso compartilhado — o script antigo agora *chama* essas funções em
+  vez de duplicar a lógica, e seu tema padrão foi corrigido de "Cyberpunk" para "Fantasia Medieval"
+  (consistente com `builder/populate.py`).
+- `engine/ai/game_master.py` (`AIGameMasterClient`): irmão de `AIStorytellerClient`, aceita
+  histórico de conversa e devolve `{"narracao", "acoes_propostas"}` — narração sempre livre, ações
+  sempre opcionais e nunca aplicadas sozinhas. Fallback determinístico se o Ollama estiver offline.
+- Tabela `mestre_conversas` (`schema.sql`) + métodos em `database.py` para histórico persistente.
+- `run_simulation.py`: enquanto pausado, se `mestre_avancar_minutos_restantes > 0`, tica e decrementa
+  sem o sleep de ritmo normal (roda o mais rápido possível), voltando a respeitar a pausa ao chegar a 0.
+- `web/mestre_routes.py` (novo blueprint): `POST /mensagem`, `POST /confirmar_acoes`,
+  `POST /avancar_tempo` (espera o `run_simulation.py` consumir, coleta eventos do período via rowid
+  — não pelo texto do timestamp, que não ordena corretamente —, narra o que aconteceu),
+  `GET /historico`, `GET /estado`.
+- Aba "🎭 Mestre" no dashboard (`index.html` + `dashboard.js`): chat, botões de avanço rápido
+  (15min/1h/6h/1dia), painel de confirmar/ignorar ações propostas.
 
-### Status: 🔴 Não iniciado (mas com base de código reaproveitável já identificada)
+### Verificado (2026-09-09)
+- Testado de ponta a ponta com Ollama real (não só o fallback): mensagens geram narração coerente
+  em português; ações de mundo aplicam corretamente no banco (`CRIAR_LOCAL`, `AFETAR_NPC` testados
+  diretamente); confirmar a mesma ação duas vezes é bloqueado (idempotência).
+- Fallback testado forçando falha de conexão com o Ollama — devolve narração de aviso em vez de quebrar.
+- Fluxo completo de `avancar_tempo` testado com um consumidor rodando em thread separada (simulando
+  o `run_simulation.py` real): avançou exatamente os minutos pedidos, coletou os eventos do período e
+  narrou com base neles.
+- Testes rodados contra uma **cópia de scratch do banco**, não o banco de produção — nada foi
+  aplicado no mundo real do autor durante o desenvolvimento desta frente.
+
+### Fora de escopo desta fase
+- IA agir sozinha durante avanços rápidos sem o jogador chamar.
+- Troca do modelo de LLM (continua `qwen2.5-coder:7b`).
+- Polimento visual da aba.
+
+### Status: 🟢 Concluído (fase 1) — backend + aba funcional no ar; refinamento visual e eventos espontâneos ficam para depois.
 
 ---
 
@@ -465,6 +503,21 @@ Rascunho de design, opções técnicas e perguntas em aberto em
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-09 (parte 7)** — **Frente 5 concluída (fase 1): Modo Mestre de IA.** Decisões tomadas
+  com o autor: ações de mundo da IA sempre exigem confirmação (nunca aplicam sozinhas), e esta fase
+  já entra com aba de chat no dashboard, não só backend. Reaproveitado o protótipo existente
+  (`builder/storyteller.py`) extraindo sua lógica pra `engine/mechanics/mestre.py` (`MestreManager`),
+  compartilhada agora pelo script antigo e pelo novo modo interativo — corrigida de passagem a
+  inconsistência de tema ("Cyberpunk" → "Fantasia Medieval"). Novo `AIGameMasterClient` para diálogo
+  contínuo com fallback determinístico. Resolvido o desafio de dois processos (dashboard Flask não é
+  dono da `SimulationEngine`, que vive no `run_simulation.py`): "avançar tempo" sinaliza via
+  `mundo_meta` como pausa/velocidade já faziam, em vez de instanciar uma engine paralela. Endpoints
+  novos (`/api/mestre/mensagem`, `/confirmar_acoes`, `/avancar_tempo`, `/historico`, `/estado`) e aba
+  "🎭 Mestre" funcional. **Tudo testado de ponta a ponta com Ollama real** contra uma cópia de
+  scratch do banco (nunca o banco de produção): narração coerente, ações de mundo aplicando
+  corretamente, confirmação idempotente, fallback funcionando com Ollama forçadamente offline, e o
+  fluxo completo de avanço de tempo com um consumidor simulado em thread separada. Eventos
+  espontâneos da IA e polimento visual ficam para depois.
 - **2026-09-09 (parte 6)** — **Frente 4 concluída: tempo 1:1 real (não a Abordagem 3 originalmente
   planejada).** Autor rejeitou a ideia de esconder um portão de 15 minutos por baixo de um tick fino
   de 1 minuto ("fingir" 1:1) e pediu o rebalanceamento total de verdade. Tick virou 1 minuto;

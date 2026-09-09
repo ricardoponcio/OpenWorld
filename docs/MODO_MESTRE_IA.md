@@ -1,5 +1,12 @@
 # 🎭 Modo Mestre de IA — Rascunho de Design
 
+> ✅ **Fase 1 implementada em 2026-09-09** (backend completo + aba de chat no dashboard). Este
+> documento continua como o registro do design original e das perguntas em aberto — o resultado
+> final e o que foi verificado estão na **Frente 5** do [`ROADMAP.md`](ROADMAP.md). As perguntas
+> "onde mora o histórico" (tabela `mestre_conversas`) e "autonomia da IA" (propõe e espera
+> confirmação) já foram decididas; "IA agir sozinha durante fast-forward" e "modelo de LLM" seguem
+> em aberto para uma próxima rodada.
+>
 > Documento de apoio à **Frente 5** do [`ROADMAP.md`](ROADMAP.md). Este é o design mais em aberto
 > das 6 frentes — o objetivo aqui é registrar o que já existe reaproveitável, o que falta decidir, e
 > uma proposta inicial de arquitetura para servir de ponto de partida da conversa, não uma
