@@ -20,10 +20,12 @@ if raiz not in sys.path:
 from cartographer.math import NoiseGenerator, ClimateProcessor
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
+from engine.logger import WorldLogger
 try:
-    from scipy.ndimage import zoom as scipy_zoom
+    from scipy.ndimage import zoom as scipy_zoom, gaussian_filter
 except ImportError:
     scipy_zoom = None
+    gaussian_filter = None
 
 class CityROIZoomGenerator:
     def __init__(
@@ -76,12 +78,16 @@ class CityROIZoomGenerator:
         max_y = min(H - 1, cy + radius)
         return global_map[min_y : max_y + 1, min_x : max_x + 1, :]
 
-    def _upscale(self, crop: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    def _upscale(self, crop: np.ndarray, target_h: int, target_w: int, ordem: int) -> np.ndarray:
         if scipy_zoom is not None:
             fh = target_h / crop.shape[0]
             fw = target_w / crop.shape[1]
-            return scipy_zoom(crop, (fh, fw, 1), order=1).astype(np.float32)
+            return scipy_zoom(crop, (fh, fw, 1), order=ordem).astype(np.float32)
         else:
+            WorldLogger.warning(
+                "[CITY-ZOOM] scipy não está instalado — usando fallback bilinear manual "
+                "(qualidade inferior). Instale 'scipy' (requirements.txt)."
+            )
             # Fallback manual sem scipy
             out = np.zeros((target_h, target_w, crop.shape[2]), dtype=np.float32)
             for c in range(crop.shape[2]):
@@ -100,6 +106,30 @@ class CityROIZoomGenerator:
                     + ch[gy1, gx1] * dy * dx
                 )
             return out
+
+    @staticmethod
+    def _suavizar_altitude(upscaled: np.ndarray, sigma_px: float) -> np.ndarray:
+        """Mesmo fix de `roi_zoom.py` — elimina estrutura de célula residual do upscale
+        antes do ruído de micro-detalhe, evitando o artefato de grade ("papel amassado")."""
+        if sigma_px <= 0:
+            return upscaled
+        resultado = upscaled.copy()
+        if gaussian_filter is not None:
+            resultado[:, :, 0] = gaussian_filter(upscaled[:, :, 0], sigma=sigma_px)
+        else:
+            k = max(1, int(round(sigma_px * 2)) | 1)
+            alt = upscaled[:, :, 0]
+            pad = k // 2
+            alt_pad = np.pad(alt, pad, mode="edge")
+            cumsum = np.cumsum(np.cumsum(alt_pad, axis=0), axis=1)
+            cumsum = np.pad(cumsum, ((1, 0), (1, 0)), mode="constant")
+            H, W = alt.shape
+            soma = (
+                cumsum[k:k + H, k:k + W] - cumsum[0:H, k:k + W]
+                - cumsum[k:k + H, 0:W] + cumsum[0:H, 0:W]
+            )
+            resultado[:, :, 0] = soma / (k * k)
+        return resultado
 
     def _apply_micro_detail(self, upscaled: np.ndarray, seed_offset: int) -> np.ndarray:
         H, W, _ = upscaled.shape
@@ -132,9 +162,12 @@ class CityROIZoomGenerator:
         global_map = self._load_global_map()
         crop_raio = cfg_get(self.config, "zoom_cidade_crop_raio_px")
         crop = self._crop_global(cx, cy, crop_raio, global_map)
+        print(f"[CITY-ZOOM] Recorte obtido: {crop.shape[1]}x{crop.shape[0]}px")
 
         target = self.target_resolution
-        upscaled = self._upscale(crop, target, target)
+        ordem = cfg_get(self.config, "zoom_upscale_ordem")
+        upscaled = self._upscale(crop, target, target, ordem)
+        upscaled = self._suavizar_altitude(upscaled, cfg_get(self.config, "zoom_suavizacao_sigma_px"))
 
         # zlib.crc32 (determinístico) em vez de hash() nativo — hash() de string é
         # aleatorizado por processo em Python, então o relevo mudava a cada

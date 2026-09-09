@@ -231,9 +231,10 @@
         "vinheta_margem_segura": 40.0,
         "vinheta_largura_fade": 80.0,
 
-        "continente_raio_min_px": 65.0,
-        "continente_raio_max_px": 155.0,
-        "continente_area_para_raio_divisor": 10.0,
+        "_comentario_3": "Frente 2 (2026-09-09): raio do continente agora vem da área real via escala_pixel_area_km2 (R = sqrt(area_km2 / (pi * escala))), não mais de um clamp fixo que comprimia toda a variação de área da IA num raio quase constante. continente_raio_min_px/max_px viraram limites de SEGURANÇA (guarda-corpo contra resposta absurda da IA), não mais a fonte principal do tamanho.",
+        "continente_raio_min_px": 30.0,
+        "continente_raio_max_px": 260.0,
+        "continente_area_para_raio_fator_visual": 1.0,
         "continente_elevacao_maxima_padrao": 0.8,
         "continente_raio_visual_padrao": 200.0,
 
@@ -249,7 +250,9 @@
             "oceano": {
                 "raso": [50, 150, 190],
                 "profundo": [10, 36, 70],
-                "curva_potencia": 6.0
+                "curva_potencia": 10.0,
+                "faixa_rasa_amplitude": 0.35,
+                "_comentario_faixa": "Frente 2: só a fração mais próxima do nível do mar (faixa_rasa_amplitude, em fração de nivel_mar) participa do brilho de recife; o resto do oceano fica com a cor profunda uniforme. Antes o brilho se espalhava por toda a coluna de profundidade, criando o halo largo demais visto nos prints."
             },
             "biomas": {
                 "2": { "_comentario": "Deserto",             "baixa": [224, 192, 114], "media": [140, 100, 85],  "transicao": 0.65 },
@@ -262,8 +265,12 @@
         "zoom_border_padding_px": 20,
         "zoom_costa_profundidade_min": 0.22,
         "zoom_costa_profundidade_faixa": 0.13,
+        "zoom_upscale_ordem": 3,
+        "zoom_suavizacao_sigma_px": 1.5,
+        "_comentario_grade": "Frente 2: causa raiz do artefato de 'papel amassado' era upscale bilinear (ordem 1) de um recorte de baixa resolução, amplificado pelas máscaras não-lineares e pelo hillshading. zoom_upscale_ordem=3 (spline cúbico, requer scipy) + zoom_suavizacao_sigma_px (blur gaussiano leve pós-upscale) eliminam a estrutura de célula residual antes de qualquer operação não-linear.",
 
-        "zoom_cidade_crop_raio_px": 2,
+        "_comentario_cidade": "Frente 2 (2026-09-09): zoom_cidade_crop_raio_px era 2 (janela 5x5!) — quase nenhum relevo real do mapa global sobra pra desenhar, o resultado era um mapa de cidade praticamente plano só com ruído sintético. Aumentado para dar variação de relevo real ao recorte.",
+        "zoom_cidade_crop_raio_px": 15,
         "zoom_cidade_hf_escala": 80.0,
         "zoom_cidade_hf_oitavas": 2,
         "zoom_cidade_amp": 0.015

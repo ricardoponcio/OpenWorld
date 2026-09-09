@@ -79,10 +79,11 @@ descorrelação entre oitavas) → fica como constante de implementação.
   `transicao=0.0` para reproduzir exatamente o mesmo resultado sem precisar de um código especial.
 
 ### `cartographer/world/tile_cartographer.py`
-- ✅ `continente_raio_min_px`/`continente_raio_max_px` (antes `np.clip(R, 65.0, 155.0)`).
-- ✅ `continente_area_para_raio_divisor` (antes `/10.0`, desacoplado de `escala_pixel_area_km2`).
-  **Valor numérico preservado** — a adequação geográfica real desse número é trabalho da Frente 2,
-  este item só resolveu "onde o número mora", não "se o número está certo".
+- 🔧 (Frente 2) Raio do continente **redesenhado**, não só centralizado: `R = sqrt(area_km2 / (pi *
+  escala_pixel_area_km2)) * continente_area_para_raio_fator_visual`, usando a mesma escala oficial
+  já declarada em config em vez do antigo `/10.0` desacoplado. `continente_raio_min_px/max_px`
+  (antes `[65,155]`, agora `[30,260]`) viraram guarda-corpo de segurança contra resposta absurda da
+  IA, não mais a fonte principal da variação de tamanho.
 - ✅ `continente_elevacao_maxima_padrao`/`continente_raio_visual_padrao` (defaults permissivos via
   `cfg_get(..., default=...)`, para quando a IA/fallback não informa o campo).
 - 🔧 Todos os `self.config["chave"]` viraram `cfg_get(cfg, "chave")` (mesma coisa, mensagem de erro
@@ -196,6 +197,5 @@ descorrelação entre oitavas) → fica como constante de implementação.
   offsets de descorrelação entre oitavas/ruídos) — nunca farão sentido como config.
 - `web/helpers.py: render_biomes_map_to_bytes()` — código morto, não chamado; não vale migrar
   paleta de cor para uma função que ninguém invoca.
-- O **valor numérico** do fator de conversão área→raio de continente e o clamp de raio
-  (`continente_area_para_raio_divisor`, `continente_raio_min_px/max_px`) foram centralizados mas
-  **não redesenhados** — a variedade visual real dos continentes é trabalho da Frente 2.
+- ~~O valor numérico do fator de conversão área→raio... não redesenhado~~ — **feito na Frente 2**
+  (2026-09-09): o raio agora vem de `escala_pixel_area_km2`, ver seção de `tile_cartographer.py` acima.

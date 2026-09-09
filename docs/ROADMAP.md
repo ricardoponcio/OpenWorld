@@ -20,7 +20,7 @@
 | # | Frente | Status | Detalhe em |
 |---|--------|--------|------------|
 | 1 | Parametrização única (engine + cartografia) | 🟢 Concluído | Seção 1 + [`AUDITORIA_HARDCODE.md`](AUDITORIA_HARDCODE.md) |
-| 2 | Qualidade e variedade visual da cartografia | 🔴 Não iniciado | Seção 2 |
+| 2 | Qualidade e variedade visual da cartografia | 🟡 Em andamento | Seção 2 |
 | 3 | Comportamento dos NPCs (Utility AI) | 🔴 Não iniciado | Seção 3 |
 | 4 | Motor de tempo 1:1 (Engrenagens Híbridas) | 🔴 Não iniciado | [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md) |
 | 5 | Modo Mestre de IA (2º modo temporal) | 🔴 Não iniciado | [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md) |
@@ -187,23 +187,57 @@ artefato **já apareceu antes e foi parcialmente mitigado** (reduzindo peso/oita
 frequência), mas a grade visível no print sugere que o efeito não foi eliminado, só atenuado — ou
 voltou por outra via (upscale bilinear).
 
-### Decisões tomadas
-- *(nenhuma — esta frente só deve começar depois da Frente 1, para não re-tunar números que ainda
-  vão mudar de lugar)*
+### Investigação e causa raiz confirmada (2026-09-09)
 
-### Plano de fases (proposto, sujeito a validação)
-1. Com os parâmetros já centralizados (pós Frente 1), reproduzir o artefato de grade isoladamente
-   (gerar um continente de teste e comparar o mapa *antes* e *depois* da etapa de zoom/upscale) para
-   confirmar a hipótese técnica acima antes de sair alterando números às cegas.
-2. Redesenhar a curva de "água rasa" (`render_ocean`) para que a faixa de recife brilhante tenha uma
-   largura fixa e configurável em pixels/km, não proporcional à suavidade da transição de altitude.
-3. Revisitar o clamp de raio continental (achado #4) para devolver variedade real de tamanho —
-   possivelmente trocando o clamp duro por uma normalização proporcional à área pedida.
-4. Considerar ampliar a paleta de biomas/cores (hoje 5 IDs fixos) e/ou introduzir variação de matiz
-   por semente, para que dois mundos com seeds diferentes pareçam visualmente distintos.
+Reproduzi o artefato de grade isoladamente (arquivos de scratch, sem tocar no mundo real) antes de
+mudar qualquer número, seguindo o plano de fases original:
+
+- **Causa raiz do "papel amassado" confirmada**: o recorte do continente vem do mapa global de baixa
+  resolução (768×768 → um continente típico ocupa só ~100-170px) e é ampliado (*upscale*) para
+  600-3000px — um fator de 3.5× a ~20×. `roi_zoom.py`/`city_roi_zoom.py` faziam esse upscale com
+  interpolação **bilinear** (`scipy.ndimage.zoom order=1`) — e pior: **`scipy` nunca esteve em
+  `requirements.txt`**, então na prática ninguém tinha o scipy instalado e todo mundo rodava o
+  fallback manual (bilinear em numpy puro) sem saber. Bilinear preserva continuidade de valor mas não
+  de curvatura — sobra uma estrutura de "célula" do pixel de origem, invisível na altitude crua, mas
+  **amplificada num padrão de grade visível** pelas máscaras não-lineares de `_apply_micro_detail` e
+  pelo gradiente do hillshading. Confirmei isolando o canal de altitude e subtraindo uma versão
+  borrada — o padrão de grade aparece espaçado exatamente na proporção do fator de upscale.
+- **Achado extra durante a investigação**: `city_roi_zoom.py` recortava um raio de **2 pixels**
+  (janela 5×5!) do mapa global antes de ampliar — praticamente nenhum relevo real sobra pra desenhar,
+  o mapa de cidade era essencialmente ruído sintético sobre uma altitude quase constante. Explica o
+  visual "chapado" do `webui-map-city.png`.
+- **Halo de água rasa**: confirmado nos prints, causa é a curva de `render_ocean` usar toda a coluna
+  de profundidade (0 até nivel_mar) como domínio do gradiente de brilho, em vez de só a faixa mais
+  próxima da costa.
+
+### Decisões tomadas
+- ✅ `scipy` promovido a dependência real do projeto (estava sendo usado oportunisticamente há tempos
+  sem nunca ter sido declarado).
+- ✅ Upscale trocado de bilinear (`order=1`) para spline cúbico (`order=3`), com suavização gaussiana
+  leve pós-upscale antes de qualquer máscara/hillshading — elimina a estrutura de célula residual.
+  Fallback manual (sem scipy) mantido funcional, mas agora **avisa no log** que a qualidade é inferior
+  (antes o fallback era silencioso).
+- ✅ Raio do continente agora vem da área real via `escala_pixel_area_km2` (a mesma escala "oficial"
+  já usada para reportar estatísticas no manifesto), não mais de um clamp fixo que comprimia toda a
+  variação. `continente_raio_min_px/max_px` viraram guarda-corpo de segurança, não a fonte do tamanho.
+- ✅ `render_ocean` redesenhada: só a fração mais próxima do nível do mar (`faixa_rasa_amplitude`,
+  nova chave) participa do gradiente de brilho; resto do oceano fica na cor profunda uniforme. Curva
+  de potência também subiu de 6 para 10 para reforçar o efeito.
+- ✅ `zoom_cidade_crop_raio_px` aumentado de 2 para 15px — achado extra corrigido junto.
+
+**Verificado visualmente** (arquivos de scratch, mundo de teste): grade desapareceu completamente
+(terreno liso e orgânico em close-up), halo ficou fino, e os 5 continentes de um mesmo mundo agora
+têm tamanhos claramente diferentes entre si (variando de ~257k a ~1M km² reais no teste), proporcional
+à área declarada — antes todos pareciam do mesmo tamanho.
+
+### Fora de escopo desta rodada (fica para próxima sessão desta frente)
+4. Ampliar a paleta de biomas/cores (hoje 5 IDs fixos) e/ou introduzir variação de matiz por semente —
+   decisão de estilo, melhor avaliada depois que os defeitos estruturais acima forem revisados pelo
+   autor, para não misturar "consertar bug" com "mudar de estilo" na mesma leva.
 5. Avaliar se o mundo global (768×768, 3×3 tiles) comporta continentes encostando uns nos outros, ou
-   se isso exige aumentar o grid (o que reabre o achado #3 da Frente 1 — motivo a mais para resolver
-   a Frente 1 antes).
+   se isso exige aumentar `mundo_tiles_por_lado` — mudança de escala de custo computacional maior.
+
+### Status: 🟡 Em andamento — itens 1-3 do plano original concluídos e verificados visualmente; itens 4-5 (paleta/variedade de matiz, tamanho do mundo) pendentes de revisão visual do autor antes de prosseguir.
 
 ### Status: 🔴 Não iniciado
 
@@ -398,6 +432,18 @@ Rascunho de design, opções técnicas e perguntas em aberto em
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-09 (parte 4)** — **Frente 2 iniciada e itens 1-3 concluídos.** Investigação isolada
+  (arquivos de scratch, sem tocar no mundo salvo) confirmou a causa raiz do "papel amassado":
+  upscale bilinear de um recorte de baixa resolução (scipy nunca esteve em `requirements.txt`,
+  todo mundo rodava o fallback manual sem saber), amplificado pelas máscaras não-lineares e pelo
+  hillshading. Corrigido: `scipy` virou dependência real, upscale trocado para spline cúbico
+  (`order=3`) + suavização gaussiana pós-upscale, fallback sem scipy agora avisa no log. Raio do
+  continente reconectado à área real via `escala_pixel_area_km2` (antes um clamp fixo comprimia
+  toda a variação). `render_ocean` redesenhada com faixa de brilho estreita. Achado extra corrigido:
+  `zoom_cidade_crop_raio_px` era 2px (praticamente sem relevo real), subiu para 15px. Tudo
+  verificado visualmente com prints gerados em scratch — grade sumiu, halo ficou fino, continentes
+  de um mesmo mundo agora variam visivelmente de tamanho. Paleta de biomas/variedade de matiz e
+  tamanho do mundo (itens 4-5) ficam para depois do autor revisar visualmente o que já mudou.
 - **2026-09-09 (parte 3)** — **Frente 1 concluída.** Terminados os blocos que faltavam
   (tectônica, clima, cor/shading, zoom) e todo o lado engine (Utility AI, ações, geração
   urbana/demografia). Achados corrigidos nesta parte: tamanho do mundo duplicado (768 fixo em 2

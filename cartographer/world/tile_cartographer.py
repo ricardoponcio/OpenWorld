@@ -56,13 +56,17 @@ class TileCartographer:
         nivel_mar = cfg_get(cfg, "nivel_mar")
         nivel_montanha = cfg_get(cfg, "nivel_montanha")
 
-        # Limites de raio continental (achado #4) e fator de conversão área->raio
-        # (achado #5) — preservados com os valores históricos, agora centralizados
-        # em config em vez de literais soltos. A adequação geográfica real desses
-        # números (variedade de tamanho dos continentes) é trabalho da Frente 2.
+        # Raio continental (Frente 2, docs/ROADMAP.md): antes um clamp fixo [65,155]
+        # comprimia quase toda a variação de área vinda da IA (1M-6M km², proporção 6x)
+        # num raio quase constante. Agora o raio é derivado da própria área declarada
+        # usando a MESMA escala oficial (escala_pixel_area_km2) que o world_manager.py
+        # usa para reportar a área real no manifesto — antes eram duas contas
+        # desacopladas que não descreviam geometricamente o mesmo raio.
+        # raio_min_px/max_px viram guarda-corpo de segurança, não a fonte do tamanho.
         raio_min_px = cfg_get(cfg, "continente_raio_min_px")
         raio_max_px = cfg_get(cfg, "continente_raio_max_px")
-        area_para_raio_divisor = cfg_get(cfg, "continente_area_para_raio_divisor")
+        escala_pixel_area_km2 = cfg_get(cfg, "escala_pixel_area_km2")
+        fator_visual = cfg_get(cfg, "continente_area_para_raio_fator_visual")
         elevacao_maxima_padrao = cfg_get(cfg, "continente_elevacao_maxima_padrao", default=0.8)
         raio_visual_padrao = cfg_get(cfg, "continente_raio_visual_padrao", default=200.0)
 
@@ -74,13 +78,18 @@ class TileCartographer:
             cx = cont["centro_x"]
             cy = cont["centro_y"]
 
-            # Conversão de escala (pixels vs km²) com teto de segurança
+            # Conversão de escala: um continente circular de área `area_km2`, desenhado
+            # numa escala onde 1 pixel de terra = `escala_pixel_area_km2` km², tem raio
+            # R = sqrt(area_km2 / (pi * escala)). `fator_visual` existe só para ajuste
+            # fino visual posterior sem abandonar essa relação física.
             area = cont.get("area_km2", 0)
             if area > 0:
-                R = np.sqrt(area / np.pi) / area_para_raio_divisor
+                R = np.sqrt(area / (np.pi * escala_pixel_area_km2)) * fator_visual
             else:
                 R = cont.get("raio_visual", cont.get("raio", raio_visual_padrao))
 
+            # Guarda-corpo de segurança contra resposta absurda da IA/fallback — não é
+            # mais a fonte principal da variação de tamanho.
             R = np.clip(R, raio_min_px, raio_max_px)
 
             irreg = cont["irregularidade"]

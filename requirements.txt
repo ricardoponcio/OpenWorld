@@ -4,3 +4,4 @@ pydantic
 numpy
 noise
 pillow
+scipy

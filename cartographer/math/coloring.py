@@ -15,6 +15,12 @@ class ColoringProcessor:
     def render_ocean(heightmap, config, nivel_mar=None):
         """
         Gera um sombreamento dinâmico de recifes/mar profundo usando uma curva de potência.
+
+        Só a fração mais próxima do nível do mar (`faixa_rasa_amplitude`, em fração de
+        `nivel_mar`) participa do gradiente de recife — o resto do oceano fica na cor
+        profunda uniforme. Antes o gradiente usava a coluna de profundidade inteira
+        (0 até nivel_mar) como domínio, o que espalhava o brilho por uma faixa muito mais
+        larga do que um recife raso razoável (Frente 2, docs/ROADMAP.md).
         """
         if nivel_mar is None:
             nivel_mar = cfg_get(config, "nivel_mar")
@@ -23,8 +29,10 @@ class ColoringProcessor:
         raso = cfg_get(oceano, "raso")
         profundo = cfg_get(oceano, "profundo")
         potencia = cfg_get(oceano, "curva_potencia")
+        faixa_rasa = cfg_get(oceano, "faixa_rasa_amplitude")
 
-        alt_norm = np.clip(heightmap / nivel_mar, 0.0, 1.0)
+        limite_inferior_faixa = nivel_mar * (1.0 - faixa_rasa)
+        alt_norm = np.clip((heightmap - limite_inferior_faixa) / (nivel_mar * faixa_rasa), 0.0, 1.0)
         alt_shading = np.power(alt_norm, potencia)
 
         r_chan = profundo[0] * (1.0 - alt_shading) + raso[0] * alt_shading

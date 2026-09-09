@@ -18,10 +18,12 @@ import numpy as np
 from cartographer.math import NoiseGenerator, ClimateProcessor
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
+from engine.logger import WorldLogger
 try:
-    from scipy.ndimage import zoom as scipy_zoom
+    from scipy.ndimage import zoom as scipy_zoom, gaussian_filter
 except ImportError:
     scipy_zoom = None
+    gaussian_filter = None
 
 
 
@@ -141,20 +143,26 @@ class ROIZoomGenerator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _upscale(crop: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
+    def _upscale(crop: np.ndarray, target_h: int, target_w: int, ordem: int) -> np.ndarray:
         """
-        Interpola bilinearmente cada canal do recorte para a resolução de destino.
+        Interpola cada canal do recorte para a resolução de destino.
 
-        Usa scipy se disponível (melhor qualidade), cai em numpy puro via zoom.
+        Usa scipy (spline de ordem `ordem` — 3 = bicúbica) se disponível; cai em
+        interpolação bilinear manual em numpy puro caso contrário, com aviso de log
+        (a qualidade do fallback é inferior — ver docs/ROADMAP.md, Frente 2).
         """
         if scipy_zoom is not None:
             # Fatores de escala por eixo (H e W) — canal 4 não é redimensionado
             fh = target_h / crop.shape[0]
             fw = target_w / crop.shape[1]
-            # order=1 → interpolação bilinear
-            return scipy_zoom(crop, (fh, fw, 1), order=1).astype(np.float32)
+            return scipy_zoom(crop, (fh, fw, 1), order=ordem).astype(np.float32)
         else:
-            # Fallback manual sem scipy
+            WorldLogger.warning(
+                "[ROI-ZOOM] scipy não está instalado — usando fallback bilinear manual "
+                "(qualidade inferior à interpolação configurada). Instale 'scipy' "
+                "(requirements.txt) para o resultado pretendido."
+            )
+            # Fallback manual sem scipy (sempre bilinear, independente de `ordem`)
             out = np.zeros((target_h, target_w, crop.shape[2]), dtype=np.float32)
             for c in range(crop.shape[2]):
                 # Coordenadas de destino em espaço de origem
@@ -173,6 +181,40 @@ class ROIZoomGenerator:
                     + ch[gy1, gx1] * dy * dx
                 )
             return out
+
+    @staticmethod
+    def _suavizar_altitude(upscaled: np.ndarray, sigma_px: float) -> np.ndarray:
+        """
+        Aplica um leve borrão gaussiano só no canal de altitude (canal 0), logo após o
+        upscale e antes de qualquer máscara não-linear ou hillshading.
+
+        Mesmo com interpolação bicúbica, pode sobrar uma sutilíssima estrutura de
+        "célula" do pixel de baixa resolução original — invisível na altitude crua, mas
+        amplificada pelas máscaras de `_apply_micro_detail` e pelo gradiente do
+        hillshading num padrão de grade visível ("papel amassado"). Este passo garante
+        que nenhuma estrutura residual sobreviva. Ver docs/ROADMAP.md, Frente 2.
+        """
+        if sigma_px <= 0:
+            return upscaled
+
+        resultado = upscaled.copy()
+        if gaussian_filter is not None:
+            resultado[:, :, 0] = gaussian_filter(upscaled[:, :, 0], sigma=sigma_px)
+        else:
+            # Fallback sem scipy: box blur simples via médias móveis cumulativas (numpy puro)
+            k = max(1, int(round(sigma_px * 2)) | 1)  # tamanho de janela ímpar
+            alt = upscaled[:, :, 0]
+            pad = k // 2
+            alt_pad = np.pad(alt, pad, mode="edge")
+            cumsum = np.cumsum(np.cumsum(alt_pad, axis=0), axis=1)
+            cumsum = np.pad(cumsum, ((1, 0), (1, 0)), mode="constant")
+            H, W = alt.shape
+            soma = (
+                cumsum[k:k + H, k:k + W] - cumsum[0:H, k:k + W]
+                - cumsum[k:k + H, 0:W] + cumsum[0:H, 0:W]
+            )
+            resultado[:, :, 0] = soma / (k * k)
+        return resultado
 
     # ------------------------------------------------------------------
     # Refinamento de micro-detalhes via Perlin de Alta Frequência
@@ -309,8 +351,14 @@ class ROIZoomGenerator:
 
         # 3. Interpola para a resolução-alvo
         target = self.target_resolution
-        upscaled = self._upscale(crop, target, target)
-        print(f"[ROI-ZOOM] Interpolado para: {target}x{target}px")
+        ordem = cfg_get(self.config, "zoom_upscale_ordem")
+        upscaled = self._upscale(crop, target, target, ordem)
+        print(f"[ROI-ZOOM] Interpolado para: {target}x{target}px (ordem={ordem})")
+
+        # 3.5. Suaviza a altitude para eliminar estrutura de célula residual do upscale
+        # (causa raiz do artefato de "papel amassado" — Frente 2)
+        sigma_px = cfg_get(self.config, "zoom_suavizacao_sigma_px")
+        upscaled = self._suavizar_altitude(upscaled, sigma_px)
 
         # 4. Injeção de micro-detalhes de alta frequência
         #    Usa um offset derivado do UUID para que cada continente tenha
