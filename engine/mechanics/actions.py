@@ -1,5 +1,4 @@
-import random
-from ..models import NPC, Acao, EstagioVida, HumorNPC
+from ..models import NPC, Acao, EstagioVida
 from ..logger import WorldLogger
 from .movement import NPCMovementManager
 from ..utils import NPCUtils, LocationUtils
@@ -151,33 +150,27 @@ class NPCActionManager:
         custo = cfg_get(cfg, "custo_pc")
         ganho_pago = cfg_get(cfg, "social_ganho")
         ganho_gratis = cfg_get(cfg, "social_ganho_gratis")
-        chance_alegre = cfg_get(cfg, "chance_ficar_alegre")
-        chance_triste = cfg_get(cfg, "chance_ficar_triste")
 
         local_atual = engine.locais.get(npc.localizacao_atual_id)
         custo_real = custo
         if local_atual and LocationUtils.is_local_publico(local_atual):
             custo_real = 0
 
+        # O humor não é mais setado aqui diretamente — ele é um retrato contínuo
+        # do bem-estar (energia/fome/social), recalculado a cada tick por
+        # NPCMoodManager. Socializar continua afetando `social` normalmente, que
+        # já alimenta esse cálculo. Ver docs/ROADMAP.md, Frente 3.
         if npc.dinheiro_total_pc >= custo_real:
             if custo_real > 0:
                 npc.dinheiro_total_pc -= custo_real
-            # Acelera ganho social
             npc.social += ganho_pago
             if npc.social > 100.0:
                 npc.social = 100.0
-
-            # Melhora humor
-            if random.random() < chance_alegre:
-                npc.humor = HumorNPC.ALEGRE.value
         else:
             # Se não tem dinheiro (e tentou ir a um local pago), tenta socializar de graça mas com menos ganho
             npc.social += ganho_gratis
             if npc.social > 100.0:
                 npc.social = 100.0
-
-            if random.random() < chance_triste:
-                npc.humor = HumorNPC.TRISTE.value
 
     @staticmethod
     def _executar_cuidar_prole(engine, npc: NPC, cfg_bio: dict):

@@ -19,6 +19,7 @@ from .mechanics.housing import NPCHousingManager
 from .mechanics.kingdom import KingdomManager
 from .mechanics.social import NPCSocialManager
 from .mechanics.events import GlobalEventManager
+from .mechanics.mood import NPCMoodManager
 
 
 class GameLoop:
@@ -128,7 +129,10 @@ class GameLoop:
             npc.fome = max(0, min(100, npc.fome))
             npc.social = max(0, min(100, npc.social))
             npc.saude = max(0, min(100, npc.saude))
-            
+
+            # 5. Humor emergente (retrato do bem-estar; ver engine/mechanics/mood.py)
+            NPCMoodManager.processar_humor(engine, npc)
+
             if npc.saude <= 0:
                 NPCBiologyManager.processar_morte(engine, npc)
                 continue

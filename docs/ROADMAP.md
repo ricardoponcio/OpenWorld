@@ -21,7 +21,7 @@
 |---|--------|--------|------------|
 | 1 | Parametrização única (engine + cartografia) | 🟢 Concluído | Seção 1 + [`AUDITORIA_HARDCODE.md`](AUDITORIA_HARDCODE.md) |
 | 2 | Qualidade e variedade visual da cartografia | 🟡 Em andamento | Seção 2 |
-| 3 | Comportamento dos NPCs (Utility AI) | 🔴 Não iniciado | Seção 3 |
+| 3 | Comportamento dos NPCs (Utility AI) | 🟡 Em andamento | Seção 3 |
 | 4 | Motor de tempo 1:1 (Engrenagens Híbridas) | 🔴 Não iniciado | [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md) |
 | 5 | Modo Mestre de IA (2º modo temporal) | 🔴 Não iniciado | [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md) |
 | 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🔴 Não iniciado | [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md) |
@@ -274,38 +274,48 @@ Ou seja:
   `AFETAR_NPC`), que é um script manual e desconectado do loop principal (ver Frente 5 — é também a
   base do futuro Modo Mestre de IA).
 
-Outros pontos observados durante a leitura de `logic.py`/`actions.py`/`movement.py` que valem
-investigação (ainda **não confirmados como "errados"**, apenas candidatos a discutir com o autor):
+Outros pontos observados durante a leitura de `logic.py`/`actions.py`/`movement.py`, ainda **não
+endereçados** (candidatos para uma próxima rodada desta frente, não escolhidos pelo autor ainda):
 - A movimentação é "teleporte" direto entre locais nomeados (sem trajeto/pathing contínuo) — pode ou
   não ser aceitável dependendo do quanto o 1:1 (Frente 4) vai deixar isso visualmente evidente.
-- Muitos limiares de utilidade (200.0 para Dormir urgente, 150.0 para Trabalhar, 10.0 para Ocioso,
-  multiplicadores de 1.2/1.5/0.4/0.5 em vários pontos de `logic.py`) são números soltos que hoje só
-  podem ser ajustados editando código-fonte — ligação direta com a Frente 1.
 - `num_dependentes` é recalculado do zero a cada tick, por NPC, iterando todos os moradores da casa
   duas vezes por tick (uma em `loop.py`, outra dentro de `actions.py:_executar_comer`) — não é um bug
   de comportamento, mas é redundância que vale revisar quando formos mexer nessa área.
+- ~~Limiares de utilidade hardcoded~~ — **já migrados para config** na Frente 1 (ver
+  `config.json["ia_decisao"]` e `AUDITORIA_HARDCODE.md`).
 
-### Decisões tomadas
-- *(nenhuma — aguardando o autor listar os comportamentos específicos que percebeu como "não muito
-  corretos" além do achado do humor, que já está confirmado)*
+### Decisões tomadas (2026-09-09)
+- Autor confirmou: começar pelo achado já identificado (humor), sem exemplos novos por enquanto —
+  se notar algo mais, sinaliza depois.
+- **Humor deixou de ser uma flag setada ad-hoc e virou um retrato contínuo do bem-estar** (energia +
+  fome invertida + social, pesos configuráveis), recalculado a cada tick com transição gradual (não
+  instantânea) em direção a um humor-alvo. Implementado em `engine/mechanics/mood.py`
+  (`NPCMoodManager`), chamado a cada tick em `loop.py`. A lógica ad-hoc que existia em
+  `actions.py::_executar_socializar` (setar Alegre/Triste direto) foi removida — socializar continua
+  afetando `social` normalmente, que já alimenta o cálculo unificado.
+- Pânico/Medo ficam fora do cálculo normal de bem-estar — continuam reservados para serem forçados
+  externamente (hoje só via `AFETAR_NPC` do `builder/storyteller.py`, base da futura Frente 5). O
+  mesmo mecanismo de transição gradual já traz o NPC de volta ao humor calculado quando ele deixa de
+  estar em Pânico/Medo, sem precisar de código especial — **verificado** nesta sessão.
+
+**Verificado**: rodei a engine por 200 ticks reais — humor deixou de convergir para 100% Alegre,
+varia organicamente entre Neutro/Contente/Alegre (mundo com economia saudável, esperado ficar mais
+pra cima). Forçando fome/energia/social ruins num NPC isolado, o humor degradou passo a passo
+Alegre → Contente → Neutro → Triste → Angustiado ao longo de ~40 ticks, e se recuperou ao inverter as
+condições — confirma que o "bug de catraca" está corrigido e o sistema reage a mudanças reais de
+estado, não só a uma rolagem de dado isolada.
 
 ### Questões em aberto para decidir juntos
-1. Corrigir o "catraca do humor" faz parte desta frente ou fica reservado para quando o Modo Mestre
-   de IA (Frente 5) assumir o controle narrativo de humor/eventos? (Podem ser complementares: um
-   decaimento natural de humor no motor + o Mestre de IA podendo forçar humores por narrativa.)
-2. Quais comportamentos específicos de NPC o autor já percebeu como incorretos além do humor? (Esta
-   seção deve ser expandida na próxima sessão com exemplos concretos observados no dashboard/logs.)
+1. Quais comportamentos específicos de NPC o autor já percebeu como incorretos além do humor? Ainda
+   em aberto — autor optou por não listar agora; retomar quando/se notar algo observando o jogo.
 
-### Plano de fases (proposto)
-1. Levantar com o autor a lista concreta de comportamentos "errados" observados (a auditoria de
-   código sozinha não substitui a observação de jogo real).
-2. Implementar decaimento/reset de humor (ex.: tendência gradual de volta a Neutro por tick, com
-   chance de virar Contente/Triste conforme necessidades atendidas/não atendidas — reaproveitando os
-   estados hoje mortos do enum).
-3. Migrar os limiares de utilidade hardcoded para o config único (depende da Frente 1).
-4. Reavaliar caso a caso os demais candidatos listados acima.
+### Plano de fases
+1. ~~Levantar achado concreto e corrigir o humor~~ ✅
+2. Reavaliar os candidatos ainda não endereçados (teleporte de movimento, redundância de
+   `num_dependentes`) quando o autor sinalizar mais comportamentos ou quiser voltar a esta frente.
 
-### Status: 🔴 Não iniciado
+### Status: 🟡 Em andamento — correção do humor concluída e verificada; demais candidatos aguardando
+observação de jogo real do autor antes de seguir.
 
 ---
 
@@ -432,6 +442,17 @@ Rascunho de design, opções técnicas e perguntas em aberto em
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-09 (parte 5)** — **Frente 3 iniciada: sistema de humor corrigido.** Autor optou por
+  seguir direto com o achado já confirmado (humor travando em "Alegre") em vez de levantar novos
+  exemplos agora. Criado `engine/mechanics/mood.py` (`NPCMoodManager`): humor virou um retrato
+  contínuo do bem-estar (energia/fome/social, pesos configuráveis) com transição gradual — resolve
+  a catraca de mão única e reativa os estados antes mortos do enum (`Contente`, `Triste`,
+  `Angustiado`). Removida a lógica ad-hoc de humor em `actions.py::_executar_socializar`. Pânico/Medo
+  ficam reservados pra serem forçados externamente (futura Frente 5). Testado com 200 ticks reais
+  (humor deixou de convergir a 100% Alegre) e com condições forçadas boas/ruins num NPC isolado
+  (degradação e recuperação passo a passo confirmadas, incluindo saída de Pânico). Demais candidatos
+  de comportamento (movimento teleporte, redundância de `num_dependentes`) ficam para quando o autor
+  notar algo observando o jogo.
 - **2026-09-09 (parte 4)** — **Frente 2 iniciada e itens 1-3 concluídos.** Investigação isolada
   (arquivos de scratch, sem tocar no mundo salvo) confirmou a causa raiz do "papel amassado":
   upscale bilinear de um recorte de baixa resolução (scipy nunca esteve em `requirements.txt`,

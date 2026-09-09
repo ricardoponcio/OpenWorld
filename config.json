@@ -30,9 +30,7 @@
             "energia_perda": 1.6,
             "social_ganho": 15.0,
             "social_ganho_gratis": 5.0,
-            "custo_pc": 20,
-            "chance_ficar_alegre": 0.2,
-            "chance_ficar_triste": 0.1
+            "custo_pc": 20
         },
         "ocioso": {
             "energia_ganho": 0.1,
@@ -105,7 +103,17 @@
         "interacao_chance": 0.5,
         "casamento_chance_coabitacao": 0.02,
         "casamento_chance_romance_fisico": 0.15,
-        "interacao_afinidade_ganhos": [-5, 5, 10, 15]
+        "interacao_afinidade_ganhos": [-5, 5, 10, 15],
+
+        "_comentario_humor": "Frente 3 (2026-09-09): humor deixou de ser uma flag setada só ao socializar (nunca decaía) e virou um retrato contínuo do bem-estar (energia/fome/social). Ver engine/mechanics/mood.py.",
+        "humor_peso_energia": 0.3,
+        "humor_peso_fome": 0.4,
+        "humor_peso_social": 0.3,
+        "humor_limiar_alegre": 80,
+        "humor_limiar_contente": 60,
+        "humor_limiar_triste": 35,
+        "humor_limiar_angustiado": 15,
+        "humor_chance_transicao": 0.15
     },
     "reino": {
         "pensao_aposentadoria": 40,
