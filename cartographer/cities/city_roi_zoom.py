@@ -8,6 +8,7 @@ DESCRIÇÃO:
 """
 import json
 import os
+import zlib
 import numpy as np
 import sys
 
@@ -18,6 +19,7 @@ if raiz not in sys.path:
 
 from cartographer.math import NoiseGenerator, ClimateProcessor
 from cartographer.config import CARTOGRAPHER_CONFIG
+from config import cfg_get
 try:
     from scipy.ndimage import zoom as scipy_zoom
 except ImportError:
@@ -107,15 +109,15 @@ class CityROIZoomGenerator:
 
         ruido_hf = NoiseGenerator.generate_noise_field(
             grid_x, grid_y,
-            scale=80.0,
-            octaves=2,
+            scale=cfg_get(self.config, "zoom_cidade_hf_escala"),
+            octaves=cfg_get(self.config, "zoom_cidade_hf_oitavas"),
             seed=self.seed,
             offset=seed_offset + 9999,
         )
 
         ruido_composto = ruido_hf - 0.5
-        amplitude = 0.015
-        
+        amplitude = cfg_get(self.config, "zoom_cidade_amp")
+
         resultado = upscaled.copy()
         resultado[:, :, 0] = np.clip(upscaled[:, :, 0] + ruido_composto * amplitude, 0.0, 1.0)
         return resultado
@@ -128,13 +130,16 @@ class CityROIZoomGenerator:
         print(f"[CITY-ZOOM] Coordenadas Globais: ({cx}, {cy})")
 
         global_map = self._load_global_map()
-        # Corta um raio de 1 pixel em volta do ponto (ou seja, matriz 3x3 global)
-        crop = self._crop_global(cx, cy, 2, global_map) 
-        
+        crop_raio = cfg_get(self.config, "zoom_cidade_crop_raio_px")
+        crop = self._crop_global(cx, cy, crop_raio, global_map)
+
         target = self.target_resolution
         upscaled = self._upscale(crop, target, target)
-        
-        seed_offset = abs(hash(cid["nome"])) % 40000
+
+        # zlib.crc32 (determinístico) em vez de hash() nativo — hash() de string é
+        # aleatorizado por processo em Python, então o relevo mudava a cada
+        # regeneração do .npz (mesmo achado #7 corrigido em roi_zoom.py).
+        seed_offset = zlib.crc32(cid["nome"].encode("utf-8")) % 40000
         final = self._apply_micro_detail(upscaled, seed_offset)
 
         # Não recalculamos clima para evitar distorções microscópicas; herdamos e suavizamos

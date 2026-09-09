@@ -133,18 +133,21 @@ def api_continente_imagem(uuid):
         # Geração dinâmica sob demanda se não existir
         if not os.path.exists(npz_path):
             from cartographer.continents.roi_zoom import ROIZoomGenerator
+            from cartographer.config import CARTOGRAPHER_CONFIG
             npz_dir = os.path.dirname(npz_path)
             global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
             manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
-            
-            # Usando uma resolução amigável para a web (1200x1200px) para geração ultra veloz em tempo real
+
+            # Usando uma resolução amigável para a web (1200x1200px) para geração ultra veloz em tempo real.
+            # config vem do único config.json do projeto — antes era um dict de 2 chaves
+            # hardcoded aqui mesmo, mais uma cópia de nivel_mar/nivel_montanha.
             generator = ROIZoomGenerator(
                 manifest_path=manifest_path,
                 npz_path=global_npz_path,
                 output_dir=npz_dir,
                 target_resolution=1200,
                 seed=manifest.get("seed", 1337),
-                config={"nivel_mar": 0.35, "nivel_montanha": 0.80}
+                config=CARTOGRAPHER_CONFIG
             )
             generator.generate(uuid)
             

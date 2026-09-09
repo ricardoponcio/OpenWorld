@@ -2,11 +2,13 @@ import sqlite3
 from ..database import DatabaseManager
 from ..logger import WorldLogger
 from ..models import ProfissaoID, CategoriaLocal, CategoriaSistema, EstagioVida, PROFISSAO_DEPENDENTE
+from ..config_loader import cfg_get, carregar_config_global
 
 class JobMarket:
     def __init__(self, db_path="database/openworld.db"):
         self.db_path = db_path
         self.db = DatabaseManager(db_path)
+        self.config = carregar_config_global()
 
     def bootstrap_market(self):
         """Inicializa as categorias e profissoes no banco se estiver vazio."""
@@ -50,7 +52,13 @@ class JobMarket:
                     elif 'comercio' in tipo_low or 'loja' in tipo_low or 'mercado' in nome_low:
                         cat = CategoriaLocal.MERCADO.value
                         
-                    cursor.execute("UPDATE locais SET categoria = ?, capacidade = 5, salario_base = 100 WHERE id = ?", (cat, loc_id))
+                    cfg_urbano = cfg_get(self.config, "geracao_urbana")
+                    capacidade_padrao = cfg_get(cfg_urbano, "capacidade_padrao_local")
+                    salario_padrao = cfg_get(cfg_urbano, "salario_padrao_local")
+                    cursor.execute(
+                        "UPDATE locais SET categoria = ?, capacidade = ?, salario_base = ? WHERE id = ?",
+                        (cat, capacidade_padrao, salario_padrao, loc_id)
+                    )
 
             WorldLogger.debug("✅ Mercado de Trabalho inicializado e configurado com sucesso!")
 

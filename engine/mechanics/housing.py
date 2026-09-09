@@ -19,6 +19,7 @@ import json
 from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
 from ..utils import NPCUtils
+from ..config_loader import cfg_get
 
 class NPCHousingManager:
     @staticmethod
@@ -31,10 +32,14 @@ class NPCHousingManager:
         if NPCUtils.obter_obra_do_npc(engine.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(engine.locais, n2)):
             return False
 
+        cfg_urbano = cfg_get(engine.config, "geracao_urbana")
+        grid_min = cfg_get(cfg_urbano, "grid_min_px")
+        grid_max = cfg_get(cfg_urbano, "grid_max_px")
+
         nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
-        # Alocação simples numa grade 40x40 local urbana
-        x = random.randint(5, 35)
-        y = random.randint(5, 35)
+        # Alocação simples numa grade local urbana (mesma grade usada em builder/populate.py)
+        x = random.randint(grid_min, grid_max)
+        y = random.randint(grid_min, grid_max)
 
         sobrenome = n1.nome.split()[-1]
 
@@ -48,7 +53,7 @@ class NPCHousingManager:
             coordenadas=[x, y],
             status=0,
             integridade=0,
-            capacidade=5,
+            capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"),
         )
         engine.locais[nova_obra_id] = obra
         engine.db.salvar_local(obra)

@@ -7,7 +7,6 @@ USO: python3 builder/populate.py --npcs 20 --ia-max-thread 4 --tema "Fantasia Me
 """
 import os
 import sys
-import json
 import random
 import argparse
 import concurrent.futures
@@ -22,6 +21,7 @@ from engine.mechanics.market import JobMarket
 from builder.generator import AIWorldGenerator
 from engine.logger import WorldLogger
 from engine.utils import CartographyImporter
+from config import get_config, cfg_get
 
 MANIFEST_PATH = "database/world_manifest.json"
 DB_PATH = "database/openworld.db"
@@ -31,7 +31,11 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
     
     # 1. Garante Banco Inicializado
     db = DatabaseManager(DB_PATH)
-    
+
+    cfg_pop = cfg_get(get_config(), "geracao_populacao")
+    cfg_urbano = cfg_get(get_config(), "geracao_urbana")
+    grid_min, grid_max = cfg_get(cfg_urbano, "grid_min_px"), cfg_get(cfg_urbano, "grid_max_px")
+
     # 2. Lê e Importa Cartografia
     cidades_salvas = CartographyImporter.import_manifest(db, MANIFEST_PATH)
     if not cidades_salvas:
@@ -54,8 +58,8 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
 
     print(f"🏗️  Construindo {len(locais_base)} Locais Essenciais...")
     for i, l_data in enumerate(locais_base):
-        x_local = random.randint(5, 35)
-        y_local = random.randint(5, 35)
+        x_local = random.randint(grid_min, grid_max)
+        y_local = random.randint(grid_min, grid_max)
         loc = Local(
             id=f"loc_{i:02d}", 
             nome=l_data['nome'], 
@@ -68,14 +72,14 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
         db.salvar_local(loc)
 
     # 6. Geração de Residências
-    num_casas = max(5, num_npcs // 2)
+    num_casas = max(cfg_get(cfg_pop, "casas_minimo"), num_npcs // cfg_get(cfg_pop, "casas_divisor_por_npc"))
     casas_ids = []
     print(f"🏠 Construindo {num_casas} Casas Residenciais...")
     for i in range(num_casas):
         c_id = f"casa_{i:02d}"
         casas_ids.append(c_id)
-        x_local = random.randint(5, 35)
-        y_local = random.randint(5, 35)
+        x_local = random.randint(grid_min, grid_max)
+        y_local = random.randint(grid_min, grid_max)
         db.salvar_local(Local(
             id=c_id, 
             nome=f"Residência {i:02d}", 
@@ -118,16 +122,10 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
         for p in npc_params:
             resultados.append(generate_single_npc(p))
 
-    # Carregar limites biológicos do config.json
-    config_path = "config.json"
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        cfg_bio = cfg.get("biologia_e_sociedade", {})
-    except:
-        cfg_bio = {}
-        
-    limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 120)
+    # Carregar limites biológicos do config único (mesmo resolver da engine/dashboard —
+    # antes este arquivo lia config.json por conta própria com seu próprio default (120),
+    # divergente do default usado em web/dashboard.py (12), ver docs/AUDITORIA_HARDCODE.md)
+    limiar_morte = cfg_get(get_config(), "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
 
     npcs_gerados = []
     for params, dna in resultados:
@@ -147,12 +145,12 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
 
         nomes_gerados.append(nome)
 
-        # Distribuir idades proporcionalmente (85% adultos reprodutores, 15% idosos)
-        if random.random() < 0.85:
-            idade_inicial_anos = random.randint(18, 35)
+        # Distribuir idades proporcionalmente (adultos reprodutores vs. idosos)
+        if random.random() < cfg_get(cfg_pop, "proporcao_adultos"):
+            idade_inicial_anos = random.randint(cfg_get(cfg_pop, "idade_adulto_min"), cfg_get(cfg_pop, "idade_adulto_max"))
             estagio_vida = "adulto"
         else:
-            idade_inicial_anos = random.randint(55, 70)
+            idade_inicial_anos = random.randint(cfg_get(cfg_pop, "idade_idoso_min"), cfg_get(cfg_pop, "idade_idoso_max"))
             estagio_vida = "idoso"
 
         idade_inicial_dias = int((idade_inicial_anos / 80.0) * limiar_morte)
@@ -168,7 +166,7 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
             casa_id=casa,
             local_trabalho_id="",
             localizacao_atual_id=casa,
-            dinheiro_total_pc=random.randint(300, 1500),
+            dinheiro_total_pc=random.randint(cfg_get(cfg_pop, "dinheiro_inicial_min"), cfg_get(cfg_pop, "dinheiro_inicial_max")),
             genero=genero,
             data_nascimento=dt_nasc.isoformat(),
             estagio_vida=estagio_vida
@@ -182,7 +180,7 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
     adultos_m = [n for n in npcs_gerados if n.genero == 'M' and n.estagio_vida == 'adulto']
     adultos_f = [n for n in npcs_gerados if n.genero == 'F' and n.estagio_vida == 'adulto']
     
-    num_casais = min(len(adultos_m), len(adultos_f), num_npcs // 4)
+    num_casais = min(len(adultos_m), len(adultos_f), num_npcs // cfg_get(cfg_pop, "casal_divisor_por_npc"))
     for idx in range(num_casais):
         m = adultos_m[idx]
         f = adultos_f[idx]
@@ -206,7 +204,7 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
             f.nome = f"{f.nome} {sobrenome_m}"
             
         # Definir afinidade muito alta para concepção imediata
-        af = random.randint(85, 95)
+        af = random.randint(cfg_get(cfg_pop, "casal_afinidade_min"), cfg_get(cfg_pop, "casal_afinidade_max"))
         m.relacionamentos[f.id] = af
         f.relacionamentos[m.id] = af
         
@@ -218,22 +216,25 @@ def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_t
 
     # 9. Relacionamentos Sociais Iniciais
     print("\n💞 Estabelecendo laços sociais e amizades prévias na comunidade...")
+    amigos_min, amigos_max = cfg_get(cfg_pop, "amigos_min"), cfg_get(cfg_pop, "amigos_max")
+    amigo_af_min, amigo_af_max = cfg_get(cfg_pop, "amigo_afinidade_min"), cfg_get(cfg_pop, "amigo_afinidade_max")
+    amigo_vinculo_limiar = cfg_get(cfg_pop, "amigo_vinculo_limiar")
     for npc_a in npcs_gerados:
-        qtd_amigos = random.randint(2, min(4, len(npcs_gerados) - 1))
+        qtd_amigos = random.randint(amigos_min, min(amigos_max, len(npcs_gerados) - 1))
         alvos = random.sample([n for n in npcs_gerados if n.id != npc_a.id], k=qtd_amigos)
-        
+
         for npc_b in alvos:
             if npc_b.id in npc_a.relacionamentos:
                 continue
-                
-            af = random.randint(15, 55)
+
+            af = random.randint(amigo_af_min, amigo_af_max)
             npc_a.relacionamentos[npc_b.id] = af
             npc_b.relacionamentos[npc_a.id] = af
-            
+
             db.salvar_npc(npc_a)
             db.salvar_npc(npc_b)
-            
-            vinculo = "Amigo" if af >= 30 else "Conhecido"
+
+            vinculo = "Amigo" if af >= amigo_vinculo_limiar else "Conhecido"
             db.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
 
     # 10. Bootstrap de Vagas e Contratação imediata

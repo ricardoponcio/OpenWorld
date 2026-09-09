@@ -1,54 +1,68 @@
 import numpy as np
+from config import cfg_get
+
 
 class ColoringProcessor:
     """
     Processador de preenchimento e interpolação de paletas altitudinais e renderização marinha.
+
+    A paleta inteira (cores de oceano e de cada bioma) vem de
+    `config["cartografia"]["cores"]` — nenhuma cor fica mais hardcoded aqui. Ver
+    docs/ROADMAP.md (Frente 1) e docs/AUDITORIA_HARDCODE.md.
     """
-    CORES_BASE = {
-        2: (224, 192, 114),  # DESERTO
-        3: (114, 166, 102),  # MEDITERRANEO
-        4: (43, 94, 60),     # FLORESTA_TEMPERADA
-        5: (110, 110, 110)   # MONTANHA_ROCHOSA
-    }
 
     @staticmethod
-    def render_ocean(heightmap, nivel_mar=0.35):
+    def render_ocean(heightmap, config, nivel_mar=None):
         """
-        Gera um sombreamento dinâmico e brilhante de recifes e mar profundo usando potência 6.
+        Gera um sombreamento dinâmico de recifes/mar profundo usando uma curva de potência.
         """
+        if nivel_mar is None:
+            nivel_mar = cfg_get(config, "nivel_mar")
+        cores = cfg_get(config, "cores")
+        oceano = cfg_get(cores, "oceano")
+        raso = cfg_get(oceano, "raso")
+        profundo = cfg_get(oceano, "profundo")
+        potencia = cfg_get(oceano, "curva_potencia")
+
         alt_norm = np.clip(heightmap / nivel_mar, 0.0, 1.0)
-        alt_shading = np.power(alt_norm, 6.0)
-        
-        r_chan = 10 * (1.0 - alt_shading) + 50 * alt_shading
-        g_chan = 36 * (1.0 - alt_shading) + 150 * alt_shading
-        b_chan = 70 * (1.0 - alt_shading) + 190 * alt_shading
-        
+        alt_shading = np.power(alt_norm, potencia)
+
+        r_chan = profundo[0] * (1.0 - alt_shading) + raso[0] * alt_shading
+        g_chan = profundo[1] * (1.0 - alt_shading) + raso[1] * alt_shading
+        b_chan = profundo[2] * (1.0 - alt_shading) + raso[2] * alt_shading
+
         return np.stack([r_chan, g_chan, b_chan], axis=-1).astype(np.uint8)
 
     @staticmethod
-    def interpolate_land_biome(bioma_id, alt_terra_norm):
+    def interpolate_land_biome(bioma_id, alt_terra_norm, config):
         """
-        Faz a interpolação de cor baseada no bioma e na altitude da terra firme (Verde -> Rocha -> Neve).
+        Interpolação de cor genérica por 3 pontos de controle (baixa -> media -> pico_neve),
+        dirigida inteiramente por config["cartografia"]["cores"]["biomas"][id].
+
+        Cada bioma define sua própria `transicao` (altitude normalizada onde a cor "media"
+        é atingida): biomas com relevo (Deserto/Mediterrâneo/Floresta) usam ~0.65; a
+        Montanha Rochosa usa `transicao=0.0`, o que degenera para um gradiente único e
+        contínuo baixa->pico em toda a faixa de altitude (equivalente ao comportamento
+        original antes desta migração).
         """
-        if bioma_id == 4:  # Floresta Temperada
-            r_c = np.where(alt_terra_norm < 0.65, 43 * (1.0 - alt_terra_norm/0.65) + 110 * (alt_terra_norm/0.65), 110 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            g_c = np.where(alt_terra_norm < 0.65, 94 * (1.0 - alt_terra_norm/0.65) + 105 * (alt_terra_norm/0.65), 105 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            b_c = np.where(alt_terra_norm < 0.65, 60 * (1.0 - alt_terra_norm/0.65) + 95 * (alt_terra_norm/0.65), 95 * (1.0 - (alt_terra_norm-0.65)/0.35) + 250 * ((alt_terra_norm-0.65)/0.35))
-        elif bioma_id == 3:  # Mediterrâneo
-            r_c = np.where(alt_terra_norm < 0.65, 114 * (1.0 - alt_terra_norm/0.65) + 115 * (alt_terra_norm/0.65), 115 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            g_c = np.where(alt_terra_norm < 0.65, 166 * (1.0 - alt_terra_norm/0.65) + 110 * (alt_terra_norm/0.65), 110 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            b_c = np.where(alt_terra_norm < 0.65, 102 * (1.0 - alt_terra_norm/0.65) + 100 * (alt_terra_norm/0.65), 100 * (1.0 - (alt_terra_norm-0.65)/0.35) + 250 * ((alt_terra_norm-0.65)/0.35))
-        elif bioma_id == 2:  # Deserto
-            r_c = np.where(alt_terra_norm < 0.65, 224 * (1.0 - alt_terra_norm/0.65) + 140 * (alt_terra_norm/0.65), 140 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            g_c = np.where(alt_terra_norm < 0.65, 192 * (1.0 - alt_terra_norm/0.65) + 100 * (alt_terra_norm/0.65), 100 * (1.0 - (alt_terra_norm-0.65)/0.35) + 245 * ((alt_terra_norm-0.65)/0.35))
-            b_c = np.where(alt_terra_norm < 0.65, 114 * (1.0 - alt_terra_norm/0.65) + 85 * (alt_terra_norm/0.65), 85 * (1.0 - (alt_terra_norm-0.65)/0.35) + 250 * ((alt_terra_norm-0.65)/0.35))
-        elif bioma_id == 5:  # Montanha Rochosa
-            r_c = 110 * (1.0 - alt_terra_norm) + 245 * alt_terra_norm
-            g_c = 110 * (1.0 - alt_terra_norm) + 245 * alt_terra_norm
-            b_c = 110 * (1.0 - alt_terra_norm) + 250 * alt_terra_norm
+        cores = cfg_get(config, "cores")
+        bioma_cor = cfg_get(cfg_get(cores, "biomas"), str(int(bioma_id)))
+        cor_baixa = cfg_get(bioma_cor, "baixa")
+        cor_media = cfg_get(bioma_cor, "media")
+        cor_pico = cfg_get(cores, "pico_neve")
+        transicao = cfg_get(bioma_cor, "transicao")
+
+        if transicao > 0.0:
+            t1 = alt_terra_norm / transicao
         else:
-            r_c = np.zeros_like(alt_terra_norm)
-            g_c = np.zeros_like(alt_terra_norm)
-            b_c = np.zeros_like(alt_terra_norm)
-            
-        return r_c.astype(np.uint8), g_c.astype(np.uint8), b_c.astype(np.uint8)
+            t1 = np.ones_like(alt_terra_norm)  # segmento 1 nunca é usado (ver abaixo)
+        t2 = np.clip((alt_terra_norm - transicao) / (1.0 - transicao), 0.0, 1.0)
+
+        canais = []
+        for i in range(3):
+            seg1 = cor_baixa[i] * (1.0 - t1) + cor_media[i] * t1
+            seg2 = cor_media[i] * (1.0 - t2) + cor_pico[i] * t2
+            canal = np.where(alt_terra_norm < transicao, seg1, seg2)
+            canais.append(canal.astype(np.uint8))
+
+        return tuple(canais)

@@ -13,8 +13,11 @@ DESCRIÇÃO:
 """
 import json
 import os
+import zlib
 import numpy as np
 from cartographer.math import NoiseGenerator, ClimateProcessor
+from cartographer.config import CARTOGRAPHER_CONFIG
+from config import cfg_get
 try:
     from scipy.ndimage import zoom as scipy_zoom
 except ImportError:
@@ -32,9 +35,6 @@ class ROIZoomGenerator:
       que só existem nessa escala, como fiordes, vales e crateras.
     """
 
-    # Padding em pixels no espaço global para incluir um pouco de oceano ao redor
-    BORDER_PADDING = 20
-
     def __init__(
         self,
         manifest_path: str = "database/world_manifest.json",
@@ -51,17 +51,20 @@ class ROIZoomGenerator:
             output_dir:         Diretório de saída para os .npz dos continentes.
             target_resolution:  Resolução final do mapa de zoom (pixels de lado).
             seed:               Semente global do mundo para reprodutibilidade.
-            config:             Dicionário de configuração do mundo (nivels de mar, etc.).
+            config:             Bloco config["cartografia"]. Se omitido, usa o
+                                 config único do projeto (antes o default era um
+                                 dict reduzido de 2 chaves, hardcoded aqui mesmo —
+                                 mais uma cópia de nivel_mar/nivel_montanha).
         """
         self.manifest_path = manifest_path
         self.npz_path = npz_path
         self.output_dir = output_dir
         self.target_resolution = target_resolution
         self.seed = seed
-        self.config = config or {
-            "nivel_mar": 0.35,
-            "nivel_montanha": 0.80,
-        }
+        self.config = config if config is not None else CARTOGRAPHER_CONFIG
+
+        # Padding em pixels no espaço global para incluir um pouco de oceano ao redor
+        self.border_padding = cfg_get(self.config, "zoom_border_padding_px")
 
         self._manifest: dict = self._load_manifest()
         self._global_map: np.ndarray | None = None  # lazy-loaded
@@ -125,10 +128,10 @@ class ROIZoomGenerator:
         Retorna array (H_crop, W_crop, 4).
         """
         H, W, _ = global_map.shape
-        min_x = max(0, bbox["min_x"] - self.BORDER_PADDING)
-        min_y = max(0, bbox["min_y"] - self.BORDER_PADDING)
-        max_x = min(W - 1, bbox["max_x"] + self.BORDER_PADDING)
-        max_y = min(H - 1, bbox["max_y"] + self.BORDER_PADDING)
+        min_x = max(0, bbox["min_x"] - self.border_padding)
+        min_y = max(0, bbox["min_y"] - self.border_padding)
+        max_x = min(W - 1, bbox["max_x"] + self.border_padding)
+        max_y = min(H - 1, bbox["max_y"] + self.border_padding)
 
         # NumPy: eixo 0 = linhas = Y, eixo 1 = colunas = X
         return global_map[min_y : max_y + 1, min_x : max_x + 1, :]
@@ -227,9 +230,11 @@ class ROIZoomGenerator:
         # Normaliza a altitude acima do nível do mar para [0, 1]
         mask_terra = np.clip((alt_macro - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
 
-        # Máscara para evitar criar ilhas artificiais espúrias em oceano muito profundo (altitudes < 0.22)
-        # Permite perturbação apenas perto da costa e na terra
-        mask_proxima_costa = np.clip((alt_macro - 0.22) / 0.13, 0.0, 1.0)
+        # Máscara para evitar criar ilhas artificiais espúrias em oceano muito profundo.
+        # Permite perturbação apenas perto da costa e na terra.
+        profundidade_min = cfg_get(self.config, "zoom_costa_profundidade_min")
+        profundidade_faixa = cfg_get(self.config, "zoom_costa_profundidade_faixa")
+        mask_proxima_costa = np.clip((alt_macro - profundidade_min) / profundidade_faixa, 0.0, 1.0)
 
         # Amplitude do ruído: base constante na costa + modulação por altitude
         amplitude = mask_proxima_costa * (
@@ -251,12 +256,9 @@ class ROIZoomGenerator:
         e na temperatura/umidade herdadas e interpoladas do mapa global.
         Garante consistência perfeita e 100% de paridade com o Mapa Mundi.
         """
-        nivel_mar = self.config["nivel_mar"]
-        nivel_montanha = self.config["nivel_montanha"]
-
         result = data.copy()
-        
-        # Geramos a grade de coordenadas perfeitamente mapeadas no espaço global [0, 768]
+
+        # Geramos a grade de coordenadas perfeitamente mapeadas no espaço global do mundo
         # para alinhar o ruído Perlin de dithering entre o Mapa Mundi e o Zoom
         H, W, _ = data.shape
         y_range = np.linspace(min_y_global, max_y_global, H, dtype=np.float32)
@@ -264,8 +266,7 @@ class ROIZoomGenerator:
         grid_x, grid_y = np.meshgrid(x_range, y_range)
 
         result[:, :, 3] = ClimateProcessor.classify_biomes(
-            data[:, :, 0], result[:, :, 1], result[:, :, 2],
-            nivel_mar=nivel_mar, nivel_montanha=nivel_montanha,
+            data[:, :, 0], result[:, :, 1], result[:, :, 2], config=self.config,
             grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )
         return result
@@ -313,16 +314,19 @@ class ROIZoomGenerator:
 
         # 4. Injeção de micro-detalhes de alta frequência
         #    Usa um offset derivado do UUID para que cada continente tenha
-        #    um relevo micro-detalhado único e reprodutível
-        cont_seed_offset = abs(hash(cont_uuid)) % 40000
+        #    um relevo micro-detalhado único e reprodutível.
+        #    IMPORTANTE: usamos zlib.crc32 (determinístico) em vez de hash() nativo —
+        #    hash() de string em Python é aleatorizado por processo (PYTHONHASHSEED),
+        #    então o relevo mudava a cada regeneração do .npz (achado #7 da auditoria).
+        cont_seed_offset = zlib.crc32(cont_uuid.encode("utf-8")) % 40000
         refined = self._apply_micro_detail(upscaled, cont_seed_offset)
         print("[ROI-ZOOM] Micro-detalhes geológicos aplicados.")
 
         # 5. Recalcula clima e biomas na nova resolução
-        min_x_global = max(0, bbox["min_x"] - self.BORDER_PADDING)
-        max_x_global = min(global_map.shape[1] - 1, bbox["max_x"] + self.BORDER_PADDING)
-        min_y_global = max(0, bbox["min_y"] - self.BORDER_PADDING)
-        max_y_global = min(global_map.shape[0] - 1, bbox["max_y"] + self.BORDER_PADDING)
+        min_x_global = max(0, bbox["min_x"] - self.border_padding)
+        max_x_global = min(global_map.shape[1] - 1, bbox["max_x"] + self.border_padding)
+        min_y_global = max(0, bbox["min_y"] - self.border_padding)
+        max_y_global = min(global_map.shape[0] - 1, bbox["max_y"] + self.border_padding)
         final = self._recompute_climate_and_biomes(
             refined, 
             min_x_global=min_x_global, 

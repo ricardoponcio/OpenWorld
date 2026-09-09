@@ -10,6 +10,7 @@ if raiz not in sys.path:
 from cartographer.world.world_manager import WorldManager
 
 from cartographer.config import CARTOGRAPHER_CONFIG
+from config import cfg_get
 
 
 def gerar_mundo_composto():
@@ -19,14 +20,17 @@ def gerar_mundo_composto():
     manager = WorldManager(tile_size=256, seed=1337, config=CARTOGRAPHER_CONFIG)
 
     print("=== Gerando Região Composta ===")
-    
-    # 3. Define a área (Começar no tile 0,0 e gerar uma grade de 3x3 tiles)
-    # Isso gera os tiles (0,0), (1,0), (2,0), (0,1)... até (2,2)
+
+    # 3. Define a área da grade de tiles a partir do mesmo config que o
+    # WorldManager usa para planejar os continentes (config["cartografia"]
+    # ["mundo_tiles_por_lado"]) — antes esse "3x3" era um literal independente
+    # aqui, podendo divergir do usado internamente pelo WorldManager.
+    tiles_por_lado = cfg_get(CARTOGRAPHER_CONFIG, "mundo_tiles_por_lado")
     mapa_composto = manager.get_full_map_region(
-        tx_start=0, 
-        ty_start=0, 
-        width_tiles=3, 
-        height_tiles=3
+        tx_start=0,
+        ty_start=0,
+        width_tiles=tiles_por_lado,
+        height_tiles=tiles_por_lado
     )
 
     # 4. Salva o resultado final

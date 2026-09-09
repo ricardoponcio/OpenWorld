@@ -5,17 +5,15 @@ import sys
 import json
 from datetime import datetime
 
+# Adicionar a raiz do projeto ao path para importar a engine/config
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 # Importações de módulos do projeto
 from web.composed_routes import composed_bp
+from config import get_config, cfg_get
 
-
-# Carregar config.json globalmente
-CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.json'))
-with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-    config = json.load(f)
-
-# Adicionar a raiz do projeto ao path para importar a engine
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Config único do projeto (config.json, via config/) — não lê mais o arquivo por conta própria
+config = get_config()
 
 app = Flask(__name__, template_folder='templates')
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'openworld.db'))
@@ -94,9 +92,10 @@ def get_update():
                 "s": r['status'], "i": r['integridade']
             }
 
-        # Carregar limiar de morte da config
-        cfg_bio = config.get("biologia_e_sociedade", {})
-        limiar_morte = cfg_bio.get("crescimento_dias_idoso_para_morte", 12)
+        # Carregar limiar de morte da config (mesma chave/resolver que a engine usa —
+        # antes este arquivo tinha seu próprio default (12), divergente do default
+        # usado em builder/populate.py (120), ver docs/AUDITORIA_HARDCODE.md)
+        limiar_morte = cfg_get(config, "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
 
         # NPCs
         npcs_rows = safe_query(conn, 'SELECT id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks FROM npcs')

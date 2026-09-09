@@ -18,7 +18,9 @@
         "comer": {
             "fome_perda": 40.0,
             "energia_ganho": 1.0,
-            "custo_pc": 15
+            "custo_pc": 15,
+            "multiplicador_por_dependente": 0.8,
+            "parcelas_refeicao": 3
         },
         "trabalhar": {
             "energia_perda": 1.8,
@@ -27,12 +29,22 @@
         "socializar": {
             "energia_perda": 1.6,
             "social_ganho": 15.0,
-            "custo_pc": 20
+            "social_ganho_gratis": 5.0,
+            "custo_pc": 20,
+            "chance_ficar_alegre": 0.2,
+            "chance_ficar_triste": 0.1
         },
         "ocioso": {
-            "energia_ganho": 0.1
+            "energia_ganho": 0.1,
+            "social_perda": 0.5
         },
-        "_comentario": "Socializar agora cansa (1.6) e Ocioso quase não recupera (0.1). Dormir é essencial."
+        "construir": {
+            "energia_perda": 1.5,
+            "fome_ganho": 0.5,
+            "integridade_ganho_por_tick": 10
+        },
+        "_comentario": "Socializar agora cansa (1.6) e Ocioso quase não recupera (0.1). Dormir é essencial.",
+        "_comentario_2": "multiplicador_por_dependente/parcelas_refeicao/social_ganho_gratis/chance_*/social_perda/construir migrados de literais soltos em actions.py na Frente 1 (2026-09-09)."
     },
     "ia_decisao": {
         "gatilho_fome_normal": 40,
@@ -46,7 +58,29 @@
         "bonus_happy_hour": 120.0,
         "bonus_persistencia": 40.0,
         "limiar_pobreza_pc": 50,
-        "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas."
+        "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas.",
+
+        "_comentario_2": "Pesos da Utility AI (NPCBrain), migrados de literais soltos em logic.py na Frente 1 (2026-09-09).",
+        "multiplicador_valor_fome": 4.0,
+        "bonus_nao_interromper_refeicao": 100.0,
+        "fator_fome_sem_dinheiro": 0.1,
+        "energia_quase_descansado": 85,
+        "energia_satisfacao_sono": 95,
+        "utilidade_dormir_maxima": 200.0,
+        "multiplicador_dormir_leve": 1.5,
+        "utilidade_trabalhar": 150.0,
+        "multiplicador_socializar_fora_happy_hour": 1.5,
+        "fator_socializar_com_local_publico_pobre": 0.4,
+        "fator_socializar_com_dependentes": 0.5,
+        "multiplicador_vontade_cuidar_prole": 1.2,
+        "bonus_cuidar_prole_fora_expediente": 40.0,
+        "energia_minima_cuidar_prole": 20,
+        "energia_minima_construir": 25,
+        "hora_fim_construir_madrugada": 5,
+        "utilidade_construir": 200.0,
+        "utilidade_ociosa_base": 10.0,
+        "bonus_dormir_medo": 50.0,
+        "penalidade_socializar_medo": 30.0
     },
     "biologia_e_sociedade": {
         "concepcao_hora": 3,
@@ -102,5 +136,136 @@
         "chance_log_deteriorado": 0.10,
         "chance_log_desgastado": 0.05,
         "energia_minima_reparo": 50
+    },
+    "geracao_urbana": {
+        "_comentario": "Grade de alocação de lotes (locais/casas/obras) e capacidade padrão de residência. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",
+        "grid_min_px": 5,
+        "grid_max_px": 35,
+        "capacidade_padrao_residencia": 5,
+        "capacidade_padrao_local": 5,
+        "salario_padrao_local": 100
+    },
+    "geracao_populacao": {
+        "_comentario": "Parâmetros do povoamento inicial (builder/populate.py). Migrado de literais soltos na Frente 1 (2026-09-09).",
+        "casas_minimo": 5,
+        "casas_divisor_por_npc": 2,
+        "proporcao_adultos": 0.85,
+        "idade_adulto_min": 18,
+        "idade_adulto_max": 35,
+        "idade_idoso_min": 55,
+        "idade_idoso_max": 70,
+        "dinheiro_inicial_min": 300,
+        "dinheiro_inicial_max": 1500,
+        "casal_afinidade_min": 85,
+        "casal_afinidade_max": 95,
+        "casal_divisor_por_npc": 4,
+        "amigos_min": 2,
+        "amigos_max": 4,
+        "amigo_afinidade_min": 15,
+        "amigo_afinidade_max": 55,
+        "amigo_vinculo_limiar": 30
+    },
+    "cartografia": {
+        "_comentario": "Migrado de cartographer/config.py (Frente 1 do docs/ROADMAP.md). Ponto único de verdade para geração de mapas.",
+        "frequencia": 200.0,
+        "oitavas": 8,
+        "persistencia": 0.5,
+        "lacunariedade": 2.1,
+        "nivel_mar": 0.35,
+        "nivel_montanha": 0.8,
+
+        "ruido_mar_escala": 80.0,
+        "ruido_mar_oitavas": 3,
+        "ruido_mar_amplitude": 0.14,
+
+        "ruido_macro_escala": 220.0,
+        "ruido_macro_oitavas": 3,
+        "ruido_costa_escala": 60.0,
+        "ruido_costa_oitavas": 4,
+        "tectonica_base_peso_macro": 0.7,
+        "tectonica_base_peso_detalhe": 0.3,
+
+        "escala_pixel_area_km2": 250,
+
+        "clima_damping_termico": 0.4,
+        "clima_umidade_oceano": 0.8,
+        "clima_umidade_terra_base": 0.4,
+
+        "clima_dithering_escala": 350.0,
+        "clima_dithering_temp_amp": 0.10,
+        "clima_dithering_umid_amp": 0.10,
+
+        "limiar_temp_deserto": 0.6,
+        "limiar_umid_deserto": 0.5,
+        "limiar_temp_mediterraneo": 0.4,
+        "limiar_umid_mediterraneo": 0.5,
+
+        "zoom_micro_hf_escala": 150.0,
+        "zoom_micro_hf_oitavas": 2,
+        "zoom_micro_mf_escala": 250.0,
+        "zoom_micro_mf_oitavas": 2,
+        "zoom_micro_hf_peso": 0.20,
+        "zoom_micro_mf_peso": 0.80,
+        "zoom_micro_amp_base": 0.024,
+        "zoom_micro_amp_terra": 0.02,
+
+        "cidades_min_por_continente": 3,
+        "cidades_max_por_continente": 6,
+
+        "_comentario_2": "Adicionado ao concluir a Frente 1 (2026-09-09): tectônica, clima restante, cor/shading e zoom. Valores preservam o comportamento visual anterior à migração, exceto onde indicado no ROADMAP/AUDITORIA como correção intencional.",
+
+        "mundo_tiles_por_lado": 3,
+
+        "tectonica_warp_escala": 120.0,
+        "tectonica_warp_amplitude": 65.0,
+        "tectonica_raio_fator_min": 0.65,
+        "tectonica_raio_fator_variacao": 0.75,
+        "tectonica_costa_distorcao_fator": 0.85,
+
+        "perfil_plato_limiar": 0.6,
+        "perfil_plato_achatamento": 0.08,
+        "perfil_arquipelago_escala": 18.0,
+        "perfil_arquipelago_inclinacao_sigmoide": 15.0,
+        "perfil_arquipelago_centro": 0.45,
+
+        "vinheta_margem_segura": 40.0,
+        "vinheta_largura_fade": 80.0,
+
+        "continente_raio_min_px": 65.0,
+        "continente_raio_max_px": 155.0,
+        "continente_area_para_raio_divisor": 10.0,
+        "continente_elevacao_maxima_padrao": 0.8,
+        "continente_raio_visual_padrao": 200.0,
+
+        "shading_escala_terreno": 48.0,
+        "shading_escala_terreno_resolucao_base": 256.0,
+        "shading_luz_direcao": [-1.0, -1.0, 0.95],
+        "shading_contraste": 1.85,
+        "shading_brilho_min": 0.45,
+        "shading_brilho_max": 1.55,
+
+        "cores": {
+            "pico_neve": [245, 245, 250],
+            "oceano": {
+                "raso": [50, 150, 190],
+                "profundo": [10, 36, 70],
+                "curva_potencia": 6.0
+            },
+            "biomas": {
+                "2": { "_comentario": "Deserto",             "baixa": [224, 192, 114], "media": [140, 100, 85],  "transicao": 0.65 },
+                "3": { "_comentario": "Mediterrâneo",        "baixa": [114, 166, 102], "media": [115, 110, 100], "transicao": 0.65 },
+                "4": { "_comentario": "Floresta Temperada",  "baixa": [43, 94, 60],    "media": [110, 105, 95],  "transicao": 0.65 },
+                "5": { "_comentario": "Montanha Rochosa (gradiente único, sem parada intermediária)", "baixa": [110, 110, 110], "media": [110, 110, 110], "transicao": 0.0 }
+            }
+        },
+
+        "zoom_border_padding_px": 20,
+        "zoom_costa_profundidade_min": 0.22,
+        "zoom_costa_profundidade_faixa": 0.13,
+
+        "zoom_cidade_crop_raio_px": 2,
+        "zoom_cidade_hf_escala": 80.0,
+        "zoom_cidade_hf_oitavas": 2,
+        "zoom_cidade_amp": 0.015
     }
 }

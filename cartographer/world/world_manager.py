@@ -4,6 +4,7 @@ import json
 import os
 from cartographer.world.tile_cartographer import TileCartographer
 from cartographer.ai.world_manager_ai import WorldManagerAIClient
+from config import cfg_get
 
 class WorldManager:
     def __init__(self, tile_size=256, seed=42, config=None):
@@ -11,20 +12,25 @@ class WorldManager:
         self.seed = seed
         self.config = config
         self.loaded_tiles = {} # Dicionário {(tx, ty): array_de_dados}
-        
-        # Camada de Estratégia (IA/Ollama): Planeja os continentes globalmente
-        # Um mundo composto de 3x3 tiles tem dimensões 768x768
-        tamanho_global = 3 * self.tile_size
-        self.layout_continentes = WorldManagerAIClient.planejar_continentes(self.seed, tamanho_global)
+
+        # Camada de Estratégia (IA/Ollama): Planeja os continentes globalmente.
+        # "mundo_tiles_por_lado" é o único lugar que define o grid de tiles do
+        # mundo composto — antes esse "3" também vivia solto em generate_world.py
+        # (width_tiles/height_tiles) e podia divergir silenciosamente do usado
+        # aqui para o planejamento de continentes.
+        tiles_por_lado = cfg_get(self.config, "mundo_tiles_por_lado")
+        self.tamanho_global = tiles_por_lado * self.tile_size
+        self.layout_continentes = WorldManagerAIClient.planejar_continentes(self.seed, self.tamanho_global)
 
     def get_tile(self, tx, ty):
         """Retorna o tile se já existir, senão gera um novo."""
         if (tx, ty) not in self.loaded_tiles:
             cartografo = TileCartographer(
-                size=self.tile_size, 
-                seed=self.seed, 
-                config=self.config, 
-                layout_continentes=self.layout_continentes
+                size=self.tile_size,
+                seed=self.seed,
+                config=self.config,
+                layout_continentes=self.layout_continentes,
+                tamanho_global=self.tamanho_global
             )
             self.loaded_tiles[(tx, ty)] = cartografo.generate_tile(tx, ty)
         return self.loaded_tiles[(tx, ty)]

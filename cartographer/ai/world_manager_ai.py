@@ -17,7 +17,7 @@ class WorldManagerAIClient:
     and regional metadata for OpenWorld's Tiled Cartographer.
     """
     @staticmethod
-    def planejar_continentes(semente: int, tamanho_global: int = 768) -> dict:
+    def planejar_continentes(semente: int, tamanho_global: int) -> dict:
         """
         Queries the local LLM to plan the distribution, sizing, irregularity, 
         and climate modification properties of continents.

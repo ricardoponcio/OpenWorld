@@ -105,7 +105,7 @@ class GameLoop:
                             npc.num_dependentes += 1
 
             acao_anterior = npc.acao_atual
-            NPCBrain.decidir_acao(npc, engine.data_simulada.hour, engine.config["ia_decisao"], engine.locais, eventos_globais)
+            NPCBrain.decidir_acao(npc, engine.data_simulada.hour, engine.config, engine.locais, eventos_globais)
 
             if npc.acao_atual != acao_anterior:
                 WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}", npc=npc)

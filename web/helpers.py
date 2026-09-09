@@ -2,6 +2,8 @@ import numpy as np
 import io
 import os
 from cartographer.math import ShadingProcessor, ColoringProcessor
+from cartographer.config import CARTOGRAPHER_CONFIG
+from config import cfg_get
 
 def render_npz_map_to_bytes(npz_path):
     """
@@ -25,33 +27,38 @@ def render_npz_map_to_bytes(npz_path):
     dados = np.load(npz_path)
     mapa = dados["mapa"]
     height, width, _ = mapa.shape
-    
+
     biomas = mapa[:, :, 3].astype(int)
     altitudes = mapa[:, :, 0]
-    nivel_mar = 0.35
-    
+    cfg = CARTOGRAPHER_CONFIG
+    nivel_mar = cfg_get(cfg, "nivel_mar")
+
     # 1. Renderiza o oceano dinâmico baseado na profundidade
-    img_rgb = ColoringProcessor.render_ocean(altitudes, nivel_mar=nivel_mar)
-    
+    img_rgb = ColoringProcessor.render_ocean(altitudes, config=cfg, nivel_mar=nivel_mar)
+
     # 2. Renderizar biomas de terra firme com gradiente de altitude
     mask_terra = (biomas > 1)
     if np.any(mask_terra):
         alt_terra_norm = np.clip((altitudes - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
-        
-        # Mapear biomas de terra firme (suportando a paleta de 2 a 5 do ColoringProcessor)
-        for b_id in [2, 3, 4, 5]:
+
+        # Mapear biomas de terra firme (mesmos IDs de ClimateProcessor.BIOME_IDS, exceto Oceano)
+        for b_id in (2, 3, 4, 5):
             mask_b = (biomas == b_id)
             if np.any(mask_b):
-                r_c, g_c, b_c = ColoringProcessor.interpolate_land_biome(b_id, alt_terra_norm)
+                r_c, g_c, b_c = ColoringProcessor.interpolate_land_biome(b_id, alt_terra_norm, config=cfg)
                 img_rgb[mask_b, 0] = r_c[mask_b]
                 img_rgb[mask_b, 1] = g_c[mask_b]
                 img_rgb[mask_b, 2] = b_c[mask_b]
-                
+
     # 3. Sombreamento 3D de Relevo (Hillshading) vindo de Noroeste
-    # Escalamos a escala_terreno de forma perfeitamente proporcional à resolução da imagem (width)
-    # para garantir que os gradientes de relevo permaneçam dramáticos e visíveis tanto em 768px quanto em 3000px.
-    escala_dinamica = 48.0 * (width / 256.0)
-    fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, escala_terreno=escala_dinamica)
+    # Escalamos a escala_terreno de forma proporcional à resolução da imagem (width) para
+    # garantir que os gradientes de relevo permaneçam dramáticos e visíveis em qualquer zoom —
+    # "shading_escala_terreno_resolucao_base" é a resolução na qual "shading_escala_terreno"
+    # foi calibrado (o mapa mundi, hoje 768/3=256px por tile).
+    escala_base = cfg_get(cfg, "shading_escala_terreno")
+    resolucao_base = cfg_get(cfg, "shading_escala_terreno_resolucao_base")
+    escala_dinamica = escala_base * (width / resolucao_base)
+    fator_luz = ShadingProcessor.calculate_northwest_hillshade(altitudes, config=cfg, escala_terreno=escala_dinamica)
     
     if np.any(mask_terra):
         for c in range(3):

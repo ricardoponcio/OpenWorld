@@ -1,5 +1,10 @@
 # 🕒 Proposta de Implementação: Simulação em Tempo Real (Speed 1:1)
 
+> ✅ **Decisão registrada em 2026-09-09**: Abordagem 3 (Engrenagens Híbridas) aceita como caminho a
+> seguir. Esta análise continua válida como está — o acompanhamento de execução, dependências e o
+> vínculo com o novo "Modo Mestre de IA" (que usa este motor de tempo para avançar a simulação em
+> quantidade escolhida) estão registrados na **Frente 4** e **Frente 5** do [`ROADMAP.md`](ROADMAP.md).
+
 Este documento descreve a análise técnica e as possíveis abordagens para adaptar o ecossistema do *OpenWorld Engine* a uma proporção de tempo 1:1 com a vida real (onde 1 minuto na vida real equivale a 1 minuto no jogo).
 Este formato é ideal para rodar o Dashboard como "pano de fundo" imersivo em uma sessão física de RPG de mesa, sincronizando as horas do jogo com a duração da aventura real.
 

@@ -62,18 +62,18 @@ class NoiseGenerator:
     """
     Gerador e manipulador de campos de ruído Perlin multi-frequência (fBm) puramente vetorizado.
     """
-    # ------------------------------------------------------------------
-    # Constantes de Ruído Parametrizadas e Documentadas
-    # ------------------------------------------------------------------
-    DEFAULT_TECTONIC_MACRO_SCALE = 220.0
-    DEFAULT_TECTONIC_MACRO_OCTAVES = 3
-    DEFAULT_TECTONIC_DETAIL_SCALE = 60.0
-    DEFAULT_TECTONIC_DETAIL_OCTAVES = 4
 
     @staticmethod
-    def generate_noise_field(grid_x, grid_y, scale, octaves=4, seed=0, offset=0):
+    def generate_noise_field(grid_x, grid_y, scale, octaves=4, seed=0, offset=0,
+                              persistencia=0.5, lacunaridade=2.0):
         """
         Gera uma grade 2D de ruído fractal Perlin (fBm) contínuo normalizado na faixa [0, 1].
+
+        `persistencia` controla quanto a amplitude cai a cada oitava sucessiva e
+        `lacunaridade` controla quanto a frequência sobe. Os defaults (0.5/2.0)
+        preservam o comportamento histórico do projeto para os chamadores que
+        ainda não foram migrados para passar esses valores explicitamente a
+        partir de config["cartografia"] (ver docs/AUDITORIA_HARDCODE.md).
         """
         grid_x = np.asarray(grid_x, dtype=np.float32)
         grid_y = np.asarray(grid_y, dtype=np.float32)
@@ -86,35 +86,49 @@ class NoiseGenerator:
         
         for i in range(octaves):
             val = perlin_noise_2d_vectorized(
-                (grid_x / scale) * frequency, 
-                (grid_y / scale) * frequency, 
+                (grid_x / scale) * frequency,
+                (grid_y / scale) * frequency,
                 seed=seed + offset + i * 100
             )
             total += val * amplitude
             max_val += amplitude
-            amplitude *= 0.5
-            frequency *= 2.0
-            
+            amplitude *= persistencia
+            frequency *= lacunaridade
+
         limite = max_val * 0.707
         total_normalizado = np.clip(total / (limite if limite > 0 else 1.0), -1.0, 1.0)
         return (total_normalizado + 1.0) / 2.0
 
     @staticmethod
-    def generate_tectonic_base(grid_x, grid_y, seed):
+    def generate_tectonic_base(grid_x, grid_y, seed, config):
         """
         Gera a base geológica unindo macro-formas tectônicas e micro-detalhes de alta frequência.
+
+        `config` é o bloco config["cartografia"] (via `cfg_get`) — antes esta função
+        tinha suas próprias constantes de classe (DEFAULT_TECTONIC_*) que duplicavam
+        (e podiam divergir) as chaves de config equivalentes, e ignorava por completo
+        `persistencia`/`lacunariedade`. Ver docs/AUDITORIA_HARDCODE.md.
         """
+        from config import cfg_get
+
+        persistencia = cfg_get(config, "persistencia")
+        lacunaridade = cfg_get(config, "lacunariedade")
+
         ruido_macro = NoiseGenerator.generate_noise_field(
-            grid_x, grid_y, 
-            scale=NoiseGenerator.DEFAULT_TECTONIC_MACRO_SCALE, 
-            octaves=NoiseGenerator.DEFAULT_TECTONIC_MACRO_OCTAVES, 
-            seed=seed
+            grid_x, grid_y,
+            scale=cfg_get(config, "ruido_macro_escala"),
+            octaves=cfg_get(config, "ruido_macro_oitavas"),
+            seed=seed,
+            persistencia=persistencia, lacunaridade=lacunaridade
         )
         ruido_detalhe = NoiseGenerator.generate_noise_field(
-            grid_x, grid_y, 
-            scale=NoiseGenerator.DEFAULT_TECTONIC_DETAIL_SCALE, 
-            octaves=NoiseGenerator.DEFAULT_TECTONIC_DETAIL_OCTAVES, 
-            seed=seed, 
-            offset=500
+            grid_x, grid_y,
+            scale=cfg_get(config, "ruido_costa_escala"),
+            octaves=cfg_get(config, "ruido_costa_oitavas"),
+            seed=seed,
+            offset=500,
+            persistencia=persistencia, lacunaridade=lacunaridade
         )
-        return ruido_macro * 0.7 + ruido_detalhe * 0.3
+        peso_macro = cfg_get(config, "tectonica_base_peso_macro")
+        peso_detalhe = cfg_get(config, "tectonica_base_peso_detalhe")
+        return ruido_macro * peso_macro + ruido_detalhe * peso_detalhe
