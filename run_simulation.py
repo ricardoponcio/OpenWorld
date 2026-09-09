@@ -6,34 +6,38 @@ def start_simulation():
     engine = SimulationEngine()
     market = JobMarket()
     market.bootstrap_market()
-    
+
     print(f"🌍 Mundo carregado com {len(engine.npcs)} habitantes e {len(engine.locais)} locais.")
-    print("Simulação em tempo real (2s real = 15min jogo).")
-    
-    ticks = 0
+    print("Simulação em tempo real 1:1 (1 min de jogo = 1 min real na velocidade 1x).")
+
     try:
         while True:
             status_pausa = engine.db.carregar_meta("simulacao_pausada")
             v_str = engine.db.carregar_meta("velocidade_simulacao")
             velocidade = float(v_str) if v_str else 1.0
-            espera = max(0.1, 2.0 / velocidade)
+            # 60s reais = 1 min de jogo na velocidade 1x (tempo real de verdade) — Frente 4.
+            espera = max(0.005, 60.0 / velocidade)
 
             if status_pausa == "1":
                 time.sleep(1.0)
                 continue
 
             engine.tick()
-            ticks += 1
 
-            # A cada 20 ticks (~5h jogo): mercado de trabalho e recarga de habitantes
-            if ticks % 20 == 0:
-                market.processar_contratacoes()
-                engine.recarregar_habitantes()
-
-            # A cada 96 ticks (1 dia jogo = 96 × 15min): decadência e reparos de infraestrutura
-            if ticks % 96 == 0:
-                InfrastructureManager.processar_desgaste(engine)
-                InfrastructureManager.processar_reparos_espontaneos(engine)
+            # Gatilhos periódicos baseados no relógio do jogo (não em contagem de ticks —
+            # ticks agora são de 1 minuto; contar "a cada N ticks" dependeria do tamanho do
+            # tick e voltaria a quebrar se ele mudasse de novo. Ver docs/ROADMAP.md, Frente 4.
+            hora = engine.data_simulada.hour
+            minuto = engine.data_simulada.minute
+            if minuto == 0:
+                if hora % 5 == 0:
+                    # A cada 5h de jogo: mercado de trabalho e recarga de habitantes
+                    market.processar_contratacoes()
+                    engine.recarregar_habitantes()
+                if hora == 2:
+                    # 1x por dia de jogo: decadência e reparos de infraestrutura
+                    InfrastructureManager.processar_desgaste(engine)
+                    InfrastructureManager.processar_reparos_espontaneos(engine)
 
             if velocidade > 1.0:
                 print(f"⏩ Velocidade: {velocidade}x")

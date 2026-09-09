@@ -1,18 +1,20 @@
 {
     "salvar_logs_npc_no_banco": false,
     "metabolismo": {
-        "energia_base_perda": 0.5,
-        "fome_base_ganho_min": 0.4,
-        "fome_base_ganho_max": 0.8,
-        "social_base_perda_min": 0.5,
-        "social_base_perda_max": 1.2,
+        "_comentario_1_1": "Frente 4 (2026-09-09): valores divididos por 15 — o tick virou 1 minuto real (era 15). O efeito total por hora de jogo é o mesmo de antes, só que distribuído em passos 15x menores. Ver docs/ROADMAP.md.",
+        "energia_base_perda": 0.033333,
+        "fome_base_ganho_min": 0.026667,
+        "fome_base_ganho_max": 0.053333,
+        "social_base_perda_min": 0.033333,
+        "social_base_perda_max": 0.08,
         "multiplicador_fome_dormindo": 0.33,
         "multiplicador_energia_dormindo": 0.0,
-        "_comentario": "Valores base. Reduzi a taxa de fome diária para um nível sustentável (~0.6 por tick average)."
+        "_comentario": "Valores base. Reduzi a taxa de fome diária para um nível sustentável (~0.6 por tick average, agora medido em ticks de 1 min)."
     },
     "acoes": {
+        "_comentario_1_1": "Frente 4 (2026-09-09): taxas por tick divididas por 15 (tick = 1 min, era 15 min). 'parcelas_refeicao' multiplicada por 15 em vez de dividir fome_perda/custo_pc/energia_ganho — como esses três já são divididos pelas parcelas no código, escalar só a contagem de parcelas já preserva o ritmo real da refeição sem tocar nos totais.",
         "dormir": {
-            "energia_ganho": 5.0,
+            "energia_ganho": 0.333333,
             "fome_ganho": 0.5
         },
         "comer": {
@@ -20,26 +22,26 @@
             "energia_ganho": 1.0,
             "custo_pc": 15,
             "multiplicador_por_dependente": 0.8,
-            "parcelas_refeicao": 3
+            "parcelas_refeicao": 45
         },
         "trabalhar": {
-            "energia_perda": 1.8,
-            "salario_pc": 5
+            "energia_perda": 0.12,
+            "salario_pc": 0.333333
         },
         "socializar": {
-            "energia_perda": 1.6,
-            "social_ganho": 15.0,
-            "social_ganho_gratis": 5.0,
-            "custo_pc": 20
+            "energia_perda": 0.106667,
+            "social_ganho": 1.0,
+            "social_ganho_gratis": 0.333333,
+            "custo_pc": 1.333333
         },
         "ocioso": {
-            "energia_ganho": 0.1,
-            "social_perda": 0.5
+            "energia_ganho": 0.006667,
+            "social_perda": 0.033333
         },
         "construir": {
-            "energia_perda": 1.5,
-            "fome_ganho": 0.5,
-            "integridade_ganho_por_tick": 10
+            "energia_perda": 0.1,
+            "fome_ganho": 0.033333,
+            "integridade_ganho_por_tick": 0.666667
         },
         "_comentario": "Socializar agora cansa (1.6) e Ocioso quase não recupera (0.1). Dormir é essencial.",
         "_comentario_2": "multiplicador_por_dependente/parcelas_refeicao/social_ganho_gratis/chance_*/social_perda/construir migrados de literais soltos em actions.py na Frente 1 (2026-09-09)."
@@ -81,11 +83,12 @@
         "penalidade_socializar_medo": 30.0
     },
     "biologia_e_sociedade": {
+        "_comentario_1_1": "Frente 4 (2026-09-09): tick virou 1 min (era 15). concepcao_chance/concepcao_chance_superlotacao NÃO mudam (são sorteadas 1x por noite, não por tick). gravidez_duracao_ticks ×15 (dura os mesmos ~48h, só que contados em ticks 15x menores). cuidar_prole_*/inaniacao_perda_saude/dormir_ganho_saude ÷15 (taxas por tick). interacao_chance/casamento_chance_coabitacao recalculadas com probabilidade composta (1-(1-p)^(1/15)), não divisão simples — dividir uma chance por 15 não preserva a frequência real do evento ao longo do tempo.",
         "concepcao_hora": 3,
         "concepcao_afinidade_minima": 90,
         "concepcao_chance": 0.05,
         "concepcao_chance_superlotacao": 0.02,
-        "gravidez_duracao_ticks": 192,
+        "gravidez_duracao_ticks": 2880,
         "gravidez_multiplicador_perda_energia": 1.2,
         "gravidez_multiplicador_ganho_fome": 1.2,
         "parto_afinidade_inicial_pais": 100,
@@ -94,18 +97,18 @@
         "crescimento_dias_crianca_para_adulto": 15,
         "crescimento_dias_adulto_para_idoso": 75,
         "crescimento_dias_idoso_para_morte": 90,
-        "cuidar_prole_consumo_energia": 2.0,
-        "cuidar_prole_ganho_social": 15.0,
+        "cuidar_prole_consumo_energia": 0.133333,
+        "cuidar_prole_ganho_social": 1.0,
         "heranca_afinidade_minima_conjuge": 50,
         "heranca_evento_modificador_afinidade": 10,
-        "inaniacao_perda_saude": 5,
-        "dormir_ganho_saude": 2,
-        "interacao_chance": 0.5,
-        "casamento_chance_coabitacao": 0.02,
+        "inaniacao_perda_saude": 0.333333,
+        "dormir_ganho_saude": 0.133333,
+        "interacao_chance": 0.0452,
+        "casamento_chance_coabitacao": 0.00135,
         "casamento_chance_romance_fisico": 0.15,
         "interacao_afinidade_ganhos": [-5, 5, 10, 15],
 
-        "_comentario_humor": "Frente 3 (2026-09-09): humor deixou de ser uma flag setada só ao socializar (nunca decaía) e virou um retrato contínuo do bem-estar (energia/fome/social). Ver engine/mechanics/mood.py.",
+        "_comentario_humor": "Frente 3 (2026-09-09): humor deixou de ser uma flag setada só ao socializar (nunca decaía) e virou um retrato contínuo do bem-estar (energia/fome/social). Ver engine/mechanics/mood.py. humor_chance_transicao recalculada na Frente 4 (era por tick de 15 min).",
         "humor_peso_energia": 0.3,
         "humor_peso_fome": 0.4,
         "humor_peso_social": 0.3,
@@ -113,7 +116,7 @@
         "humor_limiar_contente": 60,
         "humor_limiar_triste": 35,
         "humor_limiar_angustiado": 15,
-        "humor_chance_transicao": 0.15
+        "humor_chance_transicao": 0.01078
     },
     "reino": {
         "pensao_aposentadoria": 40,

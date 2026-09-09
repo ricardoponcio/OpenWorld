@@ -22,7 +22,7 @@
 | 1 | Parametrização única (engine + cartografia) | 🟢 Concluído | Seção 1 + [`AUDITORIA_HARDCODE.md`](AUDITORIA_HARDCODE.md) |
 | 2 | Qualidade e variedade visual da cartografia | 🟡 Em andamento | Seção 2 |
 | 3 | Comportamento dos NPCs (Utility AI) | 🟡 Em andamento | Seção 3 |
-| 4 | Motor de tempo 1:1 (Engrenagens Híbridas) | 🔴 Não iniciado | [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md) |
+| 4 | Motor de tempo 1:1 real (Rebalanceamento Total) | 🟢 Concluído | Seção 4 (decisão revista: Abordagem 2, não 3 — ver [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md)) |
 | 5 | Modo Mestre de IA (2º modo temporal) | 🔴 Não iniciado | [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md) |
 | 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🔴 Não iniciado | [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md) |
 
@@ -327,44 +327,67 @@ permitindo sair da velocidade fixa de 1 tick = 15 minutos simulados para **1 tic
 simulado, com o tempo real também podendo variar de 1x até Nx (sem o piso atual de 15 minutos por
 tick).
 
-### Situação atual
-- `docs/ANALISE_REALTIME_1_1.md` já documenta 3 abordagens e recomenda a Abordagem 3 — **essa
-  análise segue válida, sem necessidade de refazer**. Esta seção do roadmap só registra a decisão e
-  os detalhes de execução que a análise original não cobria.
-- Hoje (`engine/loop.py:31`): `engine.data_simulada += timedelta(minutes=15)` a cada tick, sempre —
-  não existe granularidade menor.
-- Hoje (`run_simulation.py`): a "velocidade" (`velocidade_simulacao`, ajustável pelo dashboard via
-  `/api/set_speed`) só acelera o *sleep* entre ticks (`espera = max(0.1, 2.0/velocidade)`) — o
-  salto de tempo simulado por tick continua fixo em 15 minutos. Ou seja, hoje "2x" significa "os
-  mesmos saltos de 15 minutos, só que duas vezes mais rápido no relógio de parede", não "o dobro de
-  tempo de jogo por segundo real" de forma granular.
-- Durações biológicas hoje são contadas em **ticks**, não em minutos (ex.: `gravidez_duracao_ticks =
-  192`, que a 15 min/tick equivale a 48h). Reduzir o tick para 1 minuto sem tocar nessas durações
-  multiplicaria a gestação por 15× em tempo real de jogo — por isso a Abordagem 3 propõe manter a
-  física pesada (economia, biologia) presa a um gatilho `if minuto % 15 == 0`, e não recalcular tudo
-  em unidades menores.
+### Decisão revista nesta sessão (2026-09-09): Abordagem 2, não Abordagem 3
 
-### Decisões tomadas
-- **Abordagem 3 (Engrenagens Híbridas) aceita** como caminho, conforme recomendação do documento
-  original e confirmação do autor nesta sessão.
+`docs/ANALISE_REALTIME_1_1.md` recomendava a Abordagem 3 ("Engrenagens Híbridas": tick fino de 1 min
+só pra mover o relógio, com a física pesada presa a um portão interno de 15 em 15 minutos). Propus
+essa abordagem primeiro; **o autor rejeitou** — objeção correta: isso seria "fingir" 1:1, o motor
+continuaria amarrado a múltiplos de 15 por baixo dos panos, só escondido um nível abaixo, e voltaria
+a causar problema mais tarde (ex.: o Modo Mestre de IA da Frente 5 querendo avançar um número de
+minutos que não seja múltiplo de 15). A decisão final foi a **Abordagem 2 (Rebalanceamento Total)**:
+o tick vira genuinamente 1 minuto e **tudo que hoje roda a cada tick continua rodando a cada tick**
+— sem nenhum portão de N ticks escondido em lugar nenhum — com os números de `config.json`
+recalculados para a nova escala.
 
-### Plano de fases (a refinar quando esta frente começar)
-1. Separar, dentro de `GameLoop.executar_tick`, o que hoje é "tudo por tick" em duas categorias
-   explícitas: granularidade fina (1 min — movimento, metabolismo incremental) e granularidade
-   grossa (15 min — economia, biologia, decisões pesadas), usando o padrão de exemplo já esboçado no
-   documento de análise.
-2. Trocar o tick de `timedelta(minutes=15)` para `timedelta(minutes=1)`.
-3. Reescrever o laço de `run_simulation.py` para permitir `sleep` proporcional (1 min jogo = `60/N`
-   segundos reais em velocidade Nx), removendo o piso atual de 15 minutos por iteração.
-4. Auditar todo lugar que hoje conta "ticks" como proxy de tempo (gravidez, eventos globais
-   `ticks_restantes`, etc.) e decidir, caso a caso, se deve virar contagem de minutos reais de jogo
-   ou continuar como "ticks grossos" (múltiplos de 15 min) — **não migrar tudo cegamente**, cada caso
-   tem uma resposta diferente dependendo se a granularidade fina importa para aquele sistema.
-5. Validar performance: tick de 1 minuto = 15× mais ticks/dia de jogo do que hoje. Como cada tick
-   grava todos os NPCs vivos no SQLite (achado da revisão inicial), isso pode expor o gargalo de I/O
-   antes mencionado — medir antes de assumir que "vai rodar liso".
+### Implementado (2026-09-09)
+- `engine/loop.py`: `timedelta(minutes=15)` → `timedelta(minutes=1)`. Resto do fluxo idêntico.
+- `config.json` recalculado em 3 categorias (não é "dividir tudo por 15" ingenuamente):
+  1. **Taxas por tick** (perda de energia, ganhos de fome/social, salário, custos de ação) → ÷15.
+  2. **Probabilidades por tick** (`interacao_chance`, `casamento_chance_coabitacao`,
+     `humor_chance_transicao` da Frente 3) → fórmula de probabilidade composta
+     `p_min = 1-(1-p_15min)^(1/15)`, não divisão simples (dividir uma chance por 15 não preserva a
+     frequência real do evento ao longo do tempo).
+  3. **Contadores de duração** (`gravidez_duracao_ticks`, `acoes.comer.parcelas_refeicao`) → ×15.
+  `concepcao_chance`/`concepcao_chance_superlotacao` **não mudaram** — são sorteadas 1x por noite,
+  não por tick, então já eram independentes do tamanho do tick.
+- **Dinheiro virou fracionário**: `NPC.dinheiro_total_pc` (`models.py`) e a coluna no
+  `schema.sql`/`database.py` mudaram de inteiro para `float` — pagar salário a cada minuto (em vez
+  de a cada 15) gera frações de PC. Formatação em po/pp/pc arredonda só na exibição
+  (`dinheiro_formatado`, `web/dashboard.py::formatar_moeda`). **Bug pego durante a implementação**:
+  `actions.py::_executar_comer` tinha dois `int()`/`max(1, ...)` que truncavam o custo por tick —
+  com `parcelas_refeicao` 15× maior, isso teria forçado um piso de gasto 3x maior que o pretendido;
+  removidos.
+- `run_simulation.py`: espera real recalculada (`60.0/velocidade` — 1:1 de verdade em 1x). Os
+  gatilhos `ticks % 20`/`ticks % 96` (que dependiam do tamanho do tick pra significar um intervalo
+  real) viraram checagens de `engine.data_simulada.hour/minute`, no mesmo estilo já usado dentro do
+  `loop.py` — elimina de vez qualquer contagem de ticks brutos do projeto.
+- Botões de velocidade do dashboard (`web/templates/index.html`): **1x** (tempo real, padrão ao
+  carregar — decisão do autor), **60x** ("pouco"), **360x** ("médio"), **1440x** ("muito"),
+  **21600x** ("muito muito", ~15 dias de jogo por minuto real).
 
-### Status: 🔴 Não iniciado
+### Verificado (2026-09-09)
+- 8h de trabalho contínuo = 160 PC ganhos, idêntico ao ritmo antigo (5 PC/tick de 15min).
+- 1h de metabolismo base = fome sobe entre 1.6 e 3.2, mesma faixa de antes (4 ticks de 15min ×
+  0.4-0.8).
+- Uma gravidez completa (2880 ticks novos) dura exatamente 48h simuladas — igual a antes.
+- Gatilhos de mercado (a cada 5h) e infraestrutura (1x/dia) disparam na cadência certa (testado com
+  1440 ticks = 1 dia: 5 disparos de mercado, 1 de infraestrutura).
+- Matemática de velocidade confirmada: a 600x, cada tick espera exatamente 0.1s real; 20 ticks
+  avançam exatamente 20 minutos de jogo.
+- **Custo de performance medido** (trade-off avisado no plano, não escondido): 1440 ticks (1 dia de
+  jogo) levam ~1.76s de parede nesta máquina — extrapolando, "rodar 1 milhão de ticks" (≈ 694 dias de
+  jogo) levaria ~20 minutos reais de CPU. Isso é 15× mais trabalho por hora de jogo do que antes
+  (inclui 15× mais escritas por NPC no SQLite a cada tick). Não otimizado nesta fase — fica
+  registrado como candidato a uma frente própria de performance/batching de escrita se um dia isso
+  incomodar na prática.
+
+### Fora de escopo desta fase
+- Otimização de I/O para velocidades muito altas (medido, não resolvido).
+- Movimentação visual contínua ("formigueiro" andando entre locais) — a engine não tem sistema de
+  posição interpolada; é uma feature própria, não parte de "consertar o relógio". Candidata natural
+  para quando a Frente 6 (mapa interativo) estiver em andamento.
+
+### Status: 🟢 Concluído — tempo 1:1 real implementado e verificado quantitativamente (não just "parece certo").
 
 ---
 
@@ -442,6 +465,20 @@ Rascunho de design, opções técnicas e perguntas em aberto em
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-09 (parte 6)** — **Frente 4 concluída: tempo 1:1 real (não a Abordagem 3 originalmente
+  planejada).** Autor rejeitou a ideia de esconder um portão de 15 minutos por baixo de um tick fino
+  de 1 minuto ("fingir" 1:1) e pediu o rebalanceamento total de verdade. Tick virou 1 minuto;
+  `config.json` recalculado em 3 categorias (taxas ÷15, 3 probabilidades por tick via fórmula
+  composta, 2 contadores de duração ×15) — nenhuma migração ingênua. Dinheiro do NPC virou `float`
+  (salário agora é pago em frações a cada minuto); pego e corrigido um bug de truncamento
+  (`int()`/`max(1,...)`) em `_executar_comer` que teria inflado o custo de refeição 3x. Gatilhos de
+  mercado/infraestrutura em `run_simulation.py` (antes contagem de ticks brutos) viraram checagem de
+  hora do relógio, no mesmo estilo já usado no resto do motor — não sobra nenhuma contagem de tick
+  bruto no projeto. Botões de velocidade do dashboard recalibrados (1x tempo real como padrão, até
+  21600x). **Verificado quantitativamente** (não só rodou sem erro): salário/hora, taxa de fome/hora
+  e duração de gravidez batem exatamente com o comportamento antigo; gatilhos de mercado/infra
+  disparam na cadência certa; matemática de velocidade confere. Custo de performance da nova
+  granularidade (15x mais ticks/hora) medido e documentado, não otimizado agora.
 - **2026-09-09 (parte 5)** — **Frente 3 iniciada: sistema de humor corrigido.** Autor optou por
   seguir direto com o achado já confirmado (humor travando em "Alegre") em vez de levantar novos
   exemplos agora. Criado `engine/mechanics/mood.py` (`NPCMoodManager`): humor virou um retrato

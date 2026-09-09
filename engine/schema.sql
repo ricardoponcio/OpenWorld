@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS npcs (
     localizacao_atual_id TEXT,
     acao_atual TEXT,
     energia REAL,
-    dinheiro_total_pc INTEGER,
+    dinheiro_total_pc REAL, -- fracionário desde a Frente 4 (pago a cada tick de 1 min)
     social REAL,
     fome REAL,
     saude INTEGER DEFAULT 100,

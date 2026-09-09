@@ -178,7 +178,7 @@ class DatabaseManager:
                         local_trabalho_id=r['local_trabalho_id'], localizacao_atual_id=r['localizacao_atual_id'], 
                         acao_atual=Acao(r['acao_atual']) if 'acao_atual' in r.keys() else Acao.OCIOSO, 
                         energia=float(r['energia']) if r['energia'] is not None else 100.0,
-                        dinheiro_total_pc=int(r['dinheiro_total_pc']) if r['dinheiro_total_pc'] is not None else 500,
+                        dinheiro_total_pc=float(r['dinheiro_total_pc']) if r['dinheiro_total_pc'] is not None else 500.0,
                         social=float(r['social']) if r['social'] is not None else 100.0,
                         fome=float(r['fome']) if r['fome'] is not None else 0.0,
                         saude=int(r['saude']) if 'saude' in r.keys() and r['saude'] is not None else 100,

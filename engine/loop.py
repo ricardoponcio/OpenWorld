@@ -29,7 +29,7 @@ class GameLoop:
         Executa um tick completo da simulação social, biológica e econômica do reino.
         """
         engine.tick_count += 1
-        engine.data_simulada += timedelta(minutes=15)
+        engine.data_simulada += timedelta(minutes=1)
         
         dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
         hora_formatada = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"

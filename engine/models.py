@@ -126,7 +126,7 @@ class NPC:
     
     # Necessidades e Estado
     energia: float = 100.0
-    dinheiro_total_pc: int = 500
+    dinheiro_total_pc: float = 500.0  # float desde a Frente 4: salário/custos pagos a cada tick de 1 min geram frações de PC
     social: float = 100.0
     fome: float = 0.0
     saude: int = 100 # 0 a 100
@@ -149,12 +149,15 @@ class NPC:
 
     @property
     def dinheiro_formatado(self) -> str:
-        """Converte o total de PC para o formato PO, PP, PC."""
-        po = self.dinheiro_total_pc // 1000
-        resto_pp = self.dinheiro_total_pc % 1000
+        """Converte o total de PC para o formato PO, PP, PC. Arredonda só na exibição —
+        o acúmulo fracionário (salário/custos pagos a cada tick de 1 min) fica intacto
+        internamente."""
+        total_inteiro = int(self.dinheiro_total_pc)
+        po = total_inteiro // 1000
+        resto_pp = total_inteiro % 1000
         pp = resto_pp // 100
         pc = resto_pp % 100
-        
+
         parts = []
         if po > 0: parts.append(f"{po}po")
         if pp > 0: parts.append(f"{pp}pp")

@@ -25,6 +25,8 @@ def get_db_connection():
 
 
 def formatar_moeda(total_pc):
+    # Arredonda só na exibição — dinheiro é fracionário desde a Frente 4 (pago a cada tick de 1 min)
+    total_pc = int(total_pc)
     po = total_pc // 1000
     resto_pp = total_pc % 1000
     pp = resto_pp // 100

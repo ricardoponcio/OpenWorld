@@ -34,7 +34,7 @@ class NPCLegacyManager:
         total_heranca = npc.dinheiro_total_pc
         if total_heranca > 0:
             if herdeiros:
-                parte = total_heranca // len(herdeiros)
+                parte = total_heranca / len(herdeiros)  # divisão exata — dinheiro é fracionário desde a Frente 4
                 nomes_herdeiros = ", ".join([h.nome for h in herdeiros])
                 for h in herdeiros:
                     h.dinheiro_total_pc += parte

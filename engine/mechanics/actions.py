@@ -83,10 +83,11 @@ class NPCActionManager:
                             num_dependentes += 1
 
         multiplicador = 1.0 + (multiplicador_por_dependente * num_dependentes)
-        custo_final = int(custo_base * multiplicador)
+        custo_final = custo_base * multiplicador
 
-        # Comer progressivo (a refeição inteira leva N ticks de 15 minutos, ver "parcelas_refeicao")
-        custo_do_tick = max(1, int(custo_final / parcelas_refeicao))
+        # Comer progressivo (a refeição inteira leva N ticks de 1 minuto, ver "parcelas_refeicao").
+        # Dinheiro é fracionário desde a Frente 4 — sem arredondar/forçar piso de 1 PC por tick.
+        custo_do_tick = custo_final / parcelas_refeicao
         fome_rec_do_tick = fome_rec_max / parcelas_refeicao
         energia_ganho_do_tick = cfg_get(cfg, "energia_ganho") / parcelas_refeicao
 

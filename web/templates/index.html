@@ -16,10 +16,11 @@
             </div>
             
             <div class="speed-controls">
-                <button class="speed-btn active" onclick="setSpeed(1)">1x</button>
-                <button class="speed-btn" onclick="setSpeed(2)">2x</button>
-                <button class="speed-btn" onclick="setSpeed(4)">4x</button>
-                <button class="speed-btn" onclick="setSpeed(8)">8x</button>
+                <button class="speed-btn active" onclick="setSpeed(1)" title="Tempo real: 1 min de jogo = 1 min real">1x</button>
+                <button class="speed-btn" onclick="setSpeed(60)" title="1 min real ≈ 1h de jogo">60x</button>
+                <button class="speed-btn" onclick="setSpeed(360)" title="1 min real ≈ 6h de jogo">360x</button>
+                <button class="speed-btn" onclick="setSpeed(1440)" title="1 min real ≈ 1 dia de jogo">1440x</button>
+                <button class="speed-btn" onclick="setSpeed(21600)" title="1 min real ≈ 15 dias de jogo">21600x</button>
             </div>
 
             <button id="pause-btn" onclick="togglePause()" style="margin-left:1rem; background: var(--accent); border:none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; box-shadow: 0 0 10px var(--accent);">⏸️</button>

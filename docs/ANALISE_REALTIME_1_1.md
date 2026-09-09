@@ -1,9 +1,15 @@
 # 🕒 Proposta de Implementação: Simulação em Tempo Real (Speed 1:1)
 
-> ✅ **Decisão registrada em 2026-09-09**: Abordagem 3 (Engrenagens Híbridas) aceita como caminho a
-> seguir. Esta análise continua válida como está — o acompanhamento de execução, dependências e o
-> vínculo com o novo "Modo Mestre de IA" (que usa este motor de tempo para avançar a simulação em
-> quantidade escolhida) estão registrados na **Frente 4** e **Frente 5** do [`ROADMAP.md`](ROADMAP.md).
+> ⚠️ **Decisão revista em 2026-09-09**: a Abordagem 3 (Engrenagens Híbridas) abaixo foi cogitada
+> primeiro, mas **rejeitada pelo autor** ao ver o plano concreto — o motor continuaria amarrado a
+> múltiplos de 15 minutos por baixo dos panos (só escondido um nível abaixo do tick visível), o que
+> "fingiria" o 1:1 em vez de implementá-lo de verdade. **A Abordagem 2 (Rebalanceamento Total),
+> descrita e descartada abaixo por risco de precisão, foi a que acabou implementada** — o tick virou
+> genuinamente 1 minuto e todo número de `config.json` foi recalculado (taxas ÷15, probabilidades por
+> fórmula composta, durações ×15) em vez de dividido ingenuamente. Na prática o "risco de precisão"
+> citado abaixo só se manifestou num único lugar concreto (dinheiro, que virou `float`), não no
+> sistema todo. Detalhes de execução e verificação estão na **Frente 4** do [`ROADMAP.md`](ROADMAP.md);
+> o vínculo com o "Modo Mestre de IA" está na **Frente 5**.
 
 Este documento descreve a análise técnica e as possíveis abordagens para adaptar o ecossistema do *OpenWorld Engine* a uma proporção de tempo 1:1 com a vida real (onde 1 minuto na vida real equivale a 1 minuto no jogo).
 Este formato é ideal para rodar o Dashboard como "pano de fundo" imersivo em uma sessão física de RPG de mesa, sincronizando as horas do jogo com a duração da aventura real.
