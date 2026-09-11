@@ -1,13 +1,19 @@
-from flask import Blueprint, render_template, jsonify, send_file
+from flask import Blueprint, render_template, jsonify, send_file, send_from_directory, abort, request
 import numpy as np
 import io
 import os
 import json
-from web.helpers import render_npz_map_to_bytes, obter_manifesto, obter_continente_e_caminhos
+import math
+from web.helpers import render_npz_map_to_bytes, render_npz_array, obter_manifesto
+from cartographer.config import CARTOGRAPHER_CONFIG
+from cartographer.tiles.render import obter_cartografo, config_hash_atual, oitavas_extra_por_zoom
+from config import cfg_get
 
 composed_bp = Blueprint('composed', __name__)
 
 MAPA_COMPOSTO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
+FEATURES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'features'))
+CIDADES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'cidades'))
 
 # Cache em memória autoinvalidável por mtime do arquivo para evitar I/O redundante de disco
 _MAP_DATA_CACHE = {}
@@ -30,6 +36,39 @@ def obter_mapa_do_cache(caminho_arquivo):
     except Exception as e:
         print(f"[CACHE] Erro ao carregar mapa {caminho_abs}: {e}")
         return None
+
+# Cache em memória das janelas de continente/cidade geradas sob demanda (Fase 0.5):
+# substitui os .npz de database/continentes|cidades. Chave inclui config_hash — muda a
+# config, o cache velho vira lixo automaticamente (armadilha nº 16 do plano).
+_JANELA_CACHE = {}
+
+
+def _gerar_janela_com_cache(cache_key, x0, y0, x1, y1, largura, altura):
+    """Gera (ou reaproveita do cache em memória do processo) a janela de mundo pedida.
+    Retorna (dados, mundo_px_por_img_px) ou (None, None) se o mundo ainda não existe."""
+    cartografo = obter_cartografo()
+    if cartografo is None:
+        return None, None
+
+    chave = (cache_key, config_hash_atual())
+    if chave in _JANELA_CACHE:
+        return _JANELA_CACHE[chave]
+
+    mundo_px_por_img_px = (x1 - x0) / largura
+    # Escolhe oitavas extras pela densidade efetiva da janela (px de imagem por px de
+    # mundo), reaproveitando a mesma curva de LOD por zoom do servidor de tiles — quanto
+    # mais ampliado, mais oitavas, nunca reescalando o que já foi decidido (F3).
+    densidade = largura / max(1e-6, (x1 - x0))
+    z_equivalente = max(0, round(math.log2(max(densidade, 1e-6))))
+    oitavas_extra = oitavas_extra_por_zoom(z_equivalente)
+
+    dados = cartografo.gerar_janela(x0, y0, x1, y1, largura, altura, oitavas_extra=oitavas_extra)
+    resultado = (dados, mundo_px_por_img_px)
+    if len(_JANELA_CACHE) >= 8:  # teto simples — é só pra evitar hover recalcular a cada pixel
+        _JANELA_CACHE.pop(next(iter(_JANELA_CACHE)))
+    _JANELA_CACHE[chave] = resultado
+    return resultado
+
 
 # Removed /mapa_composto route
 
@@ -89,21 +128,27 @@ def api_mapa_composto_info(x, y):
 @composed_bp.route('/api/continentes')
 def api_continentes():
     """
-    Retorna a lista de continentes do world_manifest.json indicando o status
-    de geração do arquivo NPZ de zoom para cada um.
+    Retorna a lista de continentes do world_manifest.json. Fase 0: a imagem de zoom do
+    continente é gerada sob demanda por `gerar_janela()` (não mais um `.npz` pré-gerado),
+    então todo continente listado já está "pronto" — a geração acontece na primeira
+    requisição de `/api/continente/<uuid>/imagem` e é rápida (~250ms sem cache).
     """
     try:
         manifest = obter_manifesto()
         if not manifest:
-            return jsonify({"continentes": []})
-            
+            # Fase 1.5: o early-return devolvia só "continentes", forçando o frontend a
+            # tratar esse caso como um formato de resposta diferente do normal. Devolve
+            # sempre a mesma forma, com os defaults de config novos da Fase 0.
+            return jsonify({
+                "continentes": [],
+                "dimensao_global": cfg_get(CARTOGRAPHER_CONFIG, "mundo_tiles_por_lado") * cfg_get(CARTOGRAPHER_CONFIG, "tile_size_px"),
+                "janela_padding_px": cfg_get(CARTOGRAPHER_CONFIG, "janela_padding_px"),
+                "tile_zoom_maximo_ui": cfg_get(CARTOGRAPHER_CONFIG, "tile_zoom_maximo_ui"),
+                "mapa_features_tooltip_zoom_min": cfg_get(CARTOGRAPHER_CONFIG, "mapa_features_tooltip_zoom_min"),
+            })
+
         continentes = []
         for c in manifest.get("continentes", []):
-            slug = c["nome"].lower().replace(" ", "_")
-            npz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'continentes'))
-            npz_path = os.path.join(npz_dir, f"mapa_{slug}.npz")
-            gerado = os.path.exists(npz_path)
-            
             continentes.append({
                 "uuid": c["uuid"],
                 "nome": c["nome"],
@@ -111,48 +156,75 @@ def api_continentes():
                 "biomas_predominantes": c.get("biomas_predominantes", []),
                 "bounding_box": c.get("bounding_box", {}),
                 "cidades": c.get("cidades", []),
-                "gerado": gerado
+                "gerado": True
             })
-            
-        return jsonify({"continentes": continentes})
+
+        return jsonify({
+            "continentes": continentes,
+            # Tamanho real do mapa mundi (lado do quadrado, em pixels) — vem do manifesto,
+            # não é mais hardcoded no frontend (mesma lição da Frente 1: ver docs/ROADMAP.md).
+            "dimensao_global": manifest.get("dimensao_global", 768),
+            # A imagem de zoom do continente cobre bounding_box + essa margem de cada lado
+            # (Fase 0: `_janela_continente` usa o mesmo padding) — o frontend precisa saber
+            # disso pra posicionar o overlay nos limites certos (Frente 6, achado de bug).
+            "janela_padding_px": cfg_get(CARTOGRAPHER_CONFIG, "janela_padding_px"),
+            # Zoom máximo do Leaflet (Fase 0.6): decisão de custo/UI, não limite técnico —
+            # o raster pode ser gerado em qualquer zoom (`gerar_janela` é resolução-livre).
+            "tile_zoom_maximo_ui": cfg_get(CARTOGRAPHER_CONFIG, "tile_zoom_maximo_ui"),
+            # Fase 3: acima deste zoom, o nome da cidade fica permanentemente visível
+            # (sem precisar de hover) — antes um número solto no JS.
+            "mapa_features_tooltip_zoom_min": cfg_get(CARTOGRAPHER_CONFIG, "mapa_features_tooltip_zoom_min")
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _janela_continente(continente, manifest):
+    """Bbox do continente + padding, em coordenada de MUNDO, e a resolução de imagem
+    proporcional ao aspecto real (Fase 0.5 — isotropia sai de graça: nunca força quadrado)."""
+    bbox = continente["bounding_box"]
+    padding = cfg_get(CARTOGRAPHER_CONFIG, "janela_padding_px")
+    dimensao_global = manifest.get("dimensao_global", 768)
+    x0 = max(0, bbox["min_x"] - padding)
+    y0 = max(0, bbox["min_y"] - padding)
+    x1 = min(dimensao_global, bbox["max_x"] + padding)
+    y1 = min(dimensao_global, bbox["max_y"] + padding)
+
+    alvo_maior_lado_px = cfg_get(CARTOGRAPHER_CONFIG, "imagem_janela_resolucao_alvo_px")
+    largura_mundo, altura_mundo = max(1.0, x1 - x0), max(1.0, y1 - y0)
+    fator = alvo_maior_lado_px / max(largura_mundo, altura_mundo)
+    largura_img = max(1, int(round(largura_mundo * fator)))
+    altura_img = max(1, int(round(altura_mundo * fator)))
+    return x0, y0, x1, y1, largura_img, altura_img
 
 
 @composed_bp.route('/api/continente/<uuid>/imagem')
 def api_continente_imagem(uuid):
     """
-    Retorna a imagem renderizada do continente. Se o arquivo NPZ de zoom do continente
-    ainda não existir, ele é gerado dinamicamente sob demanda (ROI Zoom) de forma transparente!
+    Retorna a imagem renderizada do continente: janela de mundo (bbox + padding) avaliada
+    por `TileCartographer.gerar_janela()` sob demanda — Fase 0, não é mais um recorte de
+    `.npz` pré-gerado (a fonte antiga usava índice local, P0.4).
     """
     try:
-        continente, npz_path, manifest = obter_continente_e_caminhos(uuid)
+        manifest = obter_manifesto()
+        if not manifest:
+            return jsonify({"error": "Mundo não gerado"}), 404
+        continente = next((c for c in manifest.get("continentes", []) if c["uuid"] == uuid), None)
         if not continente:
             return jsonify({"error": "Continente não encontrado"}), 404
-            
-        # Geração dinâmica sob demanda se não existir
-        if not os.path.exists(npz_path):
-            from cartographer.continents.roi_zoom import ROIZoomGenerator
-            from cartographer.config import CARTOGRAPHER_CONFIG
-            npz_dir = os.path.dirname(npz_path)
-            global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
-            manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
 
-            # Usando uma resolução amigável para a web (1200x1200px) para geração ultra veloz em tempo real.
-            # config vem do único config.json do projeto — antes era um dict de 2 chaves
-            # hardcoded aqui mesmo, mais uma cópia de nivel_mar/nivel_montanha.
-            generator = ROIZoomGenerator(
-                manifest_path=manifest_path,
-                npz_path=global_npz_path,
-                output_dir=npz_dir,
-                target_resolution=1200,
-                seed=manifest.get("seed", 1337),
-                config=CARTOGRAPHER_CONFIG
-            )
-            generator.generate(uuid)
-            
-        img_io, mimetype = render_npz_map_to_bytes(npz_path)
-        return send_file(img_io, mimetype=mimetype)
+        x0, y0, x1, y1, largura_img, altura_img = _janela_continente(continente, manifest)
+        dados, mundo_px_por_img_px = _gerar_janela_com_cache(
+            f"continente:{uuid}", x0, y0, x1, y1, largura_img, altura_img)
+        if dados is None:
+            return jsonify({"error": "Mundo não gerado"}), 404
+
+        rgb = render_npz_array(dados, mundo_px_por_img_px=mundo_px_por_img_px)
+        img_io = io.BytesIO()
+        from PIL import Image
+        Image.fromarray(rgb).save(img_io, format='PNG')
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/png')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -160,14 +232,20 @@ def api_continente_imagem(uuid):
 @composed_bp.route('/api/continente/<uuid>/info/<int:x>/<int:y>')
 def api_continente_info(uuid, x, y):
     """
-    Retorna detalhes de bioma, altitude, temperatura e umidade da coordenada do mapa de zoom do continente.
+    Retorna detalhes de bioma, altitude, temperatura e umidade da coordenada (x,y) da
+    imagem retornada por `/api/continente/<uuid>/imagem` — mesma janela, reaproveitada do
+    cache em memória do processo (`_gerar_janela_com_cache`) para não regerar a cada hover.
     """
     try:
-        continente, npz_path, _ = obter_continente_e_caminhos(uuid)
+        manifest = obter_manifesto()
+        if not manifest:
+            return jsonify({"error": "Mundo não gerado"}), 404
+        continente = next((c for c in manifest.get("continentes", []) if c["uuid"] == uuid), None)
         if not continente:
             return jsonify({"error": "Continente não encontrado"}), 404
-            
-        mapa = obter_mapa_do_cache(npz_path)
+
+        wx0, wy0, wx1, wy1, largura_img, altura_img = _janela_continente(continente, manifest)
+        mapa, _ = _gerar_janela_com_cache(f"continente:{uuid}", wx0, wy0, wx1, wy1, largura_img, altura_img)
         if mapa is None:
             return jsonify({"error": "Zoom do continente não gerado"}), 404
         height, width, _ = mapa.shape
@@ -203,33 +281,66 @@ def api_continente_info(uuid, x, y):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _encontrar_cidade(manifest, nome):
+    needle = nome.strip().lower()
+    for cont in manifest.get("continentes", []):
+        for cid in cont.get("cidades", []):
+            if cid["nome"].lower() == needle:
+                return cid
+    return None
+
+
+def _janela_cidade(cidade, manifest):
+    """Bbox de mundo (raio fixo ao redor do pixel-âncora) + resolução de imagem alvo
+    para a janela da cidade — mesma janela usada por `/imagem` e `/entities`, pra
+    bbox e imagem nunca divergirem (Fase 2.1)."""
+    raio = cfg_get(CARTOGRAPHER_CONFIG, "cidade_janela_raio_px")
+    cx, cy = cidade["x_global"], cidade["y_global"]
+    dimensao_global = manifest.get("dimensao_global", 768)
+    x0, y0 = max(0, cx - raio), max(0, cy - raio)
+    x1, y1 = min(dimensao_global, cx + raio), min(dimensao_global, cy + raio)
+
+    alvo = cfg_get(CARTOGRAPHER_CONFIG, "imagem_janela_resolucao_alvo_px")
+    largura_mundo, altura_mundo = max(1.0, x1 - x0), max(1.0, y1 - y0)
+    fator = alvo / max(largura_mundo, altura_mundo)
+    largura_img = max(1, int(round(largura_mundo * fator)))
+    altura_img = max(1, int(round(altura_mundo * fator)))
+    return x0, y0, x1, y1, largura_img, altura_img
+
+
 @composed_bp.route('/api/cidade/<nome>/imagem')
 def api_cidade_imagem(nome):
     """
-    Retorna a imagem renderizada da cidade em zoom. Se o arquivo NPZ da cidade
-    ainda não existir, ele é gerado dinamicamente sob demanda.
+    Retorna a imagem renderizada da vizinhança da cidade: janela de mundo centrada em
+    `(x_global, y_global)` com raio `cidade_janela_raio_px`, avaliada por
+    `TileCartographer.gerar_janela()` sob demanda — Fase 0, não é mais um recorte de
+    `.npz` pré-gerado (a fonte antiga usava índice local, P0.4).
+
+    ⚠️ Isto continua sendo o paliativo da Seção 2.1: a cidade é sub-pixel nesta escala de
+    mundo (1 px ≈ 15,8 km) — esta imagem mostra o TERRENO ao redor da cidade, não a cidade
+    em si (ruas/muralha/edifícios). Isso só existe a partir da Fase 4 (GeoJSON vetorial).
     """
     try:
-        slug = nome.lower().replace(" ", "_")
-        npz_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'cidades'))
-        npz_path = os.path.join(npz_dir, f"mapa_{slug}.npz")
-        
-        # Geração dinâmica sob demanda se não existir
-        if not os.path.exists(npz_path):
-            from cartographer.cities.city_roi_zoom import CityROIZoomGenerator
-            global_npz_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'mapa_composto.npz'))
-            manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'world_manifest.json'))
-            
-            generator = CityROIZoomGenerator(
-                manifest_path=manifest_path,
-                npz_path=global_npz_path,
-                output_dir=npz_dir,
-                target_resolution=800,
-            )
-            generator.generate(nome)
-            
-        img_io, mimetype = render_npz_map_to_bytes(npz_path)
-        return send_file(img_io, mimetype=mimetype)
+        manifest = obter_manifesto()
+        if not manifest:
+            return jsonify({"error": "Mundo não gerado"}), 404
+        cidade = _encontrar_cidade(manifest, nome)
+        if not cidade:
+            return jsonify({"error": "Cidade não encontrada"}), 404
+
+        x0, y0, x1, y1, largura_img, altura_img = _janela_cidade(cidade, manifest)
+
+        dados, mundo_px_por_img_px = _gerar_janela_com_cache(
+            f"cidade:{nome.lower()}", x0, y0, x1, y1, largura_img, altura_img)
+        if dados is None:
+            return jsonify({"error": "Mundo não gerado"}), 404
+
+        rgb = render_npz_array(dados, mundo_px_por_img_px=mundo_px_por_img_px)
+        img_io = io.BytesIO()
+        from PIL import Image
+        Image.fromarray(rgb).save(img_io, format='PNG')
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/png')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -237,40 +348,192 @@ def api_cidade_imagem(nome):
 def api_cidade_entities(nome):
     """
     Retorna locais e NPCs para serem renderizados sobre o mapa da cidade na UI.
+
+    Fase 2.1 (P0.3): `locais.coordenadas` agora é pixel de MUNDO (Seção 2.3), não mais
+    um par 5-35 numa grade local sem relação com o mapa real. O frontend precisa saber
+    a janela (bbox em mundo) e a resolução em que `/api/cidade/<nome>/imagem` foi
+    renderizada pra poder converter mundo -> pixel de imagem (mesma fórmula da Seção
+    2.3: `ix = (x-mnx)/(mxx-mnx)*w`) — por isso a bbox e a resolução vêm aqui, e não
+    são mais um número solto no JS.
     """
     try:
         from engine.database import DatabaseManager
         import os
         import sqlite3
         import json
-        
+
+        manifest = obter_manifesto()
+        if not manifest:
+            return jsonify({"locais": [], "npcs": [], "bbox": None})
+        cidade_manifesto = _encontrar_cidade(manifest, nome)
+
         db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'openworld.db'))
         if not os.path.exists(db_path):
-            return jsonify({"locais": [], "npcs": []})
-            
+            return jsonify({"locais": [], "npcs": [], "bbox": None})
+
         db = DatabaseManager(db_path)
         conn = sqlite3.connect(db.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         cidade_row = cursor.execute('SELECT id FROM cidades WHERE nome = ?', (nome,)).fetchone()
         if not cidade_row:
             conn.close()
-            return jsonify({"locais": [], "npcs": []})
-            
+            return jsonify({"locais": [], "npcs": [], "bbox": None})
+
         cidade_id = cidade_row['id']
-        
+
         locais = []
         for r in cursor.execute('SELECT id, nome, tipo, categoria, coordenadas FROM locais WHERE cidade_id = ?', (cidade_id,)).fetchall():
             d = dict(r)
             d['coordenadas'] = json.loads(d['coordenadas']) if d['coordenadas'] else [0,0]
             locais.append(d)
-            
+
         npcs = []
         for r in cursor.execute('SELECT id, nome, profissao, genero, localizacao_atual_id, acao_atual FROM npcs WHERE cidade_id = ?', (cidade_id,)).fetchall():
             npcs.append(dict(r))
-            
+
         conn.close()
-        return jsonify({"locais": locais, "npcs": npcs})
+
+        bbox = None
+        if cidade_manifesto:
+            x0, y0, x1, y1, largura_img, altura_img = _janela_cidade(cidade_manifesto, manifest)
+            bbox = {"min_x": x0, "min_y": y0, "max_x": x1, "max_y": y1,
+                    "largura_img": largura_img, "altura_img": altura_img}
+
+        return jsonify({"locais": locais, "npcs": npcs, "bbox": bbox})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@composed_bp.route('/tiles/<int:z>/<int:x>/<int:y>.png')
+def get_tile(z, x, y):
+    """
+    Serve o tile (z,x,y) do Mapa Live. Fase 0 (docs/PLANO_EVOLUCAO_V2.md): não é mais um
+    recorte de mosaico pré-renderizado — é `TileCartographer.gerar_janela()` avaliada na
+    bbox de mundo daquele tile, gerada na primeira vista e servida do cache em disco depois
+    (chave = config_hash do manifesto, ver cartographer/tiles/render.py). Tile fora do
+    mundo (manifesto ausente/incompleto) = 404; o Leaflet trata isso mostrando aquele
+    quadrado em branco, sem quebrar o resto do mapa.
+    """
+    from cartographer.tiles.render import renderizar_tile_png
+    import io as _io
+    png_bytes = renderizar_tile_png(z, x, y)
+    if png_bytes is None:
+        abort(404)
+    return send_file(_io.BytesIO(png_bytes), mimetype='image/png')
+
+
+# Cache em memória dos GeoJSON de camada, autoinvalidável por mtime (mesmo padrão de
+# `obter_mapa_do_cache`). Cada camada é um arquivo pequeno (< algumas centenas de
+# features nesta fase) — cache é só pra não reabrir/reparsear o arquivo a cada request.
+_FEATURES_CACHE = {}
+
+
+def _carregar_geojson_cache(caminho):
+    if not os.path.exists(caminho):
+        return {"type": "FeatureCollection", "features": []}
+    mtime = os.path.getmtime(caminho)
+    cache = _FEATURES_CACHE.get(caminho)
+    if cache and cache[0] == mtime:
+        return cache[1]
+    with open(caminho, "r", encoding="utf-8") as f:
+        dados = json.load(f)
+    _FEATURES_CACHE[caminho] = (mtime, dados)
+    return dados
+
+
+# Fase 4 (P2.2): geometria interna de cidade (ruas, quarteirões, lotes, edifícios,
+# muralha) — um arquivo por cidade em `database/cidades/<slug>.geojson`, agregados
+# aqui por `properties.camada` (não por arquivo) pra virar UMA camada Leaflet só
+# ("rua" mostra as ruas de todas as cidades visíveis no bbox, não uma por cidade).
+CAMADAS_INTERNAS_CIDADE = {"rua", "quarteirao", "lote", "edificio", "muralha", "torre", "portao", "praca"}
+
+
+def _listar_arquivos_geojson_cidades():
+    if not os.path.isdir(CIDADES_DIR):
+        return []
+    return [os.path.join(CIDADES_DIR, nome) for nome in os.listdir(CIDADES_DIR) if nome.endswith(".geojson")]
+
+
+def _bbox_geometria(geometry):
+    """Bbox em MUNDO (min_x,min_y,max_x,max_y) de qualquer geometry GeoJSON — desfaz
+    [lng,lat]=[x_mundo,-y_mundo] (Seção 2.3) ponto a ponto, não só pro caso Point."""
+    def achatar(coords):
+        if not coords:
+            return
+        if isinstance(coords[0], (int, float)):
+            yield coords
+        else:
+            for c in coords:
+                yield from achatar(c)
+
+    xs, ys = [], []
+    for lng, lat in achatar(geometry.get("coordinates")):
+        xs.append(lng)
+        ys.append(-lat)
+    if not xs:
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _bbox_intersecta(a, b):
+    return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
+
+
+def _coletar_features_camada(camada):
+    if camada in CAMADAS_INTERNAS_CIDADE:
+        feats = []
+        for caminho in _listar_arquivos_geojson_cidades():
+            geojson = _carregar_geojson_cache(caminho)
+            feats.extend(f for f in geojson.get("features", []) if f.get("properties", {}).get("camada") == camada)
+        return feats
+    caminho = os.path.join(FEATURES_DIR, f"{camada}.geojson")
+    return _carregar_geojson_cache(caminho).get("features", [])
+
+
+@composed_bp.route('/api/mapa/features')
+def api_mapa_features():
+    """
+    Fase 3 (P2.1): camada vetorial sobre o Leaflet — `GET
+    /api/mapa/features?camadas=cidades,pois&bbox=x0,y0,x1,y1&z=<n>`. Devolve um dict
+    `{camada: FeatureCollection}` (uma coleção por camada, não uma única mesclada — o
+    frontend cria um `L.geoJSON` por camada para o `L.control.layers` funcionar).
+
+    Filtra por `properties.zoom_min <= z` (cidade grande aparece de longe, pequena só
+    perto — Fase 1.4 definiu `tamanho`, esta fase usa) e por interseção com `bbox`, se
+    fornecida. Camada sem arquivo em `database/features/<camada>.geojson` ainda (ex.:
+    `estradas`, `pois`, `fronteiras` — nenhuma fase até aqui gera esse dado) devolve
+    `FeatureCollection` vazia, não erro.
+    """
+    try:
+        camadas = [c.strip() for c in request.args.get('camadas', 'cidades').split(',') if c.strip()]
+        z = request.args.get('z', default=0, type=int)
+
+        bbox = None
+        bbox_str = request.args.get('bbox')
+        if bbox_str:
+            try:
+                x0, y0, x1, y1 = (float(v) for v in bbox_str.split(','))
+                bbox = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+            except (ValueError, TypeError):
+                bbox = None  # bbox malformada — ignora o filtro em vez de quebrar a resposta
+
+        resultado = {}
+        for camada in camadas:
+            feats = []
+            for feat in _coletar_features_camada(camada):
+                props = feat.get("properties", {})
+                if props.get("zoom_min", 0) > z:
+                    continue
+                if bbox is not None:
+                    bbox_feat = _bbox_geometria(feat.get("geometry") or {})
+                    if bbox_feat is not None and not _bbox_intersecta(bbox_feat, bbox):
+                        continue
+                feats.append(feat)
+
+            resultado[camada] = {"type": "FeatureCollection", "features": feats}
+
+        return jsonify(resultado)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

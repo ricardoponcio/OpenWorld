@@ -14,17 +14,19 @@ class TectonicsProcessor:
     """
 
     @staticmethod
-    def calculate_distance_grid(grid_x, grid_y, cx, cy, config, seed=0):
+    def calculate_distance_grid(grid_x, grid_y, cx, cy, config, seed=0, oitavas_extra=0):
         """
         Calcula a distância euclidiana de cada ponto da grade ao centro (cx, cy)
         aplicando Domain Warping de alta intensidade para distorcer a forma circular.
+
+        `oitavas_extra` (Fase 0.3, F3): LOD por zoom — soma às 3 oitavas base do warp.
         """
         scale = cfg_get(config, "tectonica_warp_escala")
         amplitude = cfg_get(config, "tectonica_warp_amplitude")
 
         # Geramos ruído Perlin vetorizado normalizado na faixa [0, 1]
-        noise_x = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=7777)
-        noise_y = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3, seed=seed, offset=9999)
+        noise_x = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3 + oitavas_extra, seed=seed, offset=7777)
+        noise_y = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale, octaves=3 + oitavas_extra, seed=seed, offset=9999)
 
         # Trazemos o ruído para a faixa [-1, 1] para aplicar distorção bidirecional (Domain Warping)
         warp_x = (noise_x * 2.0 - 1.0) * amplitude
@@ -64,9 +66,13 @@ class TectonicsProcessor:
         return relevo_perfil
 
     @staticmethod
-    def calculate_geological_profile(perfil_nome, relevo_base, grid_x, grid_y, seed, config):
+    def calculate_geological_profile(perfil_nome, relevo_base, grid_x, grid_y, seed, config, oitavas_extra=0):
         """
         Aplica o modelo matemático do perfil geológico especificado.
+
+        `oitavas_extra` (Fase 0.3, F3): LOD por zoom — soma às 3 oitavas base do ruído
+        usado no perfil "Arquipélago". Os demais perfis (Alpino/Platô/Erosivo) derivam
+        de `relevo_base`, que já recebeu `oitavas_extra` em `generate_tectonic_base`.
         """
         if perfil_nome == "Alpino":
             relevo_perfil = np.power(relevo_base, 1.5)
@@ -82,7 +88,7 @@ class TectonicsProcessor:
             escala = cfg_get(config, "perfil_arquipelago_escala")
             inclinacao = cfg_get(config, "perfil_arquipelago_inclinacao_sigmoide")
             centro = cfg_get(config, "perfil_arquipelago_centro")
-            ruido_arqui = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=escala, octaves=3, seed=seed, offset=8888)
+            ruido_arqui = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=escala, octaves=3 + oitavas_extra, seed=seed, offset=8888)
             # Função sigmoide contínua e suave (em vez de degrau booleano descontínuo).
             # Isso cria encostas e praias realistas e remove os "aquedutos de concreto" de quina seca no zoom.
             fator_arqui = 0.1 + 0.9 / (1.0 + np.exp(-inclinacao * (ruido_arqui - centro)))

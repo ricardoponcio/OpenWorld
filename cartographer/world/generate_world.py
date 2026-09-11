@@ -1,4 +1,5 @@
 import numpy as np
+import json
 import os
 import sys
 
@@ -12,12 +13,32 @@ from cartographer.world.world_manager import WorldManager
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
 
+MANIFEST_PATH = "database/world_manifest.json"
 
-def gerar_mundo_composto():
+
+def gerar_mundo_composto(replanejar=False):
     # 2. Instancia o Gerente
     # Tile size 256 é um padrão ouro para performance/detalhe
     # Usando uma semente inteira determinística
-    manager = WorldManager(tile_size=256, seed=1337, config=CARTOGRAPHER_CONFIG)
+
+    # P0.5: reusa o layout de continentes já persistido no manifesto em vez de
+    # rechamar a IA a cada regeração — é o que torna o mundo reproduzível
+    # (Gate 1, item 5). Só replaneja quando não há manifesto ainda ou quando
+    # pedido explicitamente com --replanejar.
+    layout_continentes = None
+    if not replanejar and os.path.exists(MANIFEST_PATH):
+        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+            manifest_existente = json.load(f)
+        layout_continentes = manifest_existente.get("layout_continentes")
+        if layout_continentes:
+            print("=== Reusando layout de continentes já persistido no manifesto ===")
+        else:
+            print("=== Manifesto existente não tem 'layout_continentes' — replanejando ===")
+
+    manager = WorldManager(
+        tile_size=256, seed=1337, config=CARTOGRAPHER_CONFIG,
+        layout_continentes=layout_continentes,
+    )
 
     print("=== Gerando Região Composta ===")
 
@@ -43,4 +64,4 @@ def gerar_mundo_composto():
     print("O arquivo 'mapa_composto.npz' e o 'world_manifest.json' estão prontos para uso.")
 
 if __name__ == "__main__":
-    gerar_mundo_composto()
+    gerar_mundo_composto(replanejar="--replanejar" in sys.argv)

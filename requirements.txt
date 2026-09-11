@@ -5,3 +5,4 @@ numpy
 noise
 pillow
 scipy
+pytest

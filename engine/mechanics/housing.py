@@ -18,7 +18,7 @@ import random
 import json
 from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
-from ..utils import NPCUtils
+from ..utils import NPCUtils, GeoUtils
 from ..config_loader import cfg_get
 
 class NPCHousingManager:
@@ -33,13 +33,16 @@ class NPCHousingManager:
             return False
 
         cfg_urbano = cfg_get(engine.config, "geracao_urbana")
-        grid_min = cfg_get(cfg_urbano, "grid_min_px")
-        grid_max = cfg_get(cfg_urbano, "grid_max_px")
+        raio = cfg_get(cfg_urbano, "locais_raio_px")
+        nivel_mar = cfg_get(engine.config, "cartografia", "nivel_mar")
+
+        cidade = engine.cidades.get(n1.cidade_id, {})
+        cx, cy = cidade.get("x_global", 0), cidade.get("y_global", 0)
 
         nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
-        # Alocação simples numa grade local urbana (mesma grade usada em builder/populate.py)
-        x = random.randint(grid_min, grid_max)
-        y = random.randint(grid_min, grid_max)
+        # Fase 2.1 (P0.3): coordenada de MUNDO ao redor da própria cidade do NPC, não
+        # mais uma grade local fake — mesma convenção de builder/populate.py.
+        x, y = GeoUtils.sortear_ponto_em_terra(cx, cy, raio, nivel_mar)
 
         sobrenome = n1.nome.split()[-1]
 

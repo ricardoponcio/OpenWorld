@@ -15,7 +15,7 @@ function switchView(btn, id) {
     activeView = id;
     
     const eventLog = document.getElementById('event-log');
-    if (id === 'npc-view' || id === 'mestre-view') {
+    if (id === 'npc-view' || id === 'mestre-view' || id === 'mapa-leaflet-view') {
         eventLog.style.display = 'none';
     } else {
         eventLog.style.display = 'block';
@@ -23,6 +23,8 @@ function switchView(btn, id) {
 
     if (id === 'mestre-view') {
         carregarHistoricoMestre();
+    } else if (id === 'mapa-leaflet-view') {
+        initMapaLeaflet();
     } else {
         update();
     }

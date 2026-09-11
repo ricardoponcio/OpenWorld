@@ -16,6 +16,7 @@ import random
 import json
 from ..database import DatabaseManager
 from ..config_loader import cfg_get, carregar_config_global
+from ..utils import GeoUtils
 
 
 class MestreManager:
@@ -75,31 +76,49 @@ class MestreManager:
         lista de strings descrevendo o que foi feito (para log/exibição)."""
         config = carregar_config_global()
         cfg_urbano = cfg_get(config, "geracao_urbana")
-        grid_min, grid_max = cfg_get(cfg_urbano, "grid_min_px"), cfg_get(cfg_urbano, "grid_max_px")
+        raio = cfg_get(cfg_urbano, "locais_raio_px")
+        nivel_mar = cfg_get(config, "cartografia", "nivel_mar")
 
         resultados = []
         novo_id_criado = None
 
         with db.connection() as conn:
             cursor = conn.cursor()
+
+            # Fase 2.1 (P0.3): novo local do Mestre nasce em coordenada de MUNDO, ao
+            # redor da cidade atualmente simulada — não mais uma grade local fake.
+            # `cidade_simulada` é a única cidade com NPCs vivos hoje (Fase 2.2), então é
+            # a âncora natural até o Mestre ganhar consciência de mais de uma cidade.
+            cidade_id_simulada = db.carregar_meta("cidade_simulada")
+            cx_cidade, cy_cidade = 0.0, 0.0
+            if cidade_id_simulada:
+                row_cidade = cursor.execute(
+                    "SELECT x_global, y_global FROM cidades WHERE id = ?", (cidade_id_simulada,)
+                ).fetchone()
+                if row_cidade:
+                    cx_cidade, cy_cidade = row_cidade["x_global"], row_cidade["y_global"]
+
             for acao in acoes:
                 d = acao.get("dados", acao)
                 cmd = acao.get("comando")
 
                 if cmd == "CRIAR_LOCAL":
-                    existentes = [tuple(json.loads(r["coordenadas"])) for r in cursor.execute("SELECT coordenadas FROM locais").fetchall()]
-                    cx, cy = random.randint(grid_min, grid_max), random.randint(grid_min, grid_max)
-                    while (cx, cy) in existentes:
-                        cx, cy = random.randint(grid_min, grid_max), random.randint(grid_min, grid_max)
+                    existentes = {tuple(json.loads(r["coordenadas"])) for r in cursor.execute("SELECT coordenadas FROM locais").fetchall()}
+                    ponto = GeoUtils.sortear_ponto_em_terra(cx_cidade, cy_cidade, raio, nivel_mar)
+                    tentativa = 0
+                    while tuple(ponto) in existentes and tentativa < 10:
+                        ponto = GeoUtils.sortear_ponto_em_terra(cx_cidade, cy_cidade, raio, nivel_mar)
+                        tentativa += 1
 
                     novo_id_criado = f"loc_mestre_{random.randint(0, 999999)}"
                     cursor.execute(
-                        "INSERT INTO locais (id, nome, tipo, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base) "
-                        "VALUES (?, ?, ?, ?, ?, ?, 1, 100, 5, 100)",
+                        "INSERT INTO locais (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, 1, 100, 5, 100)",
                         (novo_id_criado, d.get("nome", "Local Indefinido"), d.get("tipo", "Social"),
-                         d.get("categoria", "generic"), d.get("descricao", ""), json.dumps([cx, cy]))
+                         int(cidade_id_simulada) if cidade_id_simulada else None,
+                         d.get("categoria", "generic"), d.get("descricao", ""), json.dumps(ponto))
                     )
-                    resultados.append(f"🏗️ Criado: {d.get('nome')} em ({cx}, {cy})")
+                    resultados.append(f"🏗️ Criado: {d.get('nome')} em ({ponto[0]}, {ponto[1]})")
 
                 elif cmd == "REATRIBUIR_NPC":
                     alvo = acao.get("id")

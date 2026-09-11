@@ -36,19 +36,37 @@ class ClimateProcessor:
         return np.clip(temp_base, 0.0, 1.0)
 
     @staticmethod
-    def calculate_humidity(heightmap, mod_umidade, config, nivel_mar=None):
+    def calculate_humidity(heightmap, mod_umidade, config, nivel_mar=None, grid_x=None, grid_y=None, seed=0):
         """
-        Calcula o índice de umidade baseado na presença de água e modificador IA regional.
+        Calcula o índice de umidade baseado na presença de água, modificador IA regional
+        e variação espacial dentro da própria terra.
+
+        Fase 1.3 (P1.3): antes a umidade de terra era CONSTANTE (`umidade_terra_base +
+        mod_umidade`, e `mod_umidade` é um escalar único por continente) — zero variação
+        espacial, o que tornava Deserto e Mediterrâneo inalcançáveis (seus limiares nunca
+        eram cruzados). `grid_x`/`grid_y` (coordenada de MUNDO, já montada por
+        `gerar_janela` — F1) alimentam um campo de ruído de escala grande e poucas
+        oitavas, então a variação é regional e suave, não granulada.
         """
         if nivel_mar is None:
             nivel_mar = cfg_get(config, "nivel_mar")
         umidade_oceano = cfg_get(config, "clima_umidade_oceano")
         umidade_terra_base = cfg_get(config, "clima_umidade_terra_base")
 
+        variacao_espacial = 0.0
+        if grid_x is not None and grid_y is not None:
+            escala = cfg_get(config, "clima_umidade_variacao_escala")
+            oitavas = cfg_get(config, "clima_umidade_variacao_oitavas")
+            amplitude = cfg_get(config, "clima_umidade_variacao_amplitude")
+            ruido = NoiseGenerator.generate_noise_field(
+                grid_x, grid_y, scale=escala, octaves=oitavas, seed=seed, offset=6666
+            )
+            variacao_espacial = (ruido - 0.5) * 2.0 * amplitude
+
         umid_base = np.where(
             heightmap < nivel_mar,
             umidade_oceano,
-            umidade_terra_base + mod_umidade
+            umidade_terra_base + mod_umidade + variacao_espacial
         )
         return np.clip(umid_base, 0.0, 1.0)
 

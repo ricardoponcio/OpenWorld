@@ -95,12 +95,18 @@ class NoiseGenerator:
             amplitude *= persistencia
             frequency *= lacunaridade
 
-        limite = max_val * 0.707
+        # F3 (Seção 2.2): normalizar pela soma TRUNCADA das amplitudes (`max_val`, que
+        # depende de `octaves`) fazia adicionar oitava reescalar o campo inteiro em ~6,5%
+        # — o zoom contradizia o zoom anterior em vez de só refinar (P1.7). A soma da
+        # série geométrica infinita não depende de `octaves`, então o divisor passa a ser
+        # estável: mais oitavas convergem para o mesmo campo, nunca o reescalam.
+        soma_infinita = 1.0 / (1.0 - persistencia) if persistencia < 1.0 else max_val
+        limite = soma_infinita * 0.707
         total_normalizado = np.clip(total / (limite if limite > 0 else 1.0), -1.0, 1.0)
         return (total_normalizado + 1.0) / 2.0
 
     @staticmethod
-    def generate_tectonic_base(grid_x, grid_y, seed, config):
+    def generate_tectonic_base(grid_x, grid_y, seed, config, oitavas_extra=0):
         """
         Gera a base geológica unindo macro-formas tectônicas e micro-detalhes de alta frequência.
 
@@ -108,6 +114,10 @@ class NoiseGenerator:
         tinha suas próprias constantes de classe (DEFAULT_TECTONIC_*) que duplicavam
         (e podiam divergir) as chaves de config equivalentes, e ignorava por completo
         `persistencia`/`lacunariedade`. Ver docs/AUDITORIA_HARDCODE.md.
+
+        `oitavas_extra` (Fase 0.3, F3): acrescenta oitavas de alta frequência sem alterar
+        a forma grossa — é o mecanismo de LOD por zoom. Some às contagens de oitava base,
+        nunca as substitui.
         """
         from config import cfg_get
 
@@ -117,14 +127,14 @@ class NoiseGenerator:
         ruido_macro = NoiseGenerator.generate_noise_field(
             grid_x, grid_y,
             scale=cfg_get(config, "ruido_macro_escala"),
-            octaves=cfg_get(config, "ruido_macro_oitavas"),
+            octaves=cfg_get(config, "ruido_macro_oitavas") + oitavas_extra,
             seed=seed,
             persistencia=persistencia, lacunaridade=lacunaridade
         )
         ruido_detalhe = NoiseGenerator.generate_noise_field(
             grid_x, grid_y,
             scale=cfg_get(config, "ruido_costa_escala"),
-            octaves=cfg_get(config, "ruido_costa_oitavas"),
+            octaves=cfg_get(config, "ruido_costa_oitavas") + oitavas_extra,
             seed=seed,
             offset=500,
             persistencia=persistencia, lacunaridade=lacunaridade

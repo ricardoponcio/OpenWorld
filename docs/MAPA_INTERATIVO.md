@@ -1,5 +1,12 @@
 # 🗺️ Mapa Interativo Estilo Leaflet — Rascunho de Design
 
+> ⚠️ **Atualizado em 2026-09-09**: a primeira versão (`L.imageOverlay`, sem tiling) foi implementada
+> e depois **rejeitada pelo autor** ao testar — "zoom infinito" fake e trocas malfeitas de camada,
+> não era "Google Maps real". A versão atual É a Abordagem B deste documento (pirâmide de tiles
+> pré-gerada), com uma economia importante: profundidade só onde há continente/cidade, oceano vazio
+> raso — evita o custo de gerar a pirâmide inteira em profundidade máxima. Ver a **Frente 6** do
+> [`ROADMAP.md`](ROADMAP.md) para arquitetura, resultados e a limitação de costura encontrada.
+>
 > Documento de apoio à **Frente 6** do [`ROADMAP.md`](ROADMAP.md). Ideia do autor: "portar de alguma
 > forma ou reutilizar os NPZs pra ter algum formato de 'Google Maps da aventura', tipo com leaflet."
 

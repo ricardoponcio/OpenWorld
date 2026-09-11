@@ -5,6 +5,15 @@
 > Os documentos irmãos em `docs/` guardam o detalhe técnico de cada frente — a visão de
 > conjunto e o "em que pé estamos" vivem aqui. Não é preciso reler o código do zero a cada
 > sessão: comece por aqui, e só desça ao código quando for efetivamente mexer em algo.
+>
+> 👉 **Vai executar as próximas melhorias?** O plano de trabalho a partir daqui está em
+> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md) — mapa do código, contratos de dados, o **modelo de
+> escalas** (mundo → continente → região → cidade), o diagnóstico medido em ordem de prioridade
+> (P0 quebrado · P1 incoerente · P2 ausente) e 12 fases em 3 blocos com *gates* de verificação:
+> **Bloco I = corrigir** (Fases 0–2), **Bloco II = tornar usável na mesa** (3–5),
+> **Bloco III = enriquecer** (6–11). Regra: nada de bioma novo, rio ou erosão antes do GATE 1.
+> Este ROADMAP continua sendo o histórico do que já foi feito (Frentes 1–6); o PLANO_EVOLUCAO_V2 é
+> o que ainda vai ser feito.
 
 **Criado em:** 2026-09-09 — sessão de kickoff (revisão completa do projeto + declaração de vontades do autor).
 
@@ -24,7 +33,7 @@
 | 3 | Comportamento dos NPCs (Utility AI) | 🟡 Em andamento | Seção 3 |
 | 4 | Motor de tempo 1:1 real (Rebalanceamento Total) | 🟢 Concluído | Seção 4 (decisão revista: Abordagem 2, não 3 — ver [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md)) |
 | 5 | Modo Mestre de IA (2º modo temporal) | 🟢 Concluído (fase 1) | Seção 5 (design original em [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md)) |
-| 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🔴 Não iniciado | [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md) |
+| 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🟡 Pirâmide de tiles real implementada, falta rodar no mundo do autor | Seção 6 (design original em [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md)) |
 
 **Ordem sugerida de execução: 1 → 2 → 3 → 4 → 5 → 6.**
 Motivo: a Frente 1 é fundação das Frentes 2 e 3 (não compensa retunar cartografia ou comportamento
@@ -481,21 +490,150 @@ interface**, não reconstruir a parte de IA:
 ### Objetivo (nas palavras do autor)
 Portar/reaproveitar os `.npz` para algum formato de "Google Maps da aventura", com Leaflet.
 
-### Situação atual
-- Já existe toda a infraestrutura de dados necessária: mapas `.npz` em 3 escalas (mundo composto
-  768×768, zoom de continente ~3000×3000 sob demanda, zoom de cidade ~800×800 sob demanda), com cache
-  em memória por mtime (`composed_routes.py`) e um renderer NumPy→PNG (`web/helpers.py:
-  render_npz_map_to_bytes`).
-- **Gap principal**: o renderer atual gera **uma imagem única e inteira** por chamada, não o esquema
-  de *tiles* em pirâmide (`{z}/{x}/{y}.png`, 256×256px cada) que o Leaflet espera nativamente. Adaptar
-  isso é o núcleo técnico desta frente.
-- Locais e NPCs já têm coordenadas em grade (`coordenadas: [x, y]`) que podem virar
-  marcadores/overlays do Leaflet.
+### Versão 1 (superada) — `L.imageOverlay`
+Primeira tentativa: uma imagem única por nível (Mundo/Continente), trocada manualmente ao clicar
+na lista lateral. O autor testou e apontou o problema de raiz: **isso não é zoom real** — é só
+esticar/encolher uma imagem de resolução fixa ("zoom infinito na mesma imagem"), e trocar de nível
+só no clique criava uma "colagem malfeita" nas bordas. Decisão do autor: refazer com pirâmide de
+tiles de verdade, **mesmo que custasse a estrutura montada** — ver Versão 2 abaixo.
 
-Rascunho de design, opções técnicas e perguntas em aberto em
-**[`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md)**.
+### Versão 2 (atual) — Pirâmide de tiles real, pré-gerada no reset
+**Decisões tomadas com o autor**: gerar detalhe profundo só onde importa (continentes/cidades;
+oceano vazio fica raso) — evita explosão de tempo/disco a cada nível de zoom. Cidades ganharam área
+real de mundo (raio 15px → 45px) em vez de serem praticamente um ponto.
 
-### Status: 🔴 Não iniciado
+- **Arquitetura**: zoom 0 = mapa mundi nativo (768×768 = 3×3 tiles de 256px, dado real, sem síntese).
+  Zoom 1-4 = pirâmide onde cada tile de 256×256 é recortado da fonte mais específica que cobre
+  aquele ponto do mundo (**cidade > continente > mundo**), reaproveitando os `.npz` que o pipeline
+  já gera (`ROIZoomGenerator`/`CityROIZoomGenerator`, sem duplicar a síntese de ruído/clima). Tiles
+  de oceano profundo longe de qualquer terra reaproveitam um único "tile genérico" pré-computado,
+  em vez de recortar/redimensionar centenas de tiles idênticos.
+- `tile_zoom_maximo=4` não é arbitrário: é onde a densidade de pixel da pirâmide (2^zoom) se
+  aproxima da densidade de detalhe real disponível nos recortes de continente (~3000px/~170px≈17x)
+  e cidade (~2000px/~130px≈15x) — acima disso seria só esticar sem detalhe novo.
+- **Novo**: `cartographer/tiles/pyramid.py` (núcleo: carregar fontes, decidir prioridade, recortar
+  tile) + `cartographer/tiles/generate_tile_pyramid.py` (script CLI, chamado como último passo de
+  `reset_cartography.sh`, depois que mundo/continentes/cidades já existem).
+- `web/helpers.py`: extraído `render_npz_array()` de `render_npz_map_to_bytes()` (o núcleo do
+  pipeline de cor/hillshading agora retorna o array RGB puro, reaproveitado pela pirâmide sem
+  round-trip de codificar/decodificar PNG).
+- `web/composed_routes.py`: nova rota `GET /tiles/<z>/<x>/<y>.png` (arquivo estático, sem
+  processamento — os tiles já vêm prontos do reset); `/api/continentes` passou a expor também
+  `tile_zoom_maximo`.
+- `web/static/js/mapa_leaflet.js`: **reescrito** — troca `L.imageOverlay` por `L.tileLayer`
+  genuíno. O Leaflet cuida nativamente do carregamento parcial (só os tiles visíveis são baixados) e
+  do zoom contínuo — nenhuma lógica de auto-troca de camada foi necessária, ela deixou de fazer
+  sentido com tiles de verdade. Lista de continentes virou um atalho de `flyToBounds`, não mais uma
+  troca de camada.
+- `config.json["cartografia"]`: `zoom_cidade_crop_raio_px` 15→45, novo `zoom_cidade_resolucao_px`
+  (800→2000, pra manter a cidade com densidade de detalhe comparável à de um continente), novos
+  `tile_size_px`/`tile_zoom_maximo`.
+
+### Verificado (mundo de teste completo gerado do zero, não o mundo real do autor)
+- Pipeline completo rodado ponta a ponta (mundo → cidades → zoom de continentes → zoom de cidades →
+  pirâmide de tiles): **3.5s** para gerar 3069 tiles (246 renderizados de verdade + 2823
+  reaproveitados do tile genérico de oceano — confirma que a "profundidade seletiva" está
+  funcionando: só ~8% dos tiles precisaram de processamento real). ~21MB em disco.
+- **Confirmado visualmente**: montando os 5 tiles do mesmo ponto do mundo em cada zoom lado a lado,
+  aparece detalhe progressivo real a cada nível — não é mais a mesma imagem esticada.
+- Tiles adjacentes do mesmo nível se encaixam sem costura dentro da mesma fonte (testado remontando
+  os 9 tiles do zoom 0 — bate pixel a pixel com o mapa composto original).
+- Rota Flask `/tiles/<z>/<x>/<y>.png` testada servindo os arquivos corretamente (200) e devolvendo
+  404 pra tile inexistente.
+- **Limitação encontrada e não corrigida** (a mesma que o plano já previa, mas mais visível do que
+  esperado): no continente de teste (pequeno), o raio da cidade (45px) quase cobre o continente
+  inteiro, e a costura entre a fonte "cidade" e "continente" aparece bem no meio da terra, não só
+  numa borda discreta. Em continentes maiores (mais prováveis no mundo real) a cidade ocupa uma
+  fração bem menor da área, então a costura tende a ficar mais discreta/periférica — mas fica
+  registrado como algo a observar no mundo real do autor, não confirmado como "resolvido".
+- **Não testado num navegador de verdade** nem contra o mundo real do autor (a pirâmide precisa ser
+  gerada via `reset_cartography.sh` — o autor precisa rodar isso pra ter tiles reais disponíveis
+  antes de abrir a aba).
+
+### Bug pós-reset real: mapa em branco, sem erro no console, tiles com 200
+Depois de rodar `reset_world.sh` de verdade, o autor reportou a aba "🗾 Mapa Live" completamente em
+branco — sem erro no console, com respostas 200 nas requisições. Diagnóstico (confirmado por
+inspeção do servidor real do autor: manifesto, tiles em disco e rota `/tiles/...` todos corretos —
+**o backend estava 100% funcional**, o bug era só no frontend):
+
+- **Causa raiz**: `initMapaLeaflet()` criava o mapa com `minZoom: -2`, mas a `L.tileLayer` foi criada
+  com `minZoom: 0` (não existe tile pré-gerado abaixo do zoom 0 — o zoom 0 já é o mundo inteiro em
+  3×3 tiles). `fitBounds()` calcula o zoom que faz o mundo (768×768 "px") caber no container real do
+  navegador e clampa esse valor aos limites do **mapa** (-2 a 4), não aos da camada de tiles. Como
+  `#mapa-leaflet-container` (altura `75vh` menos a barra lateral) pode facilmente ser um pouco menor
+  que 768px numa tela comum, o zoom calculado cai abaixo de 0 (ex.: -0.25 a -1). Quando o zoom
+  arredondado do mapa fica abaixo do `minZoom` da tile layer, o Leaflet internamente marca a camada
+  como fora de alcance e **nunca chama `_update()`** — zero requisições de tile, zero erro, mapa
+  permanentemente em branco. Isso bate exatamente com o sintoma relatado (as respostas 200 vistas
+  pelo autor eram só de `/api/continentes`; nenhuma requisição de tile chegava a sair).
+- **Correção**: `web/static/js/mapa_leaflet.js` — `minZoom` do mapa alinhado com o da tile layer
+  (ambos `0`, já que não há dado real abaixo disso); adicionado `invalidateSize()` defensivo logo
+  após a criação do mapa, cobrindo qualquer timing residual de reflow na primeira troca de aba.
+- **Verificado**: tiles do mundo real do autor testados manualmente via `curl` contra o servidor
+  Flask já em execução — `/api/continentes` retorna manifesto correto (`dimensao_global`,
+  `tile_zoom_maximo`), `/tiles/0/0/0.png` e outros tiles retornam 200 com PNG 256×256 válido
+  (confirmado visualmente: oceano genérico renderizado corretamente). Sintaxe do JS validada
+  (`node --check`).
+- **Segundo bug, revelado pelo primeiro fix**: com o `minZoom` corrigido, o Leaflet passou a pedir
+  tiles de verdade — mas com **`y` negativo** (`/tiles/0/1/-2.png` etc, 404). Causa: a transformação
+  padrão do `L.CRS.Simple` é `pixelY = -lat * escala` (sem nenhum deslocamento). `pixelParaLatLng`
+  convertia pixel-Y de mundo pra `lat = dimensaoGlobal - py` (uma tentativa de "inverter e deslocar"
+  a origem), o que resulta em `lat` sempre não-negativo e, por consequência, em `pixelY` interno do
+  Leaflet **sempre não-positivo** (`-lat*escala`) — fora do endereçamento `0..N` dos tiles. A
+  correção certa (convenção padrão do Leaflet pra mapas não-geográficos, tipo plantas baixas/mapas de
+  jogo) é `lat = -py` (sem o deslocamento por `dimensaoGlobal`): aí `pixelY = -(-py)*escala =
+  py*escala`, sempre não-negativo e alinhado com a linha 0 = topo dos tiles pré-gerados. Corrigido em
+  `pixelParaLatLng`/`latLngParaPixel`; `bboxParaBounds` e o resto do arquivo não precisaram mudar
+  (dependem só dessas duas funções).
+- **Terceiro bug (visual, achado pelos prints do autor em `erros/`)**: com o mapa já visível, o autor
+  reportou "zoom só vai até continente, não vai até cidades" e anexou capturas mostrando um padrão de
+  **xadrez/mosaico** cobrindo continentes e cidades no zoom profundo — cores de bioma alternando em
+  blocos, sem relação com o terreno real. Isolado comparando o render bruto do continente (liso, sem
+  defeito) contra o render bruto de uma cidade (`database/cidades/mapa_*.npz`, com o defeito) — o bug
+  está só na pipeline de cidade (`cartographer/cities/city_roi_zoom.py`), não na de continente.
+  - **Causa raiz**: `city_roi_zoom.py` **não recalcula biomas** após o upscale (comentário no código
+    já dizia a intenção: herdar o bioma via nearest-neighbor) — mas `_upscale()` de fato aplicava a
+    mesma interpolação **spline bicúbica (`zoom_upscale_ordem=3`)** a **todos os 4 canais**, inclusive
+    o canal de bioma (índice 3), que é um **ID categórico discreto** (1=oceano, 4=floresta, ...), não
+    um valor contínuo. Interpolar categorias com spline produz overshoot clássico: entre um pixel
+    oceano(1) e floresta(4) a curva passa por valores fracionários fora da faixa (confirmado
+    empiricamente: canal de bioma da cidade tinha 136 mil valores fracionários, de 0.35 a 4.75, com
+    IDs fantasmas 0/2/3/5 que não existem na fonte — o continente é 100% "Floresta Temperada"). Ao
+    arredondar pra colorir, isso vira o mosaico em xadrez. `roi_zoom.py` (continente) não sofre disso
+    porque **recalcula** o bioma do zero após o upscale, descartando esse canal corrompido — só a
+    cidade herdava o canal interpolado diretamente.
+  - **Correção**: `_upscale()` agora separa o canal de bioma dos demais — altitude/temperatura/
+    umidade continuam na ordem configurada (bicúbica), mas o canal de bioma vai por
+    **nearest-neighbor** (`order=0`, tanto no branch scipy quanto no fallback manual), preservando os
+    IDs originais sem misturar categorias. Isso é exatamente o que o comentário original já dizia
+    pretender fazer — só nunca tinha sido implementado de fato.
+  - **Verificado**: regenerado `mapa_cidade_das_índias.npz` numa cópia scratch (não nos arquivos reais
+    do autor) usando o `venv/` com scipy (mesmo caminho de código da produção). Antes: canal de bioma
+    com valores fracionários e IDs 0/2/3/5 fantasmas. Depois: só IDs 1 (oceano) e 4 (floresta) —
+    exatamente os dois biomas reais da região. Render visual confirmado: xadrez sumiu completamente,
+    ficou uma silhueta de ilha única e coerente (com borda "serrilhada" em blocos — esperado, é o
+    limite honesto do nearest-neighbor ampliando um recorte pequeno ~90px pra 2000px, bem menos grave
+    que o xadrez).
+  - **Ainda não confirmado**: se isso também resolve a percepção de "zoom não vai até cidades" — a
+    hipótese é que o xadrez tornava o zoom profundo visualmente ilegível/quebrado, mas o
+    `tile_zoom_maximo` (4) já é um teto intencional (Frente 6) baseado na densidade de detalhe
+    disponível, não um bug por si só. Precisa reset real + confirmação visual do autor.
+  - **Ação pendente do autor**: os arquivos `database/cidades/*.npz` reais ainda têm o canal de bioma
+    corrompido (gerados antes do fix) — é necessário rodar `reset_cartography.sh` (ou o
+    `reset_world.sh` completo) de novo para regenerar cidades e a pirâmide de tiles com a correção.
+- **Não verificado ainda**: comportamento real no navegador do autor após todas as correções acima —
+  a extensão de browser não estava conectada nesta sessão para testar ao vivo. Precisa confirmação do
+  autor.
+
+### Fora de escopo desta fase
+- Corrigir a costura na fronteira entre fontes (aceito conscientemente, ver limitação acima).
+- Conteúdo próprio de cidade (ruas, distritos, prédios) — esta fase só garante área/resolução
+  suficiente pra isso existir depois.
+- Substituir o canvas existente, NPCs em tempo real sobre o Leaflet.
+
+### Status: 🟡 Implementado; três bugs pós-reset diagnosticados e corrigidos (mapa em branco, tiles
+com y negativo, xadrez de bioma nas cidades) — **falta o autor rodar `reset_cartography.sh` de novo
+(pra regenerar cidades/tiles com a correção) e confirmar visualmente no navegador**.
 
 ---
 
@@ -503,6 +641,97 @@ Rascunho de design, opções técnicas e perguntas em aberto em
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-11 (parte 14, sessão autônoma)** — **Plano V2/V3 executado até o fim do Bloco II core:
+  Fases 0, 1, 2, 3 e 4 implementadas, testadas e verificadas** (docs/PLANO_EVOLUCAO_V2.md tem o
+  detalhe completo de cada uma, incluindo achados de bug reais no caminho). Resumo do que mudou de
+  fato no mundo: o tile do Mapa Live deixou de ser mosaico pré-renderizado e virou
+  `TileCartographer.gerar_janela()` sob demanda (zoom refina em vez de contradizer, F1-F4
+  garantidos por 7 testes em `tests/test_cartografia.py`); tamanho de continente, biomas e
+  posicionamento de cidade recalibrados por medição (não chute); `Local.coordenadas` é pixel de
+  mundo de verdade em todo o pipeline (populate.py, expansão urbana, Modo Mestre); Leaflet ganhou
+  camada vetorial (`/api/mapa/features`) com cidades, e cada cidade agora tem geometria real
+  (ruas, muralha, quarteirões, lotes, ~387 edifícios nomeados em 9 cidades testadas) gerada por
+  `cartographer/cities/generate_city_geometry.py` e importada como `Local` de verdade — zero
+  coordenada sorteada no fluxo normal. `tile_zoom_maximo_ui` 4→16. **Gate 1 revalidado em 3 mundos
+  independentes** (10/10 continentes na faixa). **Fase 5 (narrativa de cidade por IA) não iniciada**
+  — próximo passo natural. Nada commitado (autor pediu pra validar em casa antes).
+
+- **2026-09-10 (parte 13)** — **Diagnóstico do "cartógrafo confunde continente com cidade" + plano de
+  execução V2.** Autor reportou, após o reset: mapa não faz zoom até a cidade, e clicar na cidade
+  mostra o continente com locais espalhados na água. Medido e confirmado: (a) `zoom_cidade_crop_raio_px=45`
+  é fixo enquanto os continentes têm bbox de 45–127px, então o recorte "de cidade" é 0,9× a **2,7×** a
+  área do continente (em Avalonia engole o continente inteiro); (b) `carregar_fontes()` prioriza
+  cidade > continente por tipo hardcoded, mas a densidade real da cidade é **menor** que a do
+  continente em 2 de 4 casos — aproximar piora o mapa; (c) `populate.py` grava
+  `coordenadas = random.randint(5,35)`, um espaço de coordenadas que não é nem mundo nem cidade, e o
+  mapa antigo desenha esse par sem validar `nivel_mar` — daí edifícios no oceano; (d) **achado extra
+  não reportado**: `roi_zoom.py` renderiza recorte retangular em imagem quadrada 3000×3000,
+  deformando os continentes de 1,05× a **1,51×** (Gardania espremido em 51%). Causa raiz comum: o
+  projeto nunca declarou um modelo de escalas — "cidade" virou "continente menor", e o raio foi sendo
+  aumentado (2 → 15 → 45) até ultrapassar o continente. Nenhuma correção de código nesta sessão:
+  o resultado é [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md), com as 4 regras invariantes de fonte
+  de zoom (contenção, prioridade por densidade, isotropia, ganho mínimo) e 12 fases em 3 blocos,
+  ordenadas para consertar tudo antes de adicionar qualquer coisa nova.
+- **2026-09-09 (parte 12)** — **Bug: xadrez de biomas nas cidades do Mapa Live.** Autor anexou prints
+  em `erros/` mostrando um mosaico em xadrez cobrindo continentes/cidades no zoom profundo, e reportou
+  que o zoom não chegava a mostrar detalhe de cidade. Isolado renderizando o `.npz` bruto de um
+  continente (liso) vs. de uma cidade (com o defeito) — bug exclusivo de
+  `cartographer/cities/city_roi_zoom.py`. Causa: o canal de bioma (categórico, IDs 1-5) era
+  interpolado com a mesma spline bicúbica (`ordem=3`) dos canais contínuos, gerando overshoot
+  (valores fracionários, IDs fantasmas 0/2/3/5) — confirmado empiricamente antes do fix. `roi_zoom.py`
+  (continente) não tem esse bug porque recalcula bioma do zero pós-upscale; a cidade herdava o canal
+  corrompido direto. Corrigido: bioma agora vai por nearest-neighbor, canais contínuos continuam
+  bicúbicos. Verificado numa cópia scratch com o `venv/` de produção (scipy): xadrez sumiu, só sobrou
+  o bioma real (1 e 4). **Autor precisa rodar `reset_cartography.sh` de novo** pra regenerar os
+  `.npz` de cidade reais (os atuais foram gerados antes do fix) e confirmar visualmente.
+- **2026-09-09 (parte 11)** — **Bug: mapa Leaflet em branco após reset real, sem erro no console.**
+  Diagnosticado: `minZoom` do mapa (-2) e da tile layer (0) descasados — `fitBounds` podia calcular
+  um zoom abaixo do mínimo da camada de tiles quando o container era um pouco menor que 768px,
+  deixando o Leaflet silenciosamente sem pedir nenhum tile. Backend confirmado 100% funcional
+  (tiles e `/api/continentes` testados via `curl` contra o servidor real do autor já em execução)
+  antes de concluir que o bug era só no frontend. Corrigido: minZoom unificado em 0 +
+  `invalidateSize()` defensivo. Esse fix revelou um **segundo bug**: tiles passaram a ser pedidos,
+  mas com `y` negativo (404) — a conversão pixel→latLng usava `lat = dimensaoGlobal - py`, incompatível
+  com a transformação padrão do `L.CRS.Simple` (`pixelY = -lat*escala`, sem deslocamento); corrigido
+  para `lat = -py`. Ver detalhes na Frente 6 acima. **Aguardando confirmação visual do autor**
+  (extensão de browser não disponível nesta sessão para testar ao vivo).
+- **2026-09-09 (parte 10)** — **Frente 6 refeita do zero: pirâmide de tiles real.** Autor testou a
+  v1 (parte 9 abaixo) e rejeitou a base: "zoom infinito" que só ampliava a mesma imagem, e colagem
+  malfeita ao trocar de continente, não é "Google Maps real". Pediu pra estudar a arquitetura de
+  verdade mesmo que custasse refazer tudo, com a pirâmide pré-gerada no reset (não sob demanda) e
+  cidades maiores. Decisões tomadas via pergunta direta: profundidade só onde importa (continentes/
+  cidades; oceano raso) e cidade "pequena" (raio 45px, era 15px). Implementado
+  `cartographer/tiles/pyramid.py`+`generate_tile_pyramid.py` reaproveitando os `.npz` de continente/
+  cidade que o pipeline já gera (sem duplicar síntese de ruído), com atalho de tile oceânico
+  genérico pra regiões vazias. `mapa_leaflet.js` reescrito pra `L.tileLayer` de verdade — o Leaflet
+  passou a cuidar do carregamento parcial nativamente, eliminando toda a lógica manual de troca de
+  camada da v1. Testado com um mundo completo gerado do zero num diretório isolado: pipeline inteiro
+  (mundo→cidades→zooms→pirâmide) em 3.5s, 3069 tiles (só 246 renderizados de verdade, resto
+  reaproveitado do tile de oceano), detalhe progressivo real confirmado visualmente montando os 5
+  níveis de zoom do mesmo ponto lado a lado. **Achado honesto**: a costura entre fonte "cidade" e
+  "continente" (limitação já aceita no plano) ficou bem visível no continente pequeno de teste,
+  porque a cidade quase cobre o continente inteiro nesse caso — registrado para o autor observar no
+  mundo real, não assumido como resolvido. Ainda falta rodar `reset_cartography.sh` de verdade e
+  testar num navegador.
+- **2026-09-09 (parte 9)** — **Frente 6 corrigida (bug) antes da reformulação.** Autor reportou dois
+  problemas testando a v1: (a) overlay de continente malposicionado ("colagem", "corte abrupto") —
+  bug real, corrigido (o overlay não considerava a margem `zoom_border_padding_px` que a imagem do
+  continente já inclui); (b) zoom no próprio mapa não trocava de camada, e não tinha cidades — isso
+  levou à conversa que resultou na parte 10 acima.
+- **2026-09-09 (parte 8)** — **Frente 6 implementada: mapa "Google Maps da aventura" via Leaflet.**
+  Enquanto o autor rodava um reset completo do mundo pra avaliar as frentes anteriores, montei e já
+  implementei o plano em paralelo (autorizado explicitamente pra economizar tempo). Achado que
+  simplificou bastante o trabalho: não precisa de tiles em pirâmide — o zoom aqui é discreto
+  (Mundo→Continente→Cidade, cada um já uma imagem única), então `L.imageOverlay` do Leaflet resolve
+  direto, sem servidor de tiles. Nova aba "🗾 Mapa Live" ao lado do canvas existente (não substitui),
+  reaproveitando 100% dos endpoints de imagem/inspeção que já existiam — só uma adição pequena de
+  backend (`dimensao_global` no `/api/continentes`, pra não hardcodar 768 no JS). Achado de bônus:
+  o recorte quadrado forçado do `ROIZoomGenerator` (Frente 2) se autocorrige visualmente ao ser
+  posicionado de volta no bounding_box retangular original. Validado com matemática de conversão de
+  coordenadas conferida à mão e testes via cliente Flask contra dados de scratch — **não testado
+  visualmente num navegador real** nem contra o mundo do autor (que estava sendo regenerado durante
+  a sessão) — fica pro autor abrir a aba e confirmar. Nenhum arquivo de `engine/`/`cartographer/`
+  tocado, só `web/`.
 - **2026-09-09 (parte 7)** — **Frente 5 concluída (fase 1): Modo Mestre de IA.** Decisões tomadas
   com o autor: ações de mundo da IA sempre exigem confirmação (nunca aplicam sozinhas), e esta fase
   já entra com aba de chat no dashboard, não só backend. Reaproveitado o protótipo existente

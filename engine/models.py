@@ -109,6 +109,13 @@ class Local:
     integridade: int = 100 # 0 a 100
     capacidade: int = 5
     salario_base: int = 100
+    # Fase 4 (P2.2): campos que a geometria de cidade real (GeoJSON) carrega por
+    # edifício. `tipo_local` é o nome de sabor dentro da categoria ampla de
+    # `categoria` (ex.: categoria="forja", tipo_local="Ferreiro" ou "Oleiro") — dá
+    # variedade narrativa sem precisar de um `CategoriaLocal` novo por profissão.
+    tipo_local: str = ""
+    bairro: str = ""
+    dono_npc_id: str = ""
 
 
 @dataclass
@@ -141,7 +148,14 @@ class NPC:
     pai_id: str = ""
     mae_id: str = ""
     gravidez_ticks: int = 0  # 0 = não gestante, >0 = gestante
-    
+
+    # Identidade gerada pela IA (Fase 2.3, dna.txt já pedia isso — só era jogado fora
+    # em builder/populate.py). Uso na DECISÃO (traços modulando utilidade) é Fase 8;
+    # por ora só persiste pra o Modo Mestre poder narrar quem cada NPC realmente é.
+    raca: str = ""
+    personalidade: str = ""
+    background: str = ""
+
     genealogia: List[str] = field(default_factory=list)
     relacionamentos: Dict[str, int] = field(default_factory=dict)
     memoria_eventos: List[str] = field(default_factory=list)

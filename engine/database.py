@@ -114,12 +114,12 @@ class DatabaseManager:
     def salvar_local(self, local: Local):
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''INSERT OR REPLACE INTO locais 
-                              (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base) 
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-                local.id, local.nome, local.tipo, local.cidade_id, local.categoria, local.descricao, 
+            cursor.execute('''INSERT OR REPLACE INTO locais
+                              (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base, tipo_local, bairro, dono_npc_id)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+                local.id, local.nome, local.tipo, local.cidade_id, local.categoria, local.descricao,
                 json.dumps(local.coordenadas), local.status, local.integridade,
-                local.capacidade, local.salario_base
+                local.capacidade, local.salario_base, local.tipo_local, local.bairro, local.dono_npc_id
             ))
 
     def carregar_locais(self) -> dict:
@@ -137,21 +137,25 @@ class DatabaseManager:
                     status=row['status'] if 'status' in row.keys() else 1,
                     integridade=row['integridade'] if 'integridade' in row.keys() else 100,
                     capacidade=row['capacidade'] if 'capacidade' in row.keys() else 5,
-                    salario_base=row['salario_base'] if 'salario_base' in row.keys() else 100
+                    salario_base=row['salario_base'] if 'salario_base' in row.keys() else 100,
+                    tipo_local=row['tipo_local'] if 'tipo_local' in row.keys() and row['tipo_local'] is not None else '',
+                    bairro=row['bairro'] if 'bairro' in row.keys() and row['bairro'] is not None else '',
+                    dono_npc_id=row['dono_npc_id'] if 'dono_npc_id' in row.keys() and row['dono_npc_id'] is not None else ''
                 )
             return locais
 
     def salvar_npc(self, npc: NPC):
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''INSERT OR REPLACE INTO npcs                           (id, nome, profissao, profissao_id, cidade_id, casa_id, local_trabalho_id, localizacao_atual_id, 
-                               acao_atual, energia, dinheiro_total_pc, social, fome, saude, humor, 
-                               genero, estagio_vida, data_nascimento, estado_civil, conjuge_id, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+            cursor.execute('''INSERT OR REPLACE INTO npcs                           (id, nome, profissao, profissao_id, cidade_id, casa_id, local_trabalho_id, localizacao_atual_id,
+                               acao_atual, energia, dinheiro_total_pc, social, fome, saude, humor,
+                               genero, estagio_vida, raca, personalidade, background, data_nascimento, estado_civil, conjuge_id, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
                 npc.id, npc.nome, npc.profissao, npc.profissao_id, npc.cidade_id, npc.casa_id, npc.local_trabalho_id,
                 npc.localizacao_atual_id, npc.acao_atual.value, npc.energia, npc.dinheiro_total_pc,
-                npc.social, npc.fome, npc.saude, npc.humor, 
-                npc.genero, npc.estagio_vida, npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
+                npc.social, npc.fome, npc.saude, npc.humor,
+                npc.genero, npc.estagio_vida, npc.raca, npc.personalidade, npc.background,
+                npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
                 json.dumps(npc.genealogia), json.dumps(npc.relacionamentos), json.dumps(npc.memoria_eventos),
                 npc.gravidez_ticks
             ))
@@ -185,6 +189,9 @@ class DatabaseManager:
                         humor=r['humor'] if 'humor' in r.keys() else 'Neutro',
                         genero=r['genero'] if 'genero' in r.keys() else 'M',
                         estagio_vida=r['estagio_vida'] if 'estagio_vida' in r.keys() else 'adulto',
+                        raca=r['raca'] if 'raca' in r.keys() and r['raca'] is not None else '',
+                        personalidade=r['personalidade'] if 'personalidade' in r.keys() and r['personalidade'] is not None else '',
+                        background=r['background'] if 'background' in r.keys() and r['background'] is not None else '',
                         data_nascimento=r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
                         estado_civil=r['estado_civil'] if 'estado_civil' in r.keys() else EstadoCivil.SOLTEIRO.value,
                         conjuge_id=r['conjuge_id'] if 'conjuge_id' in r.keys() else '',

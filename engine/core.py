@@ -19,6 +19,10 @@ class SimulationEngine:
         self.db = DatabaseManager(db_path)
         self.npcs = self.db.carregar_npcs()
         self.locais = self.db.carregar_locais()
+        # Fase 2.1 (P0.3): expansão urbana (housing.py) precisa do pixel-âncora da
+        # cidade do NPC pra sortear coordenada de mundo pra casa nova, não mais uma
+        # grade local fake.
+        self.cidades = {c["id"]: c for c in self.db.carregar_cidades()}
         self.tick_count = 0
         
         # Carregar Configuração usando utilitário de config centralizado

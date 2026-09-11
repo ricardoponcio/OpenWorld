@@ -19,7 +19,7 @@ let mouseX = -1;
 let mouseY = -1;
 let hoveredTooltip = null;
 
-let cityEntities = { locais: [], npcs: [] };
+let cityEntities = { locais: [], npcs: [], bbox: null };
 let cachedContinents = [];
 
 // Query memory cache
@@ -140,24 +140,21 @@ function animateLoop() {
     }
 }
 
-function drawCityGridAndEntities() {
-    const gridSize = 40;
-    const tileSize = img.width / gridSize;
+// Fase 2.1 (P0.3): `loc.coordenadas` é pixel de MUNDO (Seção 2.3), não mais um índice
+// de grade 0-40. Converte mundo -> pixel da imagem da cidade usando a bbox devolvida
+// por `/api/cidade/<nome>/entities` (mesma janela que gerou a imagem em si).
+function mundoParaImagemCidade(x, y) {
+    const bbox = cityEntities.bbox;
+    if (!bbox) return { x: 0, y: 0 };
+    const ix = (x - bbox.min_x) / Math.max(1e-6, bbox.max_x - bbox.min_x) * bbox.largura_img;
+    const iy = (y - bbox.min_y) / Math.max(1e-6, bbox.max_y - bbox.min_y) * bbox.altura_img;
+    return { x: ix, y: iy };
+}
 
-    // Draw Grid
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= gridSize; i++) {
-        ctx.beginPath();
-        ctx.moveTo(offsetX + i * tileSize * scale, offsetY);
-        ctx.lineTo(offsetX + i * tileSize * scale, offsetY + img.height * scale);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(offsetX, offsetY + i * tileSize * scale);
-        ctx.lineTo(offsetX + img.width * scale, offsetY + i * tileSize * scale);
-        ctx.stroke();
-    }
+function drawCityGridAndEntities() {
+    if (!cityEntities.bbox) return; // ainda carregando /entities
+
+    const marcadorPx = 10; // tamanho do marcador em pixel de imagem (não mais "tile")
 
     const categoryColors = {
         'residencia': '#8B4513',
@@ -167,6 +164,7 @@ function drawCityGridAndEntities() {
         'publico': '#696969',
         'mercado': '#FFD700',
         'forja': '#A9A9A9',
+        'universidade': '#5D3FD3',
         'generic': '#808080'
     };
     // Use seeded random for stable jittering
@@ -177,38 +175,41 @@ function drawCityGridAndEntities() {
 
     // Draw Locais
     cityEntities.locais.forEach(loc => {
-        const x = loc.coordenadas[0];
-        const y = loc.coordenadas[1];
-        
+        const p = mundoParaImagemCidade(loc.coordenadas[0], loc.coordenadas[1]);
+        const px = offsetX + p.x * scale;
+        const py = offsetY + p.y * scale;
+        const size = marcadorPx * scale;
+
         ctx.fillStyle = categoryColors[loc.categoria] || '#ffffff';
-        ctx.fillRect(offsetX + x * tileSize * scale, offsetY + y * tileSize * scale, tileSize * scale, tileSize * scale);
-        
+        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2 * scale;
-        ctx.strokeRect(offsetX + x * tileSize * scale, offsetY + y * tileSize * scale, tileSize * scale, tileSize * scale);
+        ctx.strokeRect(px - size / 2, py - size / 2, size, size);
     });
 
     // Draw NPCs
     cityEntities.npcs.forEach((npc, idx) => {
-        let x, y;
+        let wx, wy;
         if (npc.coords && Array.isArray(npc.coords)) {
-            x = npc.coords[0];
-            y = npc.coords[1];
+            wx = npc.coords[0];
+            wy = npc.coords[1];
         } else if (npc.localizacao_atual_id) {
             const loc = cityEntities.locais.find(l => l.id === npc.localizacao_atual_id);
             if (loc) {
-                x = loc.coordenadas[0];
-                y = loc.coordenadas[1];
+                wx = loc.coordenadas[0];
+                wy = loc.coordenadas[1];
             }
         }
 
-        if (x !== undefined && y !== undefined) {
-            // Apply jitter based on index
-            const jx = (pseudoRandom(idx * 2) - 0.5) * 0.6;
-            const jy = (pseudoRandom(idx * 2 + 1) - 0.5) * 0.6;
-            
-            const targetX = x + 0.5 + jx;
-            const targetY = y + 0.5 + jy;
+        if (wx !== undefined && wy !== undefined) {
+            const p = mundoParaImagemCidade(wx, wy);
+            // Jitter em pixel de imagem (antes era em unidade de "tile", que não existe mais)
+            const jx = (pseudoRandom(idx * 2) - 0.5) * marcadorPx;
+            const jy = (pseudoRandom(idx * 2 + 1) - 0.5) * marcadorPx;
+
+            const targetX = p.x + jx;
+            const targetY = p.y + jy;
 
             // Initialize or Lerp
             if (!npcAnimations[npc.id]) {
@@ -219,11 +220,11 @@ function drawCityGridAndEntities() {
             }
 
             const anim = npcAnimations[npc.id];
-            const cx = offsetX + (anim.x * tileSize) * scale;
-            const cy = offsetY + (anim.y * tileSize) * scale;
-            
+            const cx = offsetX + anim.x * scale;
+            const cy = offsetY + anim.y * scale;
+
             const isFemale = npc.bio ? npc.bio.g === 'F' : (npc.genero === 'F');
-            
+
             ctx.beginPath();
             ctx.arc(cx, cy, 3 * scale, 0, 2 * Math.PI);
             ctx.fillStyle = isFemale ? '#FF69B4' : '#4169E1';
@@ -292,15 +293,15 @@ canvas.addEventListener('mousemove', function(e) {
         
         // Tooltip logic for entities and locais
         hoveredTooltip = null;
-        if (currentMode === 'city' && cityEntities) {
-            const tileSize = img.width / 40;
+        if (currentMode === 'city' && cityEntities && cityEntities.bbox) {
+            const marcadorPx = 10; // mesmo tamanho usado em drawCityGridAndEntities
             let found = false;
-            
+
             // Check NPCs first (circles)
             for (let npc of cityEntities.npcs) {
                 if (npcAnimations[npc.id]) {
-                    const cx = offsetX + (npcAnimations[npc.id].x * tileSize) * scale;
-                    const cy = offsetY + (npcAnimations[npc.id].y * tileSize) * scale;
+                    const cx = offsetX + npcAnimations[npc.id].x * scale;
+                    const cy = offsetY + npcAnimations[npc.id].y * scale;
                     const dist = Math.hypot(canvasX - cx, canvasY - cy);
                     if (dist < 6 * scale) {
                         hoveredTooltip = `👤 ${npc.nome}\nProfissão: ${npc.profissao}\nAção: ${npc.acao}\n❤️ ${npc.status ? npc.status.h : '?'}%`;
@@ -309,13 +310,14 @@ canvas.addEventListener('mousemove', function(e) {
                     }
                 }
             }
-            
+
             // Check Locais (rects)
             if (!found) {
                 for (let loc of cityEntities.locais) {
-                    const lx = offsetX + loc.coordenadas[0] * tileSize * scale;
-                    const ly = offsetY + loc.coordenadas[1] * tileSize * scale;
-                    const size = tileSize * scale;
+                    const p = mundoParaImagemCidade(loc.coordenadas[0], loc.coordenadas[1]);
+                    const lx = offsetX + (p.x - marcadorPx / 2) * scale;
+                    const ly = offsetY + (p.y - marcadorPx / 2) * scale;
+                    const size = marcadorPx * scale;
                     if (canvasX >= lx && canvasX <= lx + size && canvasY >= ly && canvasY <= ly + size) {
                         hoveredTooltip = `🏢 ${loc.nome}\nTipo: ${loc.tipo}\nStatus: ${loc.status === 1 ? 'Ativo' : 'Em Obras'}`;
                         break;
@@ -610,7 +612,7 @@ document.getElementById('btn-global-map').addEventListener('click', function() {
     currentMode = 'global';
     currentContinentUuid = null;
     currentCityNome = null;
-    cityEntities = { locais: [], npcs: [] };
+    cityEntities = { locais: [], npcs: [], bbox: null };
 
     document.getElementById('status-mapa').innerText = '⏳ Sincronizando Mapa Mundi...';
     document.getElementById('status-mapa').style.borderColor = 'var(--warning)';

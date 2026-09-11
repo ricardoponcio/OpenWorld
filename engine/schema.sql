@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS locais (
     status INTEGER DEFAULT 1,
     integridade INTEGER DEFAULT 100,
     capacidade INTEGER DEFAULT 5,
-    salario_base INTEGER DEFAULT 100
+    salario_base INTEGER DEFAULT 100,
+    tipo_local TEXT DEFAULT '',
+    bairro TEXT DEFAULT '',
+    dono_npc_id TEXT DEFAULT ''
 );
 
 -- Profissões / Funções (Âncora de Dados)
@@ -57,6 +60,9 @@ CREATE TABLE IF NOT EXISTS npcs (
     humor TEXT DEFAULT 'Neutro',
     genero TEXT DEFAULT 'M',
     estagio_vida TEXT DEFAULT 'adulto',
+    raca TEXT DEFAULT '',
+    personalidade TEXT DEFAULT '',
+    background TEXT DEFAULT '',
     data_nascimento TEXT,
     estado_civil TEXT DEFAULT 'solteiro',
     conjuge_id TEXT,
