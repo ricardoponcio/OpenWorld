@@ -749,9 +749,116 @@ NPCs simulados, ou (b) o número de NPCs por cidade crescer na casa das centenas
 
 ---
 
+## Frente 9 — Desenho da cidade (núcleo cívico, distribuição de usos, modelos de cidade)
+
+### Objetivo (nas palavras do autor, 2026-09-11, depois de validar a Frente 7)
+> "O centro da cidade tem diversas quadras sem nada, podiamos fazer uma praça e ocupar esse
+> espaço pra ficar mais real. Outra coisa é que todos os comércios principais ficam
+> praticamente todos juntos, as vezes na mesma quadra, podiamos espalhar pela cidade (...).
+> Alem disso queria que vc analisasse a possibilidade de termos outros designs de cidade e
+> como poderiamos fazer isso."
+
+E, ao revisar a primeira versão da especificação, a decisão de arquitetura:
+> "fazer cada modelo de cidade receber as informacoes de posicao e os dados de
+> geografia/clima/etc e produzir o desenho final. (...) Isso faz com que uma interface de
+> cidade obrigue que todos os modelos tenham um trabalho padronizado, e possibilite no futuro
+> criar por exemplo cidades portuarias, por que é só instanciar essa interface, entrar na lista
+> randomica e propor como ela vai ser desenhada, seus comércios e etc."
+
+Especificado em [`ESPEC_DESENHO_CIDADE.md`](ESPEC_DESENHO_CIDADE.md) (parte 21, v1.1). **Nada
+implementado ainda** — a parte 21 produziu só o estudo e a especificação.
+
+### Diagnóstico (2026-09-11, medido — comandos na Seção 3 do documento)
+- **Vazio central**: a banda 0 não gera quarteirão nenhum e a praça tem raio **fixo** de 25 m
+  enquanto o disco interno escala com a cidade. O vazio vale de **1,7 a 3,0 quarteirões
+  médios** (20.550 a 124.026 m²); a praça cobre de 1,6% a 8,7% dele.
+- **Notáveis amontoados**: bug de **ordem de iteração**, não de sorteio. `self._lotes` é
+  preenchido em `for banda: for setor:`, e os `max` do catálogo (somam 48) se esgotam nos
+  primeiros ~100 lotes — que são todos do quarteirão `(banda 1, setor 0)`. Medido:
+  Jorverhaven põe **os 48 notáveis em 1 de 48 quarteirões**; Aurora Vales, 43 em 2 de 36;
+  Quendorvale, 29 em 2 de 15.
+- **Monocultura residencial**: consequência do mesmo bug (`entrada is None` -> `Residência`).
+  Jorverhaven tem **99,3% de residências** (6.553 de 6.601), contra os 55% que o código
+  pretende. Falta a camada de comércio de bairro (padaria, quitanda, poço), que é densidade e
+  não contagem.
+- **Uma forma só**: as 15 cidades são o mesmo traçado radial; o `tipo` da cidade influencia só
+  o catálogo de edifícios, não a geometria.
+
+### Arquitetura decidida: interface de modelo de cidade
+Cada modelo (`radial`, `grade`, `linear`, `organica`, ...) recebe um **`SitioCidade`**
+explícito — posição, bioma, clima, relevo, distância da água — e produz o desenho **inteiro**:
+malha viária, zoneamento, onde vão os notáveis, que comércio existe, muralha. A escolha é
+"lista de possibilidades no config → sorteio determinístico pela seed do nome → instancia
+passando o sítio". Sete ganchos padronizados; a classe base responde todos, cada modelo
+sobrescreve só os que fazem sentido para ele (o `linear` não tem banda nem setor, tem fileira —
+e não precisa fingir que tem).
+
+Achado que sustenta isso, medido nesta parte: `gerar_janela` já devolve **4 canais** (altitude,
+temperatura, umidade, bioma) e o gerador **descarta três**. Altitude não discrimina (0,353 a
+0,372 nas 15 cidades), mas temperatura vai de **0,012 a 0,574**, umidade de **0,243 a 0,597**, e
+há **três biomas** distintos entre as cidades. O dado que o autor quer passar ao modelo já
+existe, de graça, na chamada que o gerador já faz.
+
+### Dois limites do mundo que o estudo confirmou (medidos, e fecham portas)
+- **A cidade é plana na própria escala**: amplitude de altitude de 0,0002 a 0,0011 na janela
+  de uma cidade, e a declividade local fica em ~1e-7 contra o limiar de 0,35 do config — seis
+  ordens de grandeza. O filtro `cidade_geo_declividade_max` **nunca dispara**. Inviabiliza
+  qualquer modelo guiado por relevo (terraços, curvas de nível).
+- **Nenhuma cidade toca a água**: `cidades_distancia_costa_minima_px = 2.0` são 31,6 km, e a
+  água mais próxima de qualquer cidade está a **35,4 a 130,4 km**. A cidade mais larga tem
+  2,3 km. `portuaria` é hoje um rótulo sem geografia.
+
+Sobre a cidade portuária, a distinção que a arquitetura torna limpa: **a interface passa a
+permitir; o mundo ainda não fornece o dado.** Depois do F4, `PortuariaModelo` é uma classe nova
+e uma linha de config, sem tocar em nada compartilhado. O que falta é `distancia_agua_m` menor
+que o raio da cidade — e baixar `cidades_distancia_costa_minima_px` sozinho **não** resolve
+(0,5 px ainda são 7,9 km). O caminho que funciona é hidrografia gerada na escala da cidade, pelo
+mesmo ruído seedado que já gera o terreno de detalhe. É frente própria, não modelo de cidade.
+Por isso `distancia_agua_m` e `direcao_agua_rad` entram no `SitioCidade` desde já, sem uso.
+
+Consequência de projeto: **o modelo é escolhido por `tipo` + `tamanho` + seed, e o sítio
+calibra o modelo escolhido, não o escolhe** — e o manifesto não muda (refundá-lo significaria
+refundar as cidades).
+
+### Plano (8 etapas, ver Seção 6/7 do documento)
+`F1` núcleo cívico (praça escalada + banda 0 urbanizável) · `F2` distribuição dirigida dos
+notáveis por zona com teto por quarteirão · `F3` comércio de bairro por densidade · `F4`
+interface de modelo de cidade (refatoração pura, `diff` vazio obrigatório em cada um dos 4
+passos) · `F5` modelo `grade` · `F6` modelo `linear` · `F7` modelo `organica` (+ `bastida`
+opcional) · `F8` registro, sorteio e instanciação.
+
+F1-F3 resolvem os dois defeitos relatados e são entregáveis sem F4+. Modelo por Voronoi foi
+**descartado**: quebra o contrato de quadrilátero de `_encolher_quad`/`_subdividir_lote`/
+`_footprint_edificio` e exigiria offset de polígono côncavo.
+
+### Status: 🔴 Não iniciado — especificação pronta, aguardando decisão do autor sobre o
+escopo (F1-F3 apenas, ou a frente inteira até F8).
+
+---
+
 ## Log de Sessões
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
+
+- **2026-09-11 (parte 21, estudo e especificação do desenho de cidade)** — Depois da validação
+  visual da parte 20, o autor apontou dois defeitos (centro vazio, comércio amontoado) e pediu
+  um estudo sobre outros desenhos de cidade. Produzida a
+  [`ESPEC_DESENHO_CIDADE.md`](ESPEC_DESENHO_CIDADE.md), auto-suficiente e escrita para um
+  agente de menor senioridade executar (Frente 9, nova, ver acima). **Nenhuma linha de código
+  mudou nesta sessão** — só medição e documento. Achado principal: a concentração dos notáveis
+  é um bug de ordem de iteração (`self._lotes` preenchido banda a banda, setor a setor, e os
+  `max` do catálogo esgotando nos primeiros ~100 lotes), que em Jorverhaven põe **os 48
+  notáveis no mesmo quarteirão** e deixa a cidade com 99,3% de residências. Também medidos os
+  dois limites do mundo que fecham portas para o estudo de desenhos: a cidade é plana na
+  própria escala (declividade real ~1e-7 contra limiar 0,35) e está a 35-130 km da água, o que
+  descarta desenho em encosta e porto de verdade. Plano em 8 etapas, com F1-F3 entregando os
+  dois pedidos do autor independentemente das F4-F8. **Revisado para v1.1 na mesma sessão**:
+  o autor pediu que o desenho fosse uma **interface de modelo de cidade** (cada modelo recebe
+  posição + geografia/clima e produz o desenho final, incluindo comércio), não um "traçado" que
+  só devolve ruas e quadras. Proposta adotada e especificada como F4 (`SitioCidade` +
+  `ModeloCidade` com 7 ganchos padronizados). Medição que sustenta a mudança: `gerar_janela` já
+  devolve 4 canais e o gerador descarta 3 — temperatura (0,012 a 0,574), umidade (0,243 a
+  0,597) e bioma (3 distintos) discriminam entre as cidades, ao contrário da altitude.
 
 - **2026-09-11 (parte 20, implementação do tecido urbano — E1 a E6)** — Executada a
   especificação da parte 19 ([`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md)), etapa por

@@ -279,8 +279,10 @@
         "relevo_detalhe_margem_costa": 0.05,
         "relevo_detalhe_offset_ruido": 31337,
 
-        "cidade_geo_praca_raio_m": 25,
-        "cidade_geo_fracao_residencial": 0.55,
+        "_comentario_praca": "docs/ESPEC_DESENHO_CIDADE.md F1.1 (2026-09-11): substitui cidade_geo_praca_raio_m (25, fixo pra qualquer tamanho de cidade — a causa do vazio central medido na Seção 3.1: quanto maior a cidade, mais desproporcional o buraco). praca_raio = clamp(cidade_geo_praca_fracao_nucleo * raio_banda0, min, max), raio_banda0 = raio_m/(num_aneis+1). Jorverhaven (raio_banda0=200,3) vai a 70m de raio; Tormirstead (84,7) vai a 38m.",
+        "cidade_geo_praca_fracao_nucleo": 0.45,
+        "cidade_geo_praca_raio_min_m": 18,
+        "cidade_geo_praca_raio_max_m": 70,
         "_comentario_zoom_min_camada": "Largura QUE A CIDADE INTEIRA precisa ter na tela, em px, pra cada camada acender. O zoom_min sai daí: ceil(log2(alvo_px_de_tela / diametro_px_de_mundo)), com diametro = 2*cidade_geo_raio_m_por_tamanho/(sqrt(escala_pixel_area_km2)*1000). Só os alvos ficam aqui — a tabela (camada x tamanho) é DERIVADA em cartographer/cities/escala.py, nunca escrita à mão, senão ela e a fórmula divergem (foi o que aconteceu quando o dict fixo sobreviveu à correção de escala do D1). Recalibrado em 2026-09-11: os alvos anteriores (120/350/700/1400) só acendiam o edifício quando a cidade já era maior que a viewport, ou seja, nunca dava pra ver a cidade E os prédios juntos. Os de agora deixam a cidade media inteira em ~620 px quando os edifícios aparecem.",
         "cidade_geo_zoom_min_alvo_px_por_camada": {
             "muralha": 48,
@@ -293,6 +295,18 @@
             "lote": 800
         },
         "cidade_geo_declividade_max": 0.35,
+        "_comentario_distribuicao_notaveis": "docs/ESPEC_DESENHO_CIDADE.md F2 (2026-09-11): corrige o bug de ordem de iteração medido na Seção 3.2 — todos os notáveis caíam no primeiro quarteirão da lista (em Jorverhaven, 48 de 48 num único quarteirão). cidade_geo_notaveis_max_por_quarteirao é o teto por quadra que quebra o amontoado; cidade_geo_zona_por_categoria mapeia cada categoria do catálogo pra uma das 4 zonas (nucleo=banda 0, centro=banda 1, meio=bandas intermediárias, borda=última banda), usada pela distribuição por rodízio (F2.3).",
+        "cidade_geo_notaveis_max_por_quarteirao": 3,
+        "cidade_geo_zona_por_categoria": {
+            "publico": "nucleo",
+            "quartel": "nucleo",
+            "mercado": "nucleo",
+            "universidade": "centro",
+            "taverna": "centro",
+            "forja": "meio",
+            "fazenda": "borda",
+            "generic": "meio"
+        },
         "cidade_geo_catalogo_edificios": [
             {"tipo_local": "Castelo", "categoria": "publico", "peso": 0.3, "min": 0, "max": 1, "tamanhos": ["grande"], "tipos_cidade": ["capital", "fortaleza"], "capacidade": 20, "salario_base": 200},
             {"tipo_local": "Prefeitura", "categoria": "publico", "peso": 0.5, "min": 0, "max": 1, "tamanhos": ["medio", "grande"], "tipos_cidade": ["capital", "comercial"], "capacidade": 15, "salario_base": 150},
@@ -329,6 +343,43 @@
             {"tipo_local": "Doca", "categoria": "generic", "peso": 0.9, "min": 0, "max": 2, "tamanhos": [], "tipos_cidade": ["portuaria", "pesqueira"], "capacidade": 10, "salario_base": 90},
             {"tipo_local": "Poço", "categoria": "generic", "peso": 0.5, "min": 1, "max": 2, "tamanhos": [], "tipos_cidade": [], "capacidade": 1, "salario_base": 0},
             {"tipo_local": "Guarda", "categoria": "quartel", "peso": 0.8, "min": 1, "max": 1, "tamanhos": [], "tipos_cidade": [], "capacidade": 10, "salario_base": 100}
+        ],
+        "_comentario_comercio_bairro": "docs/ESPEC_DESENHO_CIDADE.md F3 (2026-09-11): resolve a Seção 3.3 (99,3% das construções eram residência, porque o catálogo de MARCOS acima é de contagem fixa — min/max — e o F2 já esgota ele com ~15-25 unidades numa cidade grande). Comércio de bairro é DENSIDADE, não contagem: quantidade = n_lotes // um_a_cada_n_lotes, sem min/max/tipos_cidade. Roda depois das encomendas de marco (F2), com seu próprio teto por quarteirão — o marco nunca perde lugar pra uma quitanda. cidade_geo_fracao_residencial_min é o piso: para de colocar comércio de bairro quando a fração residencial chegaria nesse piso. Substitui cidade_geo_fracao_residencial (removida — nunca funcionou como pretendido, Seção 3.3). CALIBRADO em 2026-09-11 (medido, não o valor sugerido no texto do F3.1): a densidade e o teto por quarteirão sugeridos no documento (um_a_cada_n_lotes 120-400, teto 2) dão só ~3,5% não-residencial no mundo medido — o próprio F3.1 já avisa 'calibre pra cima se ficar ralo'. O mundo real tem 61 lotes/quarteirão em média (562 quarteirões, 34.286 lotes), então um teto de 2 por quarteirão é o gargalo, não o catálogo. Densidade ~4x maior e teto 10 (em vez de 2) dão ~85% residencial, dentro do alvo de aceite F3.4 (80-93%).",
+        "cidade_geo_comercio_bairro_max_por_quarteirao": 10,
+        "cidade_geo_fracao_residencial_min": 0.80,
+        "_comentario_grade": "docs/ESPEC_DESENHO_CIDADE.md F5 (2026-09-11): traçado 'grade' (colônia romana/cidade planejada) — ruas retas cruzando em ângulo reto, quadras retangulares, cardo+decumanus mais largos cruzando na praça central. cidade_geo_grade_lado_quadra_m_faixa é o lado da célula (sorteado por cidade); cidade_geo_grade_jitter_m evita 'papel milimetrado'; cidade_geo_grade_avenida_a_cada_n define de quantas em quantas linhas sai uma avenida (classe_via='anel'). cidade_geo_umidade_limiar_seco/cidade_geo_grade_fator_lado_seco calibram o gancho ajustar_por_sitio (F5.2): cidade de clima seco (umidade < limiar) tem quadra maior — pátio interno grande, rua na sombra, como se constrói em clima seco de verdade. limiar 0,30 fica no meio da faixa medida no mundo (umidade 0,243-0,597, Seção 4.2).",
+        "cidade_geo_grade_lado_quadra_m_faixa": [70, 140],
+        "cidade_geo_grade_jitter_m": 6,
+        "cidade_geo_grade_avenida_a_cada_n": 3,
+        "cidade_geo_umidade_limiar_seco": 0.30,
+        "cidade_geo_grade_fator_lado_seco": 1.30,
+        "_comentario_linear": "F6: traçado 'linear' (vila de estrada) — uma rua principal atravessando a cidade, quadras só nas laterais, cidade comprida e estreita. cidade_geo_linear_profundidade_faixas é o nº de fileiras de quadra de cada lado do eixo (sorteado); cidade_geo_linear_largura_quadra_m_faixa a profundidade de cada fileira; cidade_geo_linear_curvatura o desvio lateral máximo do eixo, como fração do comprimento.",
+        "cidade_geo_linear_profundidade_faixas": [1, 3],
+        "cidade_geo_linear_largura_quadra_m_faixa": [50, 90],
+        "cidade_geo_linear_curvatura": 0.12,
+        "_comentario_organica": "F7: traçado 'organica' — radial degradado de propósito (herda de RadialModelo), pra dar a sensação de aldeia crescida sem plano. cidade_geo_organica_fator_irregularidade multiplica cidade_geo_irregularidade_via; cidade_geo_organica_fracao_quadras_vazias é a faixa (sorteada por cidade) de quadras descartadas de propósito.",
+        "cidade_geo_organica_fator_irregularidade": 2.2,
+        "cidade_geo_organica_fracao_quadras_vazias": [0.05, 0.18],
+        "_comentario_selecao_modelo": "F8: 'lista de possibilidades' do pedido do usuário — tipo da cidade -> [[nome_do_modelo, peso], ...], sorteio ponderado (rng derivado da seed, Seção 10 item 1: nunca o rng principal, pra não deslocar raio/anéis de toda cidade). '_default' cobre tipo sem entrada própria. Nome não registrado em MODELOS (ex.: 'portuaria', Seção 4.7) cai em 'radial' sem quebrar a geração.",
+        "cidade_geo_modelo_por_tipo": {
+            "capital": [["grade", 0.6], ["radial", 0.4]],
+            "comercial": [["grade", 0.5], ["radial", 0.5]],
+            "fortaleza": [["radial", 0.7], ["grade", 0.3]],
+            "agricola": [["linear", 0.6], ["organica", 0.4]],
+            "pesqueira": [["linear", 0.7], ["organica", 0.3]],
+            "mineira": [["organica", 0.6], ["linear", 0.4]],
+            "mistica": [["organica", 0.7], ["radial", 0.3]],
+            "residencial": [["radial", 0.5], ["organica", 0.5]],
+            "portuaria": [["linear", 0.5], ["grade", 0.5]],
+            "_default": [["radial", 1.0]]
+        },
+        "cidade_geo_catalogo_comercio_bairro": [
+            {"tipo_local": "Padaria de Bairro", "categoria": "forja", "capacidade": 3, "salario_base": 60, "um_a_cada_n_lotes": 40},
+            {"tipo_local": "Taverna de Bairro", "categoria": "taverna", "capacidade": 4, "salario_base": 70, "um_a_cada_n_lotes": 50},
+            {"tipo_local": "Quitanda", "categoria": "mercado", "capacidade": 3, "salario_base": 55, "um_a_cada_n_lotes": 35},
+            {"tipo_local": "Oficina", "categoria": "forja", "capacidade": 3, "salario_base": 75, "um_a_cada_n_lotes": 45},
+            {"tipo_local": "Poço de Bairro", "categoria": "generic", "capacidade": 1, "salario_base": 0, "um_a_cada_n_lotes": 30},
+            {"tipo_local": "Capela de Bairro", "categoria": "publico", "capacidade": 2, "salario_base": 50, "um_a_cada_n_lotes": 100}
         ],
 
         "_comentario_2": "Adicionado ao concluir a Frente 1 (2026-09-09): tectônica, clima restante, cor/shading e zoom. Valores preservam o comportamento visual anterior à migração, exceto onde indicado no ROADMAP/AUDITORIA como correção intencional.",
