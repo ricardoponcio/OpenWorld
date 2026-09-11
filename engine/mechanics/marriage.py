@@ -9,10 +9,10 @@ DESCRIÇÃO:
 """
 import time
 import random
-from datetime import datetime
-from ..models import NPC, Evento, TipoEvento, EstadoCivil
+from ..models import NPC, Evento, TipoEvento, EstadoCivil, VinculoSocial
+from ..tempo import RelogioMundo
 from ..logger import WorldLogger
-from ..utils import NPCUtils
+from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
 from .housing import NPCHousingManager
 
@@ -110,8 +110,7 @@ class NPCMarriageManager:
         engine.db.salvar_npc(n2)
 
         # Registrar Evento de União no RPG
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
         nome_casa = casa_obj.nome if casa_obj else "uma nova moradia"
 
         if surpresa:
@@ -135,7 +134,7 @@ class NPCMarriageManager:
         # Aumentar afinidade e salvar o relacionamento no banco
         n1.relacionamentos[n2.id] = min(1000, n1.relacionamentos.get(n2.id, 0) + bonus_afinidade)
         n2.relacionamentos[n1.id] = min(1000, n2.relacionamentos.get(n1.id, 0) + bonus_afinidade)
-        engine.db.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], "Aliado")
+        engine.db.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], VinculoSocial.ALIADO.value)
 
         # Emitir logs oficiais do simulador
         WorldLogger.info(f"❤️ [UNIÃO] {resumo}", npc=n1)

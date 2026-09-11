@@ -18,7 +18,8 @@ import random
 import json
 from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
-from ..utils import NPCUtils, GeoUtils
+from ..consultas_npc import NPCUtils
+from ..geo import GeoUtils
 from ..config_loader import cfg_get
 
 class NPCHousingManager:
@@ -36,8 +37,8 @@ class NPCHousingManager:
         raio = cfg_get(cfg_urbano, "locais_raio_px")
         nivel_mar = cfg_get(engine.config, "cartografia", "nivel_mar")
 
-        cidade = engine.cidades.get(n1.cidade_id, {})
-        cx, cy = cidade.get("x_global", 0), cidade.get("y_global", 0)
+        cidade = engine.cidades.get(n1.cidade_id)
+        cx, cy = (cidade.x_global, cidade.y_global) if cidade else (0, 0)
 
         nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
         # Fase 2.1 (P0.3): coordenada de MUNDO ao redor da própria cidade do NPC, não
@@ -52,7 +53,8 @@ class NPCHousingManager:
             tipo=TipoLocal.CASA.value,
             categoria=CategoriaLocal.RESIDENCIA.value,
             cidade_id=n1.cidade_id,
-            descricao=f"Dono: {n1.id}",
+            descricao=f"Obra da família {sobrenome}, em construção.",
+            dono_npc_id=n1.id,
             coordenadas=[x, y],
             status=0,
             integridade=0,

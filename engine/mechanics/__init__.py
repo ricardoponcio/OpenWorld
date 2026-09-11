@@ -1,5 +1,6 @@
 from .actions import NPCActionManager
-from .biology import NPCBiologyManager
+from .reproduction import NPCReproductionManager
+from .lifecycle import NPCLifecycleManager
 from .finance import NPCLegacyManager
 from .social import NPCSocialManager
 from .marriage import NPCMarriageManager
@@ -15,7 +16,8 @@ from .housing import NPCHousingManager
 
 __all__ = [
     "NPCActionManager",
-    "NPCBiologyManager",
+    "NPCReproductionManager",
+    "NPCLifecycleManager",
     "NPCLegacyManager",
     "NPCSocialManager",
     "NPCMarriageManager",

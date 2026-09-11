@@ -4,14 +4,14 @@ from datetime import datetime
 from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
+from ..tempo import RelogioMundo
 
 class NPCLifecycleManager:
     @staticmethod
     def processar_crescimento(engine):
         """Varredura diária para processar o crescimento e transição de estágios de vida dos NPCs."""
         cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
 
         for npc in engine.npcs:
             if not npc.esta_vivo() or not npc.data_nascimento:
@@ -97,24 +97,14 @@ class NPCLifecycleManager:
     @staticmethod
     def processar_morte(engine, npc: NPC):
         """Processa o falecimento biológico de um NPC, liberando seus recursos e acionando o testamento financeiro."""
-        from ..models import Acao, EstagioVida, Evento, TipoEvento
-        
         # 1. Registrar o óbito no banco para consistência histórica
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
-        
+        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
+
         idade_anos = 0
         if npc.data_nascimento:
-            try:
-                cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
-                limiar_morte = cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte")
-                
-                dt_str = npc.data_nascimento.replace(' ', 'T')
-                birth = datetime.fromisoformat(dt_str)
-                idade_dias = (engine.data_simulada - birth).days
-                idade_anos = int((idade_dias / limiar_morte) * 80.0)
-            except:
-                pass
+            cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+            limiar_morte = cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte")
+            idade_anos = RelogioMundo.idade_em_anos(npc.data_nascimento, engine.data_simulada, limiar_morte)
                 
         idade_str = f" aos {idade_anos} anos" if idade_anos > 0 else ""
         if npc.estagio_vida == EstagioVida.IDOSO.value:

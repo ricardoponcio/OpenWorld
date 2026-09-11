@@ -16,6 +16,7 @@ from flask import Blueprint, request, jsonify
 from engine.database import DatabaseManager
 from engine.mechanics.mestre import MestreManager
 from engine.ai import AIGameMasterClient
+from engine.models import MetaChave
 
 mestre_bp = Blueprint('mestre', __name__)
 
@@ -43,8 +44,8 @@ def get_historico():
 def get_estado():
     try:
         db = _get_db()
-        restante = int(db.carregar_meta("mestre_avancar_minutos_restantes") or 0)
-        pausado = db.carregar_meta("simulacao_pausada") == "1"
+        restante = int(db.carregar_meta(MetaChave.AVANCAR_MINUTOS) or 0)
+        pausado = db.carregar_meta(MetaChave.SIMULACAO_PAUSADA) == "1"
         return jsonify({"pausado": pausado, "avancando": restante > 0, "minutos_restantes": restante})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -119,15 +120,15 @@ def post_avancar_tempo():
         # Garante que a simulação está pausada — sem isso, o run_simulation.py nunca
         # olha para mestre_avancar_minutos_restantes (esse contador só é consumido
         # dentro do ramo de pausa do loop).
-        db.salvar_meta("simulacao_pausada", "1")
-        db.salvar_meta("mestre_avancar_minutos_restantes", str(minutos))
+        db.salvar_meta(MetaChave.SIMULACAO_PAUSADA, "1")
+        db.salvar_meta(MetaChave.AVANCAR_MINUTOS, str(minutos))
 
         # Espera o run_simulation.py consumir o avanço (poll curto). Timeout generoso
         # o bastante mesmo para saltos grandes (medido ~1.2ms/tick na Frente 4).
         timeout = max(5.0, minutos * 0.02)
         inicio = time.time()
         while time.time() - inicio < timeout:
-            restante = int(db.carregar_meta("mestre_avancar_minutos_restantes") or 0)
+            restante = int(db.carregar_meta(MetaChave.AVANCAR_MINUTOS) or 0)
             if restante <= 0:
                 break
             time.sleep(0.1)

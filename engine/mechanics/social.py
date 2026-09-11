@@ -8,11 +8,11 @@ DESCRIÇÃO:
 """
 import time
 import random
-from datetime import datetime
-from ..models import NPC, Evento, TipoEvento
+from ..models import NPC, Evento, TipoEvento, VinculoSocial
 from ..logger import WorldLogger
-from ..utils import NPCUtils
+from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
+from ..tempo import RelogioMundo
 from .marriage import NPCMarriageManager
 
 
@@ -59,19 +59,14 @@ class NPCSocialManager:
         n2.relacionamentos[n1.id] = nova_afinidade
         
         # Determinar Vínculo
-        vinculo = "Conhecido"
-        if nova_afinidade >= 70: vinculo = "Aliado"
-        elif nova_afinidade >= 30: vinculo = "Amigo"
-        elif nova_afinidade < -20: vinculo = "Rival"
-        elif nova_afinidade < -50: vinculo = "Inimigo"
+        vinculo = NPCSocialManager._classificar_vinculo(nova_afinidade, cfg_bio).value
 
         # Salvar na tabela oficial de relacionamentos
         engine.db.salvar_relacionamento(n1.id, n2.id, nova_afinidade, vinculo)
 
         tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
         resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
         
         evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}", 
                         timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
@@ -90,3 +85,19 @@ class NPCSocialManager:
                 if casa_escolhida:
                     # Realizar casamento completo e atômico no gerenciador de casamentos
                     NPCMarriageManager.realizar_casamento(engine, n1, n2, casa_escolhida, surpresa=True)
+
+    @staticmethod
+    def _classificar_vinculo(afinidade: float, cfg_bio: dict) -> VinculoSocial:
+        """Classifica o vínculo pela afinidade acumulada. Testa os limiares negativos
+        do mais extremo pro menos extremo (R-B01) — a ordem inversa deixava INIMIGO
+        inalcançável: qualquer afinidade abaixo de -50 já satisfazia '< limiar_rival'
+        (-20) primeiro e nunca chegava a checar '< limiar_inimigo'."""
+        if afinidade >= cfg_get(cfg_bio, "vinculo_limiar_aliado"):
+            return VinculoSocial.ALIADO
+        if afinidade >= cfg_get(cfg_bio, "vinculo_limiar_amigo"):
+            return VinculoSocial.AMIGO
+        if afinidade <= cfg_get(cfg_bio, "vinculo_limiar_inimigo"):
+            return VinculoSocial.INIMIGO
+        if afinidade <= cfg_get(cfg_bio, "vinculo_limiar_rival"):
+            return VinculoSocial.RIVAL
+        return VinculoSocial.CONHECIDO

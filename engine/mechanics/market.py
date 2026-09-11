@@ -1,14 +1,16 @@
-import sqlite3
 from ..database import DatabaseManager
 from ..logger import WorldLogger
 from ..models import ProfissaoID, CategoriaLocal, CategoriaSistema, EstagioVida, PROFISSAO_DEPENDENTE
-from ..config_loader import cfg_get, carregar_config_global
+from ..config_loader import cfg_get
 
 class JobMarket:
-    def __init__(self, db_path="database/openworld.db"):
-        self.db_path = db_path
-        self.db = DatabaseManager(db_path)
-        self.config = carregar_config_global()
+    """Mercado de trabalho: vagas e contratação. Recebe o banco e a config de quem já
+    os tem (R-F02) — antes abria seu próprio pool de conexões
+    (`DatabaseManager(db_path)`), e `run_simulation.py` acabava com DOIS pools no mesmo
+    processo (a `SimulationEngine` e o `JobMarket`), sem motivo nenhum."""
+    def __init__(self, db: DatabaseManager, config: dict):
+        self.db = db
+        self.config = config
 
     def bootstrap_market(self):
         """Inicializa as categorias e profissoes no banco se estiver vazio."""
@@ -176,7 +178,3 @@ class JobMarket:
 
             if contratacoes > 0:
                 WorldLogger.info(f"📊 Total de novas contratações: {contratacoes}")
-
-if __name__ == "__main__":
-    market = JobMarket()
-    market.processar_contratacoes()

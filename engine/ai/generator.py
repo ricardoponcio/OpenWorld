@@ -1,8 +1,10 @@
 import random
 from typing import Dict, List, Optional
 from .client import AIClient
-from ai.utils import AIUtils
+from .utils import AIUtils
+from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
+from ..models import Genero
 
 class AIGeneratorClient:
     """
@@ -25,12 +27,10 @@ class AIGeneratorClient:
             WorldLogger.warning(f"[AI-GENERATOR] Ativando fallback para criação de locais devido a falha: {e}")
             
         # Fallback procedural
-        categorias_oficina = ["Oficina do Dragão", "Ferrearia da Guilda", "Moinho de Vento", "Serraria Real"]
-        categorias_sociais = ["Taverna do Dragão", "Praça das Estrelas", "Arena da Vila", "Jardim Botânico"]
         locais = []
         for i in range(quantidade):
             tipo = "Social" if i < 2 else "Oficina"
-            nome = random.choice(categorias_sociais) if tipo == "Social" else random.choice(categorias_oficina)
+            nome = AIFallbacks.sortear_local_social() if tipo == "Social" else AIFallbacks.sortear_local_oficina()
             locais.append({
                 "nome": f"{nome} {random.randint(10, 99)}",
                 "tipo": tipo,
@@ -43,7 +43,7 @@ class AIGeneratorClient:
         """
         Generates an NPC DNA structure, ensuring high-fidelity fallback when offline.
         """
-        genero_ext = "MASCULINO" if genero == 'M' else "FEMININO"
+        genero_ext = "MASCULINO" if genero == Genero.MASCULINO.value else "FEMININO"
         nomes_str = ", ".join(nomes_excluidos) if nomes_excluidos else "Nenhum"
         
         try:
@@ -65,25 +65,12 @@ class AIGeneratorClient:
             WorldLogger.warning(f"[AI-GENERATOR] Ativando fallback para DNA de NPC: {e}")
             
         # Fallback procedural
-        nomes_m = ["Erik", "Thorn", "Kaelen", "Fíricus", "Einar", "Elior", "Garrick", "Bram"]
-        nomes_f = ["Elara", "Mila", "Aria", "Lila", "Natalia", "Mariana", "Sylvia", "Vespera"]
-        sobrenomes = ["Stonefist", "Ironforge", "Moonshadow", "Thornbloom", "Frostwhisper", "Brilhante", "Marinerá", "Soliluna"]
-        
-        first = random.choice(nomes_m) if genero == 'M' else random.choice(nomes_f)
-        last = random.choice(sobrenomes)
-        nome_completo = f"{first} {last}"
-        
-        while nome_completo in nomes_excluidos:
-            first = random.choice(nomes_m) if genero == 'M' else random.choice(nomes_f)
-            last = random.choice(sobrenomes)
-            nome_completo = f"{first} {last}"
-            
-        raca = "Humano" if random.random() < 0.7 else random.choice(["Elfo", "Anão", "Orc"])
-        
+        nome_completo = AIFallbacks.sortear_nome_npc(genero, nomes_excluidos)
+
         return {
             "nome": nome_completo,
             "genero": genero,
-            "raca": raca,
+            "raca": AIFallbacks.sortear_raca(),
             "cargo": f"Trabalhador de {loc_nome}",
             "personalidade": "Uma mente curiosa e determinada a cumprir seus objetivos.",
             "background": f"Chegou a {tema} recentemente buscando fazer fortuna em {loc_nome}."

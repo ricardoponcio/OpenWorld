@@ -7,8 +7,8 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.append(raiz)
 
-from ai.client import AIClient
-from ai.utils import AIUtils
+from engine.ai.client import AIClient
+from engine.ai.utils import AIUtils
 from engine.logger import WorldLogger
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get

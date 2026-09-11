@@ -64,7 +64,7 @@ def _carregar_cartografo():
 def obter_cartografo():
     """Acesso público ao `TileCartographer` de processo único — reaproveitado por
     qualquer rota que precise de `gerar_janela` fora do endpoint de tile (ex.: imagem de
-    continente/cidade em `web/composed_routes.py`). Retorna None se o mundo ainda não foi
+    continente/cidade em `web/rotas/mapa.py`). Retorna None se o mundo ainda não foi
     gerado ou o manifesto não tem `layout_continentes` persistido (P0.5)."""
     return _carregar_cartografo()
 

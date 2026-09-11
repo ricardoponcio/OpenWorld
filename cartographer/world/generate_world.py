@@ -36,7 +36,9 @@ def gerar_mundo_composto(replanejar=False):
             print("=== Manifesto existente não tem 'layout_continentes' — replanejando ===")
 
     manager = WorldManager(
-        tile_size=256, seed=1337, config=CARTOGRAPHER_CONFIG,
+        tile_size=cfg_get(CARTOGRAPHER_CONFIG, "tile_size_px"),
+        seed=cfg_get(CARTOGRAPHER_CONFIG, "mundo_seed"),
+        config=CARTOGRAPHER_CONFIG,
         layout_continentes=layout_continentes,
     )
 

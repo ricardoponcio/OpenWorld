@@ -43,23 +43,6 @@ class InfrastructureManager:
             return EstadoInfraestrutura.DESGASTADO
         return EstadoInfraestrutura.CONSERVADO
 
-    @staticmethod
-    def capacidade_efetiva(local: Local, cfg: dict) -> int:
-        """
-        Ponto único de verdade para capacidade real de vagas de um local,
-        descontando degradação estrutural.
-        Deve ser consultado pelo JobMarket em vez de local.capacidade diretamente.
-        """
-        estado = InfrastructureManager.estado_atual(local, cfg)
-        cap = local.capacidade
-        if estado in (EstadoInfraestrutura.CRITICO, EstadoInfraestrutura.RUINA):
-            return 0
-        if estado == EstadoInfraestrutura.DETERIORADO:
-            return max(0, cap - 2)
-        if estado == EstadoInfraestrutura.DESGASTADO:
-            return max(0, cap - 1)
-        return cap
-
     # ------------------------------------------------------------------
     # Pipeline principal (chamada diária)
     # ------------------------------------------------------------------

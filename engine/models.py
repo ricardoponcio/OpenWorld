@@ -2,6 +2,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 from enum import Enum
 
+# Limite estrutural das necessidades do NPC (energia/fome/social/saúde) — R-B09. Não é
+# parâmetro de balanceamento (não vai pro config): é a faixa que a própria escala 0-100
+# da simulação define.
+ESCALA_MINIMA = 0.0
+ESCALA_MAXIMA = 100.0
+
 class Acao(Enum):
     DORMIR = "Dormir"
     TRABALHAR = "Trabalhar"
@@ -10,6 +16,14 @@ class Acao(Enum):
     OCIOSO = "Ocioso"
     CUIDAR_PROLE = "Cuidar da Prole"
     CONSTRUIR = "Construindo"
+
+class Genero(Enum):
+    """INVARIANTE: NPC.genero guarda sempre Genero.X.value (str) — é o que vai para a
+    coluna TEXT do SQLite. Rótulos de exibição ('menino'/'menina', 'Masculino ♂️') não
+    entram aqui — são apresentação, não domínio; ficam como constante no módulo que
+    exibe."""
+    MASCULINO = "M"
+    FEMININO = "F"
 
 class EstagioVida(Enum):
     BEBE = "bebe"
@@ -77,13 +91,26 @@ class EstadoInfraestrutura(Enum):
     RUINA       = "Ruína"        # 10–0
 
 class HumorNPC(Enum):
-    NEUTRO = "Neutro"
-    ALEGRE = "Alegre"
-    CONTENTE = "Contente"
-    TRISTE = "Triste"
-    ANGUSTIADO = "Angustiado"
-    PANICO = "Em Pânico"
-    MEDO = "Amedrontado"
+    """`ordem` é a posição no "termômetro" de humor normal, do pior pro melhor — usado
+    por `NPCMoodManager` pra decidir se o próximo passo de transição sobe ou desce um
+    degrau. PANICO/MEDO ficam fora da escala normal (`ordem=None`): são forçados
+    externamente (ex.: Modo Mestre) e não fazem parte da transição gradual (R-C04)."""
+    ANGUSTIADO = ("Angustiado", 0)
+    TRISTE     = ("Triste", 1)
+    NEUTRO     = ("Neutro", 2)
+    CONTENTE   = ("Contente", 3)
+    ALEGRE     = ("Alegre", 4)
+    PANICO     = ("Em Pânico", None)
+    MEDO       = ("Amedrontado", None)
+
+    def __init__(self, rotulo, ordem):
+        self._value_ = rotulo
+        self.ordem = ordem
+
+    @classmethod
+    def escala_normal(cls) -> list:
+        """Os humores com posição na escala normal, do pior pro melhor."""
+        return sorted((h for h in cls if h.ordem is not None), key=lambda h: h.ordem)
 
 class TipoEvento(Enum):
     NASCIMENTO = "NASCIMENTO"
@@ -95,6 +122,30 @@ class TipoEvento(Enum):
     MAIORIDADE = "MAIORIDADE"
     CONVERSA = "CONVERSA"
     DISCUSSAO = "DISCUSSAO"
+
+class VinculoSocial(Enum):
+    """Classificação qualitativa de uma relação, derivada da afinidade acumulada
+    entre dois NPCs (ver NPCSocialManager._classificar_vinculo)."""
+    CONJUGE    = "Cônjuge"
+    ALIADO     = "Aliado"
+    AMIGO      = "Amigo"
+    CONHECIDO  = "Conhecido"
+    RIVAL      = "Rival"
+    INIMIGO    = "Inimigo"
+
+class MetaChave(Enum):
+    """Chaves da tabela `mundo_meta` (sinalização entre run_simulation.py, o dashboard
+    e o Modo Mestre — ver ARQUITETURA.md Seção 1: "Regra de processo"). Um erro de
+    digitação numa string solta era silencioso: carregar_meta devolvia None e o
+    sistema seguia com o default (R-B05)."""
+    SIMULACAO_PAUSADA   = "simulacao_pausada"
+    VELOCIDADE          = "velocidade_simulacao"
+    AVANCAR_MINUTOS     = "mestre_avancar_minutos_restantes"
+    HORA_FORMATADA      = "hora_simulada"
+    HORA_ISO            = "hora_simulada_iso"
+    CIDADE_SIMULADA     = "cidade_simulada"
+    CIDADES_ATIVAS      = "cidades_ativas"
+    MAPA_TERRENO        = "mapa_terreno"
 
 @dataclass
 class Local:
@@ -119,6 +170,20 @@ class Local:
 
 
 @dataclass
+class Cidade:
+    """Uma cidade do mundo, importada de `world_manifest.json` (R-C06). Antes,
+    `DatabaseManager.carregar_cidades()` devolvia `list[dict]` cru — a única forma de
+    retorno crua entre `carregar_npcs`/`carregar_locais` (que já devolvem dataclass)."""
+    id: int
+    continente_uuid: str
+    nome: str
+    tamanho: str
+    tipo: str
+    x_global: int
+    y_global: int
+
+
+@dataclass
 class NPC:
     id: str
     nome: str
@@ -137,11 +202,14 @@ class NPC:
     social: float = 100.0
     fome: float = 0.0
     saude: int = 100 # 0 a 100
-    humor: str = "Neutro"
+    humor: str = HumorNPC.NEUTRO.value
     
     # Atributos Biológicos e Ciclo de Vida
-    genero: str = "M"  # 'M' ou 'F'
-    estagio_vida: str = "adulto" # 'bebe', 'crianca', 'adulto', 'idoso'
+    # INVARIANTE (R-C05): genero/estagio_vida/humor guardam SEMPRE o .value do enum
+    # correspondente (Genero/EstagioVida/HumorNPC) — é o que vai para a coluna TEXT do
+    # SQLite. Nunca o membro do enum.
+    genero: str = Genero.MASCULINO.value
+    estagio_vida: str = EstagioVida.ADULTO.value
     estado_civil: str = EstadoCivil.SOLTEIRO.value
     conjuge_id: str = ""
     data_nascimento: str = ""
@@ -159,6 +227,11 @@ class NPC:
     genealogia: List[str] = field(default_factory=list)
     relacionamentos: Dict[str, int] = field(default_factory=dict)
     memoria_eventos: List[str] = field(default_factory=list)
+
+    # Campo DERIVADO, recalculado por GameLoop a cada tick a partir dos moradores da
+    # casa (R-C01). Não é persistido (ver DatabaseManager/RepositorioNPC) e não deve
+    # ser escrito por nenhum outro módulo.
+    num_dependentes: int = 0
 
 
     @property
@@ -179,16 +252,35 @@ class NPC:
         return ", ".join(parts)
 
     def is_adulto(self) -> bool:
-        return self.estagio_vida == EstagioVida.ADULTO.value or self.estagio_vida == EstagioVida.ADULTO
+        return self.estagio_vida == EstagioVida.ADULTO.value
 
     def is_idoso(self) -> bool:
-        return self.estagio_vida == EstagioVida.IDOSO.value or self.estagio_vida == EstagioVida.IDOSO
+        return self.estagio_vida == EstagioVida.IDOSO.value
 
     def pode_procriar(self) -> bool:
         return self.is_adulto() and self.saude > 0
 
     def esta_vivo(self) -> bool:
-        return self.saude > 0 and self.estagio_vida != EstagioVida.MORTO.value and self.estagio_vida != EstagioVida.MORTO
+        return self.saude > 0 and self.estagio_vida != EstagioVida.MORTO.value
+
+    def eh_dependente(self) -> bool:
+        """Bebê, criança ou adulto marcado como dependente — não trabalha, não
+        socializa fora de casa e tem a conta paga por um responsável (R-B04). Antes
+        desta unificação, a mesma expressão estava copiada em 6 lugares, e em
+        movement.py a cópia já tinha divergido (só olhava 'bebe', não 'crianca')."""
+        return (self.profissao == PROFISSAO_DEPENDENTE
+                or self.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value))
+
+    def normalizar_necessidades(self) -> None:
+        """Prende energia/fome/social/saúde na faixa válida (R-B09). Ponto único de
+        clamp — as ações somam e subtraem livremente ao longo do tick e isto fecha a
+        conta uma vez só, no fim. Antes, o mesmo clamp estava espalhado em `loop.py` (as
+        4 necessidades) e de novo, parcialmente, em `actions.py` (só energia/social, em
+        4 pontos diferentes)."""
+        self.energia = min(ESCALA_MAXIMA, max(ESCALA_MINIMA, self.energia))
+        self.fome    = min(ESCALA_MAXIMA, max(ESCALA_MINIMA, self.fome))
+        self.social  = min(ESCALA_MAXIMA, max(ESCALA_MINIMA, self.social))
+        self.saude   = int(min(ESCALA_MAXIMA, max(ESCALA_MINIMA, self.saude)))
 
 @dataclass
 class Evento:

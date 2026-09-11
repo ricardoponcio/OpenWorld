@@ -2,12 +2,24 @@ import time
 import random
 import threading
 import sqlite3
-from datetime import datetime
-from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao
+from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao, Genero
 from ..logger import WorldLogger
-from ..utils import NPCUtils
+from ..consultas_npc import NPCUtils
 from ..ai import AIBiographyClient
 from ..config_loader import cfg_get
+from ..tempo import RelogioMundo
+
+
+def _extrair_sobrenome(nome: str) -> str:
+    """Último token do nome completo, ou o próprio nome se for de uma palavra só."""
+    partes = nome.split()
+    return partes[-1] if len(partes) > 1 else nome
+
+
+# Rótulo de exibição do gênero do bebê no resumo do evento de nascimento — não entra
+# no enum Genero (que é domínio/persistência), é só apresentação (R-B02).
+_ROTULO_GENERO_BEBE = {Genero.MASCULINO.value: "menino", Genero.FEMININO.value: "menina"}
+
 
 class NPCReproductionManager:
     @staticmethod
@@ -23,8 +35,8 @@ class NPCReproductionManager:
                 continue
             
             # Procurar pares (M/F) férteis e com alta afinidade
-            homens = [m for m in presentes if m.genero == 'M' and m.pode_procriar()]
-            mulheres = [m for m in presentes if m.genero == 'F' and m.pode_procriar() and m.gravidez_ticks == 0]
+            homens = [m for m in presentes if m.genero == Genero.MASCULINO.value and m.pode_procriar()]
+            mulheres = [m for m in presentes if m.genero == Genero.FEMININO.value and m.pode_procriar() and m.gravidez_ticks == 0]
             
             casa_superlotada = NPCUtils.is_casa_superlotada(engine.locais, engine.npcs, casa_id)
             
@@ -40,8 +52,7 @@ class NPCReproductionManager:
                             engine.db.salvar_npc(m)
                             
                             # Registrar evento de concepção
-                            dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-                            timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+                            timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
                             resumo = f"Grande notícia em segredo: {m.nome} e {h.nome} estão esperando um bebê!"
                             
                             evento = Evento(
@@ -68,13 +79,13 @@ class NPCReproductionManager:
         moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, mae.casa_id, apenas_vivos=True)
         # Excluir a própria mãe da lista
         moradores = [n for n in moradores if n.id != mae.id]
-        homens = [m for m in moradores if m.genero == 'M' and m.is_adulto()]
+        homens = [m for m in moradores if m.genero == Genero.MASCULINO.value and m.is_adulto()]
         if homens:
             homens.sort(key=lambda h: mae.relacionamentos.get(h.id, 0), reverse=True)
             pai = homens[0]
             
         # 2. Gerar o nome temporário e gênero do bebê
-        genero_bebe = random.choice(['M', 'F'])
+        genero_bebe = random.choice([g.value for g in Genero])
         nome_mae = mae.nome
         nome_pai = pai.nome if pai else "Desconhecido"
         
@@ -82,23 +93,14 @@ class NPCReproductionManager:
         nome_pai_curto = nome_pai.split()[0] if pai else "Desconhecido"
         nome_temp_bebe = f"Bebê de {nome_mae_curto} e {nome_pai_curto}" if pai else f"Bebê de {nome_mae_curto}"
         
-        def extrair_sobrenome(nome):
-            partes = nome.split()
-            if len(partes) > 1:
-                if "de" in partes:
-                    return partes[-1]
-                return partes[-1]
-            return nome
-            
-        sobrenome_mae = extrair_sobrenome(nome_mae)
-        sobrenome_pai = extrair_sobrenome(nome_pai) if pai else ""
+        sobrenome_mae = _extrair_sobrenome(nome_mae)
+        sobrenome_pai = _extrair_sobrenome(nome_pai) if pai else ""
         sobrenome_bebe = sobrenome_pai if sobrenome_pai else sobrenome_mae
         if sobrenome_mae and sobrenome_pai and sobrenome_mae != sobrenome_pai:
             sobrenome_bebe = f"{sobrenome_pai} {sobrenome_mae}" if random.random() < 0.5 else sobrenome_pai
             
         # 3. Criar e salvar o bebê com nome temporário no banco
-        dia = (engine.data_simulada - datetime(1200, 1, 1, 0, 0)).days + 1
-        timestamp_rpg = f"Dia {dia}, {engine.data_simulada.strftime('%H:%M')}"
+        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
         
         bebe_id = f"npc_nac_{int(time.time())}_{random.randint(0, 999)}"
         
@@ -146,7 +148,7 @@ class NPCReproductionManager:
         
         # Registrar evento de parto com nome temporário
         pais_str = f"{mae.nome} e {pai.nome}" if pai else mae.nome
-        resumo_temp = f"Nascimento na Vila! Nasceu o bebê {nome_temp_bebe} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+        resumo_temp = f"Nascimento na Vila! Nasceu o bebê {nome_temp_bebe} ({_ROTULO_GENERO_BEBE[genero_bebe]}), filho de {pais_str}."
         evento_id = f"evt_parto_{int(time.time())}_{random.randint(0,999)}"
         
         evento = Evento(
@@ -186,7 +188,7 @@ class NPCReproductionManager:
                     cursor.execute("UPDATE npcs SET nome = ? WHERE id = ?", (nome_gerado, bebe_id))
                     
                     # 3. Atualiza a descrição do evento de nascimento
-                    resumo_final = f"Nascimento na Vila! Nasceu o bebê {nome_gerado} ({'menino' if genero_bebe == 'M' else 'menina'}), filho de {pais_str}."
+                    resumo_final = f"Nascimento na Vila! Nasceu o bebê {nome_gerado} ({_ROTULO_GENERO_BEBE[genero_bebe]}), filho de {pais_str}."
                     cursor.execute("UPDATE eventos SET resumo_estruturado = ? WHERE id = ?", (resumo_final, evento_id))
                 
                 # 4. Sincroniza o novo nome na lista ativa de NPCs da Engine

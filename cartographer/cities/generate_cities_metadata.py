@@ -13,7 +13,7 @@ if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
 from cartographer.ai.city_manager_ai import CityManagerAIClient
-from cartographer.math.climate import ClimateProcessor
+from cartographer.math.climate import Bioma
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
 
@@ -141,20 +141,20 @@ def gerar_metadados_cidades(uuid_ou_nome: str):
     # substitui `random.choice` por adjacência à costa + altitude baixa/plana + bioma
     # pedido, com distância mínima entre cidades como restrição dura.
     #
-    # ⚠️ Achado nesta sessão: `{k.replace("_"," ").title(): v for k,v in BIOME_IDS.items()}`
-    # dava "Mediterraneo" (sem acento, de "MEDITERRANEO" em climate.py) — mas o nome que
-    # circula de verdade em `biomas_predominantes`/prompt da IA é "Mediterrâneo" (COM
-    # acento, de `world_manager.py:biomas_nomes`). O `.get()` falhava em silêncio e toda
-    # cidade com `bioma_desejado="Mediterrâneo"` caía no fallback (Floresta Temperada) sem
-    # aviso nenhum. Mapa fixo, batendo com a grafia real usada no resto do pipeline — é o
-    # mesmo ponto de manutenção "4 lugares" já avisado na Seção 1.2 do plano.
-    biome_map_to_id = {"Oceano": 1, "Deserto": 2, "Mediterrâneo": 3, "Floresta Temperada": 4, "Montanha Rochosa": 5}
+    # ⚠️ Achado nesta sessão (histórico): `{k.replace("_"," ").title(): v for k,v in
+    # BIOME_IDS.items()}` dava "Mediterraneo" (sem acento, de "MEDITERRANEO" em
+    # climate.py) — mas o nome que circula de verdade em `biomas_predominantes`/prompt
+    # da IA é "Mediterrâneo" (COM acento). O `.get()` falhava em silêncio e toda cidade
+    # com `bioma_desejado="Mediterrâneo"` caía no fallback (Floresta Temperada) sem
+    # aviso nenhum. R-B06: o mapa nome->id agora vem do enum `Bioma` (fonte única do
+    # rótulo, com acento e tudo) — não há mais um segundo dicionário pra divergir.
+    biome_map_to_id = {b.rotulo: b.id_numerico for b in Bioma}
     distancia_minima = cfg_get(CARTOGRAPHER_CONFIG, "cidades_distancia_minima_px")
 
     cidades_ja_colocadas = []  # [(x_global, y_global), ...]
     for cid in cidades:
         bioma_str = cid.get("bioma_desejado", biomas_disponiveis[0] if biomas_disponiveis else "Floresta Temperada").title()
-        bioma_id = biome_map_to_id.get(bioma_str, ClimateProcessor.BIOME_IDS.get("FLORESTA_TEMPERADA", 4))
+        bioma_id = biome_map_to_id.get(bioma_str, Bioma.FLORESTA_TEMPERADA.id_numerico)
 
         score = _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, CARTOGRAPHER_CONFIG, tipo=(cid.get("tipo") or "").lower())
 

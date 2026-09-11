@@ -2,8 +2,8 @@ import os
 import random
 import zlib
 from engine.logger import WorldLogger
-from ai.client import AIClient
-from ai.utils import AIUtils
+from engine.ai.client import AIClient
+from engine.ai.utils import AIUtils
 
 # Fase 1.4 (P1.4): fallback procedural — o mesmo padrão de tabela de sílabas usado
 # implicitamente em outros fallbacks do projeto (nomes fixos em world_manager_ai.py), aqui

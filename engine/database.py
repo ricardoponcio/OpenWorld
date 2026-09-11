@@ -3,7 +3,8 @@ import json
 import os
 import queue
 from contextlib import contextmanager
-from .models import NPC, Local, Evento, Acao, EstadoCivil, CategoriaSistema
+from typing import Dict
+from .models import NPC, Local, Evento, Acao, EstadoCivil, CategoriaSistema, MetaChave, Cidade
 from .logger import WorldLogger
 
 class DatabaseManager:
@@ -79,15 +80,19 @@ class DatabaseManager:
             rows = cursor.fetchall()
             return [dict(r) for r in rows]
 
-    def salvar_meta(self, chave: str, valor: str):
+    def salvar_meta(self, chave, valor: str):
+        """`chave` aceita `MetaChave` ou `str` — `str` continua funcionando pra não
+        quebrar `builder/fix/` e SQL ad-hoc de diagnóstico (R-B05)."""
+        chave_str = chave.value if isinstance(chave, MetaChave) else chave
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('INSERT OR REPLACE INTO mundo_meta VALUES (?, ?)', (chave, valor))
+            cursor.execute('INSERT OR REPLACE INTO mundo_meta VALUES (?, ?)', (chave_str, valor))
 
-    def carregar_meta(self, chave: str) -> str:
+    def carregar_meta(self, chave) -> str:
+        chave_str = chave.value if isinstance(chave, MetaChave) else chave
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT valor FROM mundo_meta WHERE chave = ?', (chave,))
+            cursor.execute('SELECT valor FROM mundo_meta WHERE chave = ?', (chave_str,))
             row = cursor.fetchone()
             return row[0] if row else None
 
@@ -104,12 +109,22 @@ class DatabaseManager:
                            (continente_uuid, nome, tamanho, tipo, x_global, y_global))
             return cursor.lastrowid
 
-    def carregar_cidades(self) -> list:
+    def carregar_cidades_por_id(self) -> Dict[int, Cidade]:
+        """R-C06: antes devolvia `list[dict]` cru — única forma de retorno crua entre os
+        três carregadores (`carregar_npcs`/`carregar_locais_por_id` já devolviam
+        dataclass). Os chamadores reindexavam por `id` na mão (`engine/core.py`)."""
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM cidades')
             rows = cursor.fetchall()
-            return [dict(r) for r in rows]
+            return {
+                row['id']: Cidade(
+                    id=row['id'], continente_uuid=row['continente_uuid'], nome=row['nome'],
+                    tamanho=row['tamanho'], tipo=row['tipo'],
+                    x_global=row['x_global'], y_global=row['y_global'],
+                )
+                for row in rows
+            }
 
     def salvar_local(self, local: Local):
         with self.connection() as conn:
@@ -122,7 +137,7 @@ class DatabaseManager:
                 local.capacidade, local.salario_base, local.tipo_local, local.bairro, local.dono_npc_id
             ))
 
-    def carregar_locais(self) -> dict:
+    def carregar_locais_por_id(self) -> dict:
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM locais')

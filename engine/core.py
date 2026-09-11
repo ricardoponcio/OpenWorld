@@ -9,7 +9,7 @@ DESCRIÇÃO:
 """
 from .database import DatabaseManager
 from .logger import WorldLogger
-from .utils import NPCUtils
+from .consultas_npc import NPCUtils
 from .config_loader import carregar_config_global
 from .loop import GameLoop
 
@@ -18,11 +18,11 @@ class SimulationEngine:
     def __init__(self, db_path="database/openworld.db"):
         self.db = DatabaseManager(db_path)
         self.npcs = self.db.carregar_npcs()
-        self.locais = self.db.carregar_locais()
+        self.locais = self.db.carregar_locais_por_id()
         # Fase 2.1 (P0.3): expansão urbana (housing.py) precisa do pixel-âncora da
         # cidade do NPC pra sortear coordenada de mundo pra casa nova, não mais uma
         # grade local fake.
-        self.cidades = {c["id"]: c for c in self.db.carregar_cidades()}
+        self.cidades = self.db.carregar_cidades_por_id()
         self.tick_count = 0
         
         # Carregar Configuração usando utilitário de config centralizado

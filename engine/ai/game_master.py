@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List
 from .client import AIClient
-from ai.utils import AIUtils
+from .utils import AIUtils
 from ..logger import WorldLogger
 
 

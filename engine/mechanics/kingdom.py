@@ -25,15 +25,17 @@ class KingdomManager:
         if not cfg_get(cfg_reino, "fornecer_sopao"):
             return False
             
-        # Permitir sopão se o NPC for idoso OU se estiver em extrema miséria e fome (> 60) sem dinheiro
-        extremamente_pobre = npc.dinheiro_total_pc <= 0 and npc.fome > 60.0
+        # Permitir sopão se o NPC for idoso OU se estiver em extrema miséria e fome sem dinheiro
+        limiar_miseria = cfg_get(cfg_reino, "sopao_fome_limiar_miseria")
+        fator = cfg_get(cfg_reino, "sopao_fator_potencia")
+        extremamente_pobre = npc.dinheiro_total_pc <= 0 and npc.fome > limiar_miseria
         if not npc.is_idoso() and not extremamente_pobre:
             return False
-            
-        npc.fome -= (fome_rec_do_tick * 0.5)  # Sopão alimenta menos que refeição paga
-        npc.energia += (energia_ganho_do_tick * 0.5)
-        
-        if engine.tick_count % 4 == 0:
+
+        npc.fome -= (fome_rec_do_tick * fator)  # Sopão alimenta menos que refeição paga
+        npc.energia += (energia_ganho_do_tick * fator)
+
+        if WorldLogger.deve_logar_amostra(engine.tick_count, engine.config):
             WorldLogger.info(f"🍲 [SOPÃO COMUNITÁRIO] O reino forneceu um sopão para {npc.nome}, evitando a inanição.", npc=npc)
         return True
 

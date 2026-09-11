@@ -47,6 +47,9 @@
         "_comentario_2": "multiplicador_por_dependente/parcelas_refeicao/social_ganho_gratis/chance_*/social_perda/construir migrados de literais soltos em actions.py na Frente 1 (2026-09-09)."
     },
     "ia_decisao": {
+        "_comentario_movimento": "R-B11 do PLANO_REFATORACAO.md: chances de decisão de movimento, antes literais soltos em movement.py.",
+        "chance_ficar_em_casa_com_dependentes": 0.50,
+        "chance_comer_fora_de_casa": 0.50,
         "gatilho_fome_normal": 40,
         "gatilho_fome_dormindo": 85,
         "fome_urgente_limiar": 70,
@@ -61,6 +64,7 @@
         "_comentario": "Abaixei o bônus de persistência para eles não ficarem 'presos' em ações cansativas.",
 
         "_comentario_2": "Pesos da Utility AI (NPCBrain), migrados de literais soltos em logic.py na Frente 1 (2026-09-09).",
+        "esta_comendo_fome_minima": 10,
         "multiplicador_valor_fome": 4.0,
         "bonus_nao_interromper_refeicao": 100.0,
         "fator_fome_sem_dinheiro": 0.1,
@@ -93,6 +97,8 @@
         "gravidez_multiplicador_ganho_fome": 1.2,
         "parto_afinidade_inicial_pais": 100,
         "crescimento_hora": 4,
+        "habitacao_hora": 6,
+        "pagamento_reino_hora": 8,
         "crescimento_dias_bebe_para_crianca": 5,
         "crescimento_dias_crianca_para_adulto": 15,
         "crescimento_dias_adulto_para_idoso": 75,
@@ -102,11 +108,19 @@
         "heranca_afinidade_minima_conjuge": 50,
         "heranca_evento_modificador_afinidade": 10,
         "inaniacao_perda_saude": 0.333333,
+        "inaniacao_fome_limiar": 90,
+        "recuperacao_sono_fome_maxima": 20,
         "dormir_ganho_saude": 0.133333,
         "interacao_chance": 0.0452,
         "casamento_chance_coabitacao": 0.00135,
         "casamento_chance_romance_fisico": 0.15,
         "interacao_afinidade_ganhos": [-5, 5, 10, 15],
+
+        "_comentario_vinculo": "R-B01 do PLANO_REFATORACAO.md (2026-09-11): limiares de classificação de VinculoSocial pela afinidade acumulada. Extraídos da cadeia if/elif que estava em social.py, que tinha um bug real — 'elif < -20' vinha antes de 'elif < -50', então INIMIGO nunca era atribuído (afinidade -60 já satisfazia '< -20' e parava ali). A classificação correta testa os limiares negativos do mais extremo pro menos extremo.",
+        "vinculo_limiar_aliado": 70,
+        "vinculo_limiar_amigo": 30,
+        "vinculo_limiar_rival": -20,
+        "vinculo_limiar_inimigo": -50,
 
         "_comentario_humor": "Frente 3 (2026-09-09): humor deixou de ser uma flag setada só ao socializar (nunca decaía) e virou um retrato contínuo do bem-estar (energia/fome/social). Ver engine/mechanics/mood.py. humor_chance_transicao recalculada na Frente 4 (era por tick de 15 min).",
         "humor_peso_energia": 0.3,
@@ -121,7 +135,10 @@
     "reino": {
         "pensao_aposentadoria": 40,
         "fornecer_sopao": true,
-        "custo_sopao_ao_reino": 5
+        "custo_sopao_ao_reino": 5,
+        "_comentario_sopao": "Anexo 1 do PLANO_REFATORACAO.md: gatilho (fome mínima pra qualificar como 'extrema miséria') e potência (fração da refeição/energia normal que o sopão dá) do sopão comunitário — antes literais soltos em kingdom.py.",
+        "sopao_fome_limiar_miseria": 60.0,
+        "sopao_fator_potencia": 0.5
     },
     "infraestrutura": {
         "_comentario": "Sistema de decadência e manutenção de construções. Valores de integridade em pontos (0-100).",
@@ -148,14 +165,22 @@
         "chance_log_desgastado": 0.05,
         "energia_minima_reparo": 50
     },
+    "observabilidade": {
+        "_comentario": "R-B10 do PLANO_REFATORACAO.md (2026-09-11): amostragem de log de ação. Um tick é 1 minuto de jogo — logar toda ação de todo NPC a cada tick inundaria o arquivo. `log_acao_a_cada_n_ticks` substitui o `tick_count % 4` que estava copiado (sem nome, sem config) em 5 lugares (actions.py x4, kingdom.py x1).",
+        "log_acao_a_cada_n_ticks": 4
+    },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",
         "capacidade_padrao_residencia": 5,
         "capacidade_padrao_local": 5,
         "salario_padrao_local": 100,
+        "casas_paliativas": 5,
 
         "_comentario_fase2": "Fase 2.1 (P0.3, 2026-09-11): grid_min_px/grid_max_px (5-35) removidos — eram um par aleatório sem relação nenhuma com o mundo real, a causa raiz de P0.3. `locais_raio_px` era o raio de espalhamento (paliativo consciente) até a Fase 4 substituir por geometria real; sobrevive só como parâmetro do FALLBACK (`_importar_locais_paliativo` em populate.py) pra quando uma cidade não tem GeoJSON gerado ainda. `locais_por_tipo_cidade`/`locais_extra_por_tamanho` (Fase 2.2) foram REMOVIDOS na Fase 4 — supersedidos pelo catálogo `cidade_geo_catalogo_edificios`, que já cobre todas as cidades, não só a spawn.",
-        "locais_raio_px": 3.0
+        "locais_raio_px": 3.0,
+
+        "_comentario_r_d06": "R-D06 (2026-09-11): `LocationUtils.is_local_publico` (engine/consultas_local.py) classificava locais públicos por substring do nome quando a categoria não bastava — um paliativo consciente enquanto não há um campo estrutural de 'é área pública' nos dados de cidade gerados; a lista de palavras-chave estava hardcoded no código e agora vive aqui.",
+        "palavras_chave_local_publico": ["praça", "praca", "parque", "jardim", "rua", "largo", "campo", "arena"]
     },
     "geracao_populacao": {
         "_comentario": "Parâmetros do povoamento inicial (builder/populate.py). Migrado de literais soltos na Frente 1 (2026-09-09).",
@@ -189,6 +214,9 @@
         "ruido_mar_escala": 80.0,
         "ruido_mar_oitavas": 3,
         "ruido_mar_amplitude": 0.14,
+        "_comentario_ruido_mar_faixa": "R-D04 do PLANO_REFATORACAO.md: piso e teto do ruído marinho suave (fossas/bancos de areia), antes literais soltos (0.02/0.90) em tile_cartographer.py.",
+        "ruido_mar_piso": 0.02,
+        "ruido_mar_teto_fracao_nivel_mar": 0.90,
 
         "ruido_macro_escala": 220.0,
         "ruido_macro_oitavas": 3,
@@ -262,6 +290,11 @@
         "cidade_geo_edificacao_recuo_m": 1.5,
         "cidade_geo_edificacao_taxa_ocupacao": 0.55,
         "cidade_geo_edificacao_jitter": 0.15,
+        "cidade_geo_edificacao_taxa_ocupacao_min": 0.15,
+        "cidade_geo_edificacao_taxa_ocupacao_max": 0.95,
+        "_comentario_residencia_padrao": "R-D05 do PLANO_REFATORACAO.md: capacidade/salário padrão de uma Residência (lote sem notável atribuído), e o fallback genérico pra uma entrada do catálogo que não especifique os dois campos — antes literais soltos em generate_city_geometry.py.",
+        "cidade_geo_residencia_padrao": {"capacidade": 5, "salario_base": 0},
+        "cidade_geo_catalogo_entrada_padrao": {"capacidade": 5, "salario_base": 80},
         "_comentario_via_largura": "Largura das vias em METROS, por classe de via. O frontend converte pra px de tela a cada zoom (mapa_leaflet.js, estiloRua): px_por_metro = 2^zoom / metros_por_pixel_mundo. Antes a espessura era um `weight` fixo em px de TELA, o que deixava a rua com largura real inversamente proporcional ao zoom — 11,6 m no z11 e 0,7 m no z15, ou seja, ela encolhia justo quando você chegava perto, e por isso parecia linha imaginária em vez de rua. A classe de cada via é gravada em `classe_via` pelo gerador (fato semântico: 'principal' é a radial que liga um portão ao centro), mas a largura fica AQUI e é servida por /api/continentes, pra calibrar sem regerar as 15 cidades. `cidade_via_largura_min_px` é o piso em px de tela: no zoom em que a camada de rua acende a cidade inteira ainda tem ~310 px, e a via de verdade daria 2 px — sem o piso ela sumiria justamente na primeira aparição.",
         "cidade_via_largura_m_por_classe": {
             "principal": 11.0,
@@ -435,6 +468,8 @@
         },
 
         "tile_size_px": 256,
+        "_comentario_mundo_seed": "R-D04 do PLANO_REFATORACAO.md: semente determinística do mundo, antes um literal solto (1337) em generate_world.py. Mudar isto refunda o mundo inteiro — não é parâmetro de balanceamento.",
+        "mundo_seed": 1337,
 
         "_comentario_fase0": "Fase 0 (docs/PLANO_EVOLUCAO_V2.md, 2026-09-10): o tile deixou de ser recorte de mosaico pré-renderizado e passou a ser gerar_janela() avaliada sob demanda com cache em disco. tile_oitavas_extra_por_zoom/tile_oitavas_max controlam o LOD (mais oitavas = mais detalhe real, nunca reescala — F3, corrigido pela normalização por soma infinita em noise.py). tile_zoom_maximo_ui é decisão de custo/UI para o Leaflet, não limite técnico (o raster pode ser gerado em qualquer zoom). janela_padding_px substitui zoom_border_padding_px (mesmo papel, nome genérico pois não há mais recorte 'de continente' específico). cidade_janela_raio_px é o raio (em px de mundo) da janela ao redor do pixel-âncora da cidade.",
         "tile_oitavas_extra_por_zoom": 1,
@@ -446,6 +481,8 @@
         "_comentario_regiao_janela": "D7 do DIAGNOSTICO_V3 (2026-09-11), Passo 3(a): renomeado de cidade_janela_raio_px pra deixar claro que esta é a janela da vista REGIONAL ('onde a cidade fica no continente'), não uma vista urbana — 12 px de mundo = 190km de raio é correto pra essa leitura (Seção 9.5). A vista URBANA ('o que tem dentro da cidade') não usa raster nenhum: o raster do mundo é sub-pixel nessa escala (Seção 2.4) e não carrega informação — quem cobre isso é a camada vetorial de detalhe de cidade (rua/edifício/lote/muralha) já visível no Mapa Live (aba 🗾, D3), que não perde qualidade ao ampliar por ser vetor.",
         "regiao_janela_raio_px": 12,
         "imagem_janela_resolucao_alvo_px": 1200,
+        "_comentario_janela_cache": "R-D07 (2026-09-11): teto do cache em memória de janelas geradas sob demanda (web/janelas.py) — só evita recalcular a cada pixel de hover; não precisa ser grande.",
+        "janela_cache_teto": 8,
 
         "_comentario_maxnativezoom": "D5/D2 do DIAGNOSTICO_V3 (2026-09-11): acima deste zoom o raster não tem detalhe NOVO, então o Leaflet estica em vez de pedir tile ao servidor. Com o campo de detalhe local (D2/Caminho B, Seção 13) implementado, o valor é 11, derivado por maxNativeZoom = ceil(log2(2^relevo_detalhe_oitavas / relevo_detalhe_escala_px)) = ceil(log2(2^10/0.5)) = 11 (Seção 13.7 do diagnóstico). Se relevo_detalhe_oitavas ou relevo_detalhe_escala_px mudar, recalcule este valor com a mesma fórmula — deixá-los dessincronizados desperdiça CPU ou perde detalhe. tile_zoom_maximo_ui continua maior porque as camadas VETORIAIS de cidade precisam de zoom alto — são vetor, não perdem qualidade ao ampliar.",
         "tile_max_native_zoom": 11,

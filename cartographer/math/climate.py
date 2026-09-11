@@ -1,6 +1,32 @@
+from enum import Enum
+
 import numpy as np
 from cartographer.math.noise import NoiseGenerator
 from config import cfg_get
+
+
+class Bioma(Enum):
+    """Os 5 biomas terrestres do mundo (R-B06). Fonte única do id numérico, do rótulo
+    de exibição e do emoji — antes existiam quatro cópias independentes desta tabela
+    (`ClimateProcessor.BIOME_IDS`, dois `NOME_BIOMAS` idênticos em
+    `web/rotas/mapa.py`, e `biomeBadges` em `mapa_composto.js`, que ainda tinha um
+    `6: Zona Urbana` que não existe aqui). O frontend não copia mais nada — consome
+    `/api/continentes["biomas"]`."""
+    OCEANO              = (1, "Oceano",              "🌊")
+    DESERTO             = (2, "Deserto",             "🏜️")
+    MEDITERRANEO        = (3, "Mediterrâneo",        "🌱")
+    FLORESTA_TEMPERADA  = (4, "Floresta Temperada",  "🌲")
+    MONTANHA_ROCHOSA    = (5, "Montanha Rochosa",    "🏔️")
+
+    def __init__(self, id_numerico, rotulo, emoji):
+        self.id_numerico = id_numerico
+        self.rotulo = rotulo
+        self.emoji = emoji
+
+    @classmethod
+    def por_id(cls, id_numerico: int) -> "Bioma | None":
+        return next((b for b in cls if b.id_numerico == id_numerico), None)
+
 
 class ClimateProcessor:
     """
@@ -11,13 +37,9 @@ class ClimateProcessor:
     lidos via `cfg_get` — sem constantes de classe duplicadas. Ver docs/ROADMAP.md
     (Frente 1) e docs/AUDITORIA_HARDCODE.md.
     """
-    BIOME_IDS = {
-        "OCEANO": 1,
-        "DESERTO": 2,
-        "MEDITERRANEO": 3,
-        "FLORESTA_TEMPERADA": 4,
-        "MONTANHA_ROCHOSA": 5
-    }
+    # Derivado do enum Bioma — mantém a matemática vetorizada de classify_biomes (que
+    # indexa por nome) sem reescrevê-la, e sem duplicar o id numérico à mão (R-B06).
+    BIOME_IDS = {b.name: b.id_numerico for b in Bioma}
 
     @staticmethod
     def calculate_temperature(grid_y, heightmap, mod_calor, map_height, config):

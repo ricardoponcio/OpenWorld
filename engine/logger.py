@@ -154,3 +154,11 @@ class WorldLogger:
         WorldLogger.get_logger().error(msg)
         if npc:
             WorldLogger.queue_db_log(npc, "ERROR", msg)
+
+    @staticmethod
+    def deve_logar_amostra(tick_count: int, config: dict) -> bool:
+        """Amostragem de log de ação (R-B10): um tick é 1 minuto de jogo — logar toda
+        ação de todo NPC a cada tick inunda o arquivo. Substitui o `% 4` solto que
+        estava copiado em 5 lugares (`actions.py` x4, `kingdom.py` x1)."""
+        n = cfg_get(config, "observabilidade", "log_acao_a_cada_n_ticks")
+        return tick_count % n == 0

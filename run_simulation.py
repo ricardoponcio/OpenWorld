@@ -1,6 +1,7 @@
 import time
 from engine.core import SimulationEngine
 from engine.mechanics import JobMarket, InfrastructureManager
+from engine.models import MetaChave
 
 def processar_gatilhos_periodicos(engine, market):
     """Gatilhos baseados no relógio do jogo (não em contagem de ticks — ver Frente 4)."""
@@ -18,7 +19,7 @@ def processar_gatilhos_periodicos(engine, market):
 
 def start_simulation():
     engine = SimulationEngine()
-    market = JobMarket()
+    market = JobMarket(engine.db, engine.config)
     market.bootstrap_market()
 
     print(f"🌍 Mundo carregado com {len(engine.npcs)} habitantes e {len(engine.locais)} locais.")
@@ -26,8 +27,8 @@ def start_simulation():
 
     try:
         while True:
-            status_pausa = engine.db.carregar_meta("simulacao_pausada")
-            v_str = engine.db.carregar_meta("velocidade_simulacao")
+            status_pausa = engine.db.carregar_meta(MetaChave.SIMULACAO_PAUSADA)
+            v_str = engine.db.carregar_meta(MetaChave.VELOCIDADE)
             velocidade = float(v_str) if v_str else 1.0
             # 60s reais = 1 min de jogo na velocidade 1x (tempo real de verdade) — Frente 4.
             espera = max(0.005, 60.0 / velocidade)
@@ -37,13 +38,13 @@ def start_simulation():
                 # avançar N minutos controlados. run_simulation.py continua sendo o único
                 # processo dono da SimulationEngine — o dashboard só sinaliza via
                 # mundo_meta, nunca instancia uma segunda engine.
-                restante_str = engine.db.carregar_meta("mestre_avancar_minutos_restantes")
+                restante_str = engine.db.carregar_meta(MetaChave.AVANCAR_MINUTOS)
                 restante = int(restante_str) if restante_str else 0
 
                 if restante > 0:
                     engine.tick()
                     processar_gatilhos_periodicos(engine, market)
-                    engine.db.salvar_meta("mestre_avancar_minutos_restantes", str(restante - 1))
+                    engine.db.salvar_meta(MetaChave.AVANCAR_MINUTOS, str(restante - 1))
                     continue  # roda o mais rápido possível, sem o sleep de ritmo normal
 
                 time.sleep(1.0)

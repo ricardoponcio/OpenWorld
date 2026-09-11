@@ -15,25 +15,25 @@ class AIUtils:
         """
         if not raw_text:
             return ""
-            
+
         # 1. Remover blocos de código Markdown (```json ... ``` ou ```)
         cleaned = re.sub(r'```json\s*', '', raw_text, flags=re.IGNORECASE)
         cleaned = re.sub(r'```\s*', '', cleaned)
-        
+
         # 2. Remover comentários estilo // ... ou # ... de dentro do JSON
         cleaned = re.sub(r'//.*', '', cleaned)
         cleaned = re.sub(r'#.*', '', cleaned)
-        
+
         # 3. Encontrar os limites reais do JSON (objeto {} ou array [])
         start_obj = cleaned.find('{')
         end_obj = cleaned.rfind('}')
         start_arr = cleaned.find('[')
         end_arr = cleaned.rfind(']')
-        
+
         # Escolher a menor janela válida que abrange o JSON correto
         start_idx = -1
         end_idx = -1
-        
+
         if start_obj != -1 and start_arr != -1:
             if start_obj < start_arr:
                 start_idx = start_obj
@@ -47,10 +47,10 @@ class AIUtils:
         elif start_arr != -1:
             start_idx = start_arr
             end_idx = end_arr
-            
+
         if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
             return cleaned[start_idx:end_idx+1].strip()
-            
+
         return cleaned.strip()
 
     @staticmethod

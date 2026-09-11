@@ -3,7 +3,7 @@ import random
 from datetime import datetime
 from ..models import NPC, Evento, Acao, EstagioVida, TipoEvento
 from ..logger import WorldLogger
-from ..utils import NPCUtils
+from ..consultas_npc import NPCUtils
 
 from ..config_loader import cfg_get
 

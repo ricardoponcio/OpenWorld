@@ -5,6 +5,7 @@ import os
 import hashlib
 from cartographer.world.tile_cartographer import TileCartographer
 from cartographer.ai.world_manager_ai import WorldManagerAIClient
+from cartographer.math.climate import Bioma
 from config import cfg_get
 
 class WorldManager:
@@ -164,14 +165,6 @@ class WorldManager:
             "continentes": []
         }
         
-        biomas_nomes = {
-            1: "Oceano",
-            2: "Deserto",
-            3: "Mediterrâneo",
-            4: "Floresta Temperada",
-            5: "Montanha Rochosa"
-        }
-        
         continentes_stats = {}
         for c in continentes_list:
             c_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"continente.{c['nome']}.{self.seed}"))
@@ -241,7 +234,8 @@ class WorldManager:
                 biomas_count = stats["biomas"]
                 biomas_predominantes = []
                 for b_id, count in sorted(biomas_count.items(), key=lambda item: item[1], reverse=True):
-                    b_nome = biomas_nomes.get(b_id, f"Bioma {b_id}")
+                    bioma = Bioma.por_id(b_id)
+                    b_nome = bioma.rotulo if bioma else f"Bioma {b_id}"
                     pct = (count / num_pixels) * 100.0
                     biomas_predominantes.append({
                         "id": b_id,

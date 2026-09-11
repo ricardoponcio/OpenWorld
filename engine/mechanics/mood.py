@@ -19,15 +19,6 @@ import random
 from ..models import NPC, HumorNPC
 from ..config_loader import cfg_get
 
-# Ordem do "termômetro" de humor normal, do pior para o melhor.
-_ESCALA_HUMOR = [
-    HumorNPC.ANGUSTIADO.value,
-    HumorNPC.TRISTE.value,
-    HumorNPC.NEUTRO.value,
-    HumorNPC.CONTENTE.value,
-    HumorNPC.ALEGRE.value,
-]
-
 
 class NPCMoodManager:
     @staticmethod
@@ -69,14 +60,15 @@ class NPCMoodManager:
         # NPC em Pânico/Medo (forçado externamente) não tem posição na escala
         # normal — qualquer transição o move direto para o alvo calculado,
         # trazendo-o de volta ao normal assim que a condição é reavaliada.
-        if npc.humor not in _ESCALA_HUMOR:
+        escala = [h.value for h in HumorNPC.escala_normal()]
+        if npc.humor not in escala:
             npc.humor = alvo
             return
 
-        indice_atual = _ESCALA_HUMOR.index(npc.humor)
-        indice_alvo = _ESCALA_HUMOR.index(alvo)
+        indice_atual = escala.index(npc.humor)
+        indice_alvo = escala.index(alvo)
 
         if indice_alvo > indice_atual:
-            npc.humor = _ESCALA_HUMOR[indice_atual + 1]
+            npc.humor = escala[indice_atual + 1]
         else:
-            npc.humor = _ESCALA_HUMOR[indice_atual - 1]
+            npc.humor = escala[indice_atual - 1]

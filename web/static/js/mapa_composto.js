@@ -24,6 +24,10 @@ let cityEntities = { locais: [], npcs: [], bbox: null };
 // (canvas em pixel de TELA, já com offset/scale aplicados) — usado só pro hit-test do hover.
 let cityAggregateMarker = null;
 let cachedContinents = [];
+// R-B06/R-H04: tabela de biomas (id -> {rotulo, emoji}) servida por /api/continentes —
+// nunca copiada à mão aqui (já divergiu uma vez: um bioma "Zona Urbana" inventado no JS
+// que não existia no classificador Python).
+let cachedBiomas = {};
 
 // Query memory cache
 const apiCache = {};
@@ -333,16 +337,10 @@ function fetchTerrainInfo(x, y) {
 function updateSidebar(data) {
     document.getElementById('lblCoord').innerText = `X: ${data.x}, Y: ${data.y}`;
     
-    const biomeBadges = {
-        1: { text: "🌊 Oceano", class: "biome-1" },
-        2: { text: "🏜️ Deserto", class: "biome-2" },
-        3: { text: "🌱 Mediterrâneo", class: "biome-3" },
-        4: { text: "🌲 Floresta Temperada", class: "biome-4" },
-        5: { text: "🏔️ Montanha Rochosa", class: "biome-5" },
-        6: { text: "🏰 Zona Urbana", class: "biome-1" }
-    };
-
-    const badgeInfo = biomeBadges[data.bioma_id] || { text: `❓ ${data.bioma_nome}`, class: "biome-5" };
+    const bioma = cachedBiomas[data.bioma_id];
+    const badgeInfo = bioma
+        ? { text: `${bioma.emoji} ${bioma.rotulo}`, class: `biome-${data.bioma_id}` }
+        : { text: `❓ ${data.bioma_nome}`, class: "biome-5" };
     const badge = document.getElementById('lblBiomeBadge');
     badge.innerText = badgeInfo.text;
     badge.className = `biome-badge ${badgeInfo.class}`;
@@ -371,6 +369,7 @@ function loadContinents() {
         .then(res => res.json())
         .then(data => {
             cachedContinents = data.continentes || [];
+            cachedBiomas = data.biomas || {};
             draw(); // Redraw map to show markers
 
             const container = document.getElementById('continents-list-container');

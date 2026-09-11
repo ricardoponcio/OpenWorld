@@ -9,9 +9,11 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Importações de módulos do projeto
-from web.composed_routes import composed_bp
+from web.rotas import registrar_blueprints
 from web.mestre_routes import mestre_bp
 from config import get_config, cfg_get
+from engine.models import MetaChave
+from engine.tempo import RelogioMundo
 
 # Config único do projeto (config.json, via config/) — não lê mais o arquivo por conta própria
 config = get_config()
@@ -64,7 +66,7 @@ def get_init():
                 "coords": json.loads(r['coordenadas']) if r['coordenadas'] else [0,0]
             })
 
-        meta_mapa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'mapa_terreno'").fetchone()
+        meta_mapa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.MAPA_TERRENO.value,)).fetchone()
         mapa_terreno = json.loads(meta_mapa['valor']) if meta_mapa else []
         
         conn.close()
@@ -79,8 +81,8 @@ def get_update():
         warnings = []
 
         # Obter data simulada atual
-        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'hora_simulada_iso'").fetchone()
-        data_simulada_iso = meta_hora['valor'] if meta_hora else '1200-01-01T06:00:00'
+        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.HORA_ISO.value,)).fetchone()
+        data_simulada_iso = meta_hora['valor'] if meta_hora else RelogioMundo.HORA_INICIAL_PADRAO_ISO
         data_simulada = datetime.fromisoformat(data_simulada_iso)
 
         # Locais Dinâmicos
@@ -108,13 +110,7 @@ def get_update():
             idade_anos = 0
             dn_raw = r['data_nascimento']
             if dn_raw:
-                try:
-                    dt_str = dn_raw.replace(' ', 'T')
-                    birth = datetime.fromisoformat(dt_str)
-                    idade_dias = (data_simulada - birth).days
-                    idade_anos = int((idade_dias / limiar_morte) * 80.0)
-                except Exception:
-                    pass
+                idade_anos = RelogioMundo.idade_em_anos(dn_raw, data_simulada, limiar_morte)
 
             npcs.append({
                 "id": r['id'], "nome": r['nome'], "profissao": r['profissao'],
@@ -139,9 +135,9 @@ def get_update():
         evg = {"t": evg_row[0]['titulo'], "d": evg_row[0]['descricao'], "tp": evg_row[0]['tipo']} if evg_row else None
 
         # Meta e Velocidade
-        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'hora_simulada'").fetchone()
-        meta_pausa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'simulacao_pausada'").fetchone()
-        meta_vel = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'velocidade_simulacao'").fetchone()
+        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.HORA_FORMATADA.value,)).fetchone()
+        meta_pausa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.SIMULACAO_PAUSADA.value,)).fetchone()
+        meta_vel = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.VELOCIDADE.value,)).fetchone()
         
         # Eventos Unificados
         ev_rows = safe_query(conn, 'SELECT timestamp, resumo_estruturado FROM eventos ORDER BY timestamp DESC LIMIT 15')
@@ -170,18 +166,15 @@ def get_update():
     except Exception as e:
         return jsonify({"error": f"Erro de Sincronização: {str(e)}"}), 500
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/api/toggle_pause', methods=['POST'])
 def toggle_pause():
     try:
         conn = get_db_connection()
         # Buscar estado atual
-        row = conn.execute("SELECT valor FROM mundo_meta WHERE chave = 'simulacao_pausada'").fetchone()
+        row = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.SIMULACAO_PAUSADA.value,)).fetchone()
         novo_estado = "1" if not row or row['valor'] == "0" else "0"
         
-        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES ('simulacao_pausada', ?)", (novo_estado,))
+        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES (?, ?)", (MetaChave.SIMULACAO_PAUSADA.value, novo_estado))
         conn.commit()
         conn.close()
         return jsonify({"pausado": novo_estado == "1"})
@@ -192,7 +185,7 @@ def toggle_pause():
 def set_speed(speed):
     try:
         conn = get_db_connection()
-        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES ('velocidade_simulacao', ?)", (speed,))
+        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES (?, ?)", (MetaChave.VELOCIDADE.value, speed))
         conn.commit()
         conn.close()
         return jsonify({"velocidade": speed})
@@ -221,7 +214,7 @@ def get_npc_rels(npc_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 # --- REGISTRO DO CARTÓGRAFO PRO (MÓDULO SEPARADO) ---
-app.register_blueprint(composed_bp)
+registrar_blueprints(app)
 app.register_blueprint(mestre_bp)
 
 if __name__ == '__main__':

@@ -15,8 +15,9 @@ DESCRIÇÃO:
 import random
 import json
 from ..database import DatabaseManager
+from ..models import MetaChave, HumorNPC
 from ..config_loader import cfg_get, carregar_config_global
-from ..utils import GeoUtils
+from ..geo import GeoUtils
 
 
 class MestreManager:
@@ -89,7 +90,7 @@ class MestreManager:
             # redor da cidade atualmente simulada — não mais uma grade local fake.
             # `cidade_simulada` é a única cidade com NPCs vivos hoje (Fase 2.2), então é
             # a âncora natural até o Mestre ganhar consciência de mais de uma cidade.
-            cidade_id_simulada = db.carregar_meta("cidade_simulada")
+            cidade_id_simulada = db.carregar_meta(MetaChave.CIDADE_SIMULADA)
             cx_cidade, cy_cidade = 0.0, 0.0
             if cidade_id_simulada:
                 row_cidade = cursor.execute(
@@ -141,10 +142,16 @@ class MestreManager:
                     resultados.append(f"💥 {acao.get('id')} foi destruído")
 
                 elif cmd == "AFETAR_NPC":
+                    # Humor vem da IA — entrada não confiável, valida contra o enum
+                    # antes de persistir (R-C04/ARQUITETURA.md Seção 9).
+                    try:
+                        humor = HumorNPC(d.get("humor")).value
+                    except ValueError:
+                        humor = HumorNPC.NEUTRO.value
                     cursor.execute(
                         "UPDATE npcs SET saude = MAX(0, MIN(100, saude + ?)), humor = ? WHERE id = ?",
-                        (d.get("saude", 0), d.get("humor", "Neutro"), acao.get("id"))
+                        (d.get("saude", 0), humor, acao.get("id"))
                     )
-                    resultados.append(f"👤 {acao.get('id')} afetado (saúde {d.get('saude', 0):+}, humor {d.get('humor')})")
+                    resultados.append(f"👤 {acao.get('id')} afetado (saúde {d.get('saude', 0):+}, humor {humor})")
 
         return resultados

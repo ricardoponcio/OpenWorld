@@ -1,8 +1,8 @@
-import random
 import json
 from typing import Dict
 from .client import AIClient
-from ai.utils import AIUtils
+from .utils import AIUtils
+from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
 
 class AIStorytellerClient:
@@ -28,20 +28,6 @@ class AIStorytellerClient:
         except Exception as e:
             WorldLogger.warning(f"[AI-STORYTELLER] Ativando fallback para evento global: {e}")
             
-        # Fallback procedural
-        titulos = ["Nevasca Súbita", "Mercado Próspero", "Epidemia Leve", "Dia de Sol"]
-        descricoes = [
-            "Uma nevasca misteriosa cobre a vila de frio, dificultando movimentações na rua.",
-            "Comerciantes de terras distantes chegam, trazendo oportunidades e prosperidade.",
-            "Um resfriado sazonal se espalha, fazendo com que as pessoas prefiram descansar.",
-            "Um dia extremamente ensolarado e alegre, perfeito para happy hour na taverna."
-        ]
-        idx = random.randint(0, 3)
-        return {
-            "titulo": titulos[idx],
-            "descricao": descricoes[idx],
-            "tipo": "METEOROLOGICO" if idx == 0 or idx == 3 else "ECONOMICO",
-            "modificadores": {"SOCIALIZAR": 10 if idx == 3 else -5},
-            "duracao_ticks": 6,
-            "acoes_mundo": []
-        }
+        # Fallback procedural — sorteia o evento inteiro, não um índice acoplado ao
+        # tamanho de uma lista escrita à mão (R-B12).
+        return AIFallbacks.sortear_evento_global()

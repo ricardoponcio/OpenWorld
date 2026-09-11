@@ -3,8 +3,12 @@ SCRIPT: audit_market.py
 OBJETIVO: Auditoria de Compatibilidade e Saúde da Economia Urbana.
 MOMENTO DE USO: Use este script para verificar por que NPCs continuam desempregados mesmo havendo vagas, 
                 ou para identificar categorias de prédios que ainda não existem no mapa.
-MOTIVAÇÃO: Desenvolvido para diagnosticar o 'Mismatch de Categorias', onde NPCs tinham profissões (ex: Alquimista) 
+MOTIVAÇÃO: Desenvolvido para diagnosticar o 'Mismatch de Categorias', onde NPCs tinham profissões (ex: Alquimista)
            mas o mundo não possuía locais compatíveis (ex: Laboratório), resultando em desemprego estrutural.
+
+⚠️ FERRAMENTA MANUAL DE DIAGNÓSTICO. Roda fora da engine, com conexão SQLite própria e
+caminho relativo à raiz do projeto. Não importe estes módulos de dentro de engine/,
+web/ ou cartographer/ — eles não fazem parte do runtime.
 """
 import sqlite3
 

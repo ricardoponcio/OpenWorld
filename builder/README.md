@@ -30,9 +30,7 @@ venv/bin/python builder/populate.py --npcs 20 --ia-max-thread 4
 ## 🛠️ Arquitetura dos Scripts de Construção
 
 *   **`populate.py`**: O Grande Orquestrador Demográfico. Insere habitantes iniciais na simulação de maneira distribuída por entre as cidades e biomas.
-*   **`generator.py`**: A Matriz Biológica. Módulo de conexão direta (`AIWorldGenerator`) com o serviço do Ollama, onde prompts estruturados definem características orgânicas da vida criada.
 *   **`storyteller.py`**: O Narrador. Lida com chamadas de IA para batizar recém-nascidos e futuramente analisar registros vitais e comportamentais.
-*   **`old/`**: Arquivo morto. Contém os antigos `manager.py` e `cartographer.py` baseados puramente em matrizes bidimensionais em texto/JSON, substituídos pela nova Engine de Numpy.
 
 ---
 

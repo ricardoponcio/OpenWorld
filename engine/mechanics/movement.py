@@ -2,7 +2,7 @@ import random
 from ..models import NPC, Acao
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
-from ..utils import LocationUtils
+from ..consultas_local import LocationUtils
 
 class NPCMovementManager:
     @staticmethod
@@ -11,17 +11,17 @@ class NPCMovementManager:
         locais = engine.locais
         
         # Se for bebê ou dependente, ele deve SEMPRE ficar em sua própria residência!
-        if getattr(npc, 'estagio_vida', '') == 'bebe' or npc.profissao == 'dependente':
+        if npc.eh_dependente():
             local_id = npc.casa_id
             
         # Se o local de destino não existe ou está inativo (status=0), volta para casa
         local_destino = locais.get(local_id) if locais else None
-        if not local_destino or getattr(local_destino, 'status', 1) != 1:
+        if not local_destino or local_destino.status != 1:
             local_id = npc.casa_id
             
         # Garante que a casa existe, caso contrário tenta a primeira casa ativa
         if local_id not in locais:
-            casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or getattr(l, 'categoria', '') == 'residencia']
+            casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or l.categoria == 'residencia']
             if casas_disponiveis:
                 local_id = casas_disponiveis[0]
                 
@@ -39,7 +39,7 @@ class NPCMovementManager:
     @staticmethod
     def mover_para_obra(engine, npc: NPC, obra_id: str):
         """Move o NPC para uma obra em andamento (status 0)."""
-        if getattr(npc, 'estagio_vida', '') == 'bebe' or npc.profissao == 'dependente':
+        if npc.eh_dependente():
             local_id = npc.casa_id
         else:
             local_id = obra_id
@@ -55,7 +55,7 @@ class NPCMovementManager:
         locais = engine.locais
         loc_trab = locais.get(npc.local_trabalho_id) if locais else None
         
-        if loc_trab and getattr(loc_trab, 'status', 1) == 1:
+        if loc_trab and loc_trab.status == 1:
             NPCMovementManager.mover_para(engine, npc, npc.local_trabalho_id)
         else:
             NPCMovementManager.mover_para_casa(engine, npc)
@@ -65,10 +65,11 @@ class NPCMovementManager:
     def mover_para_social(engine, npc: NPC):
         """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local."""
         locais = engine.locais
-        sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and getattr(l, 'status', 1) == 1] if locais else []
+        sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and l.status == 1] if locais else []
         
-        num_dep = getattr(npc, 'num_dependentes', 0)
-        if num_dep > 0 and random.random() < 0.50:
+        num_dep = npc.num_dependentes
+        chance_ficar_em_casa = cfg_get(engine.config, "ia_decisao", "chance_ficar_em_casa_com_dependentes")
+        if num_dep > 0 and random.random() < chance_ficar_em_casa:
             NPCMovementManager.mover_para_casa(engine, npc)
         elif sociais:
             # NPCs com menos de limiar_pobreza dão preferência a locais públicos/gratuitos (praças, parques, arenas, etc.)
@@ -95,20 +96,17 @@ class NPCMovementManager:
         locais_comida = []
         if locais:
             for l_id, l in locais.items():
-                if getattr(l, 'status', 1) != 1: continue
+                if l.status != 1: continue
                 if LocationUtils.is_local_comida(l):
                     locais_comida.append(l_id)
         
-        # 50% de chance de comer em casa para economizar e reduzir superlotação de restaurantes
-        if locais_comida and random.random() < 0.5:
+        # Chance de comer fora (restaurante/taverna) em vez de em casa — o resto vai pra
+        # casa, o que reduz superlotação de restaurantes.
+        chance_comer_fora = cfg_get(engine.config, "ia_decisao", "chance_comer_fora_de_casa")
+        if locais_comida and random.random() < chance_comer_fora:
             NPCMovementManager.mover_para(engine, npc, random.choice(locais_comida))
         else:
             NPCMovementManager.mover_para_casa(engine, npc)
-
-    @staticmethod
-    def mover_para_local_social(engine, npc: NPC):
-        """Redireciona para mover_para_social para compatibilidade externa."""
-        NPCMovementManager.mover_para_social(engine, npc)
 
     @staticmethod
     def mover_aleatoriamente(engine, npc: NPC):
@@ -116,7 +114,7 @@ class NPCMovementManager:
         locais_permitidos = []
         if engine.locais:
             for l_id, l in engine.locais.items():
-                if getattr(l, 'status', 1) != 1: continue
+                if l.status != 1: continue
                 # Permite apenas locais Sociais, Lojas comerciais, ou a própria casa do NPC (evita que ociosos invadam quartéis e fazendas)
                 if LocationUtils.is_local_passeio(l, npc.casa_id):
                     locais_permitidos.append(l_id)

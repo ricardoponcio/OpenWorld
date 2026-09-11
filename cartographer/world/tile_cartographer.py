@@ -1,12 +1,43 @@
+from dataclasses import dataclass
+
 import numpy as np
 from cartographer.math import NoiseGenerator, TectonicsProcessor, ClimateProcessor
 from config import cfg_get
+
+
+@dataclass
+class _CamposDeRuido:
+    """Os 3 campos de ruído cru que `gerar_janela` monta antes de acumular
+    continentes — extraídos pra um dataclass pra não virar 3 parâmetros soltos
+    passados entre as etapas privadas (R-D04)."""
+    ruido_macro: np.ndarray
+    relevo_base: np.ndarray
+    ruido_costa: np.ndarray
+
+
+@dataclass
+class _MassaContinental:
+    """Resultado de acumular todos os continentes na janela: a máscara de "quanto é
+    terra" em cada pixel, o relevo continental, os modificadores climáticos ponderados,
+    e (se pedido) quem é dono de cada pixel."""
+    mask_continente: np.ndarray
+    relevo_continentes: np.ndarray
+    mod_calor_total: np.ndarray
+    mod_umidade_total: np.ndarray
+    donos: 'np.ndarray | None'
+
 
 class TileCartographer:
     """
     Cartógrafo procedural responsável por gerar os dados geográficos e climáticos
     de tiles individuais de forma perfeitamente contínua e determinística.
     """
+    # R-D04: offsets de ruído nomeados — mudar qualquer um dos dois MUDA O MUNDO
+    # GERADO (são parte da semente efetiva de cada campo). Documentados aqui em vez de
+    # literais soltos no meio do método.
+    OFFSET_RUIDO_COSTA = 12345
+    OFFSET_RUIDO_MAR = 9999
+    PERFIL_GEOLOGICO_PADRAO = "Alpino"
     def __init__(self, size=256, seed=0, config=None, layout_continentes=None, tamanho_global=None):
         self.size = size
         self.seed = seed
@@ -117,45 +148,61 @@ class TileCartographer:
         `linspace(a, a+N, N, endpoint=False)` é exatamente `arange(a, a+N)` — em z0
         (`largura=altura=self.size`, `oitavas_extra=0`) o resultado é bit a bit igual ao
         `generate_tile` antigo (T4 garante isso).
-        """
-        cfg = self.config
 
+        Refatorado em 6 etapas privadas (R-D04) — a matemática de cada uma é idêntica à
+        versão anterior, só movida; nenhuma reordenada. `tests/test_cartografia.py`
+        trava isso bit a bit (determinismo, invariância a subdivisão, coerência entre
+        zooms, culling).
+        """
+        grid_x, grid_y = self._montar_grade(x0, y0, x1, y1, largura, altura)
+        ruidos = self._gerar_campos_de_ruido(grid_x, grid_y, oitavas_extra)
+        massa = self._acumular_continentes(grid_x, grid_y, ruidos, x0, y0, x1, y1,
+                                            oitavas_extra, _desabilitar_culling, retornar_donos)
+        altitude_regional = self._mesclar_terra_e_mar(massa, grid_x, grid_y, oitavas_extra)
+        altitude_final = self._aplicar_detalhe_local(altitude_regional, grid_x, grid_y, largura, x0, x1)
+        return self._classificar_clima_e_bioma(altitude_regional, altitude_final, massa,
+                                                grid_x, grid_y, retornar_donos)
+
+    def _montar_grade(self, x0, y0, x1, y1, largura, altura):
         x_range = np.linspace(x0, x1, largura, endpoint=False, dtype=np.float32)
         y_range = np.linspace(y0, y1, altura, endpoint=False, dtype=np.float32)
-        grid_x, grid_y = np.meshgrid(x_range, y_range)
+        return np.meshgrid(x_range, y_range)
 
-        # Aloca por chamada — nunca reusar buffer entre chamadas: janela não-quadrada
-        # quebraria um `self.data` de tamanho fixo, e chamadas concorrentes (Fase 0.4,
-        # servidor de tiles) se corromperiam compartilhando o mesmo array.
-        data = np.zeros((altura, largura, 4), dtype=np.float32)
-
-        # 1. Geração da base geológica contínua via Perlin noise
+    def _gerar_campos_de_ruido(self, grid_x, grid_y, oitavas_extra) -> _CamposDeRuido:
+        """Base geológica contínua (Perlin) + costa de alta frequência pra distorções
+        locais. Nunca reusa buffer entre chamadas: janela não-quadrada quebraria um
+        array de tamanho fixo, e chamadas concorrentes (servidor de tiles) se
+        corromperiam compartilhando o mesmo array."""
+        cfg = self.config
         scale_macro = cfg_get(cfg, "ruido_macro_escala")
         oct_macro = cfg_get(cfg, "ruido_macro_oitavas")
         ruido_macro = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale_macro, octaves=oct_macro + oitavas_extra, seed=self.seed)
         relevo_base = NoiseGenerator.generate_tectonic_base(grid_x, grid_y, seed=self.seed, config=cfg, oitavas_extra=oitavas_extra)
 
-        # 2. Costa de alta frequência para distorções locais
         scale_costa = cfg_get(cfg, "ruido_costa_escala")
         oct_costa = cfg_get(cfg, "ruido_costa_oitavas")
-        ruido_costa = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale_costa, octaves=oct_costa + oitavas_extra, seed=self.seed, offset=12345)
+        ruido_costa = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=scale_costa, octaves=oct_costa + oitavas_extra, seed=self.seed, offset=self.OFFSET_RUIDO_COSTA)
 
-        # Inicializa a máscara de continente vazia e o relevo acumulado
+        return _CamposDeRuido(ruido_macro=ruido_macro, relevo_base=relevo_base, ruido_costa=ruido_costa)
+
+    def _acumular_continentes(self, grid_x, grid_y, ruidos: _CamposDeRuido, x0, y0, x1, y1,
+                               oitavas_extra, _desabilitar_culling, retornar_donos) -> _MassaContinental:
+        """Itera cada continente do layout, acumulando a máscara de terra (o maior
+        `fator_radial` entre todos, pixel a pixel), o relevo continental, e os
+        modificadores climáticos ponderados pela proximidade. Culling (Fase 0.3,
+        2-4x mais rápido em zoom alto): pula o continente cujo raio de influência
+        máximo não alcança a janela pedida — `test_culling_nao_altera_resultado`
+        garante que ligar/desligar isto não muda o resultado, bit a bit."""
+        cfg = self.config
+        altura, largura = grid_x.shape
         mask_continente = np.zeros((altura, largura), dtype=np.float32)
         relevo_continentes = np.zeros((altura, largura), dtype=np.float32)
-
-        nivel_mar = cfg_get(cfg, "nivel_mar")
-        nivel_montanha = cfg_get(cfg, "nivel_montanha")
-
-        # Raio continental: derivado da área declarada por `calcular_raio_efetivo`
-        # (Frente 2 + Fase 1.1 — histórico completo no docstring daquele método).
-        elevacao_maxima_padrao = cfg_get(cfg, "continente_elevacao_maxima_padrao", default=0.8)
-
-        # Calor e umidade modificadores ponderados pela proximidade ao continente
         mod_calor_total = np.zeros((altura, largura), dtype=np.float32)
         mod_umidade_total = np.zeros((altura, largura), dtype=np.float32)
-
         donos = np.full((altura, largura), -1, dtype=np.int32) if retornar_donos else None
+
+        nivel_mar = cfg_get(cfg, "nivel_mar")
+        elevacao_maxima_padrao = cfg_get(cfg, "continente_elevacao_maxima_padrao", default=0.8)
 
         for idx_cont, cont in enumerate(self.layout_continentes.get("continentes", [])):
             cx = cont["centro_x"]
@@ -163,7 +210,7 @@ class TileCartographer:
 
             irreg = cont["irregularidade"]
             elev_max = cont.get("elevacao_maxima", elevacao_maxima_padrao)
-            perfil = cont.get("perfil_geologico", "Alpino")
+            perfil = cont.get("perfil_geologico", self.PERFIL_GEOLOGICO_PADRAO)
 
             fator_min = cfg_get(cfg, "tectonica_raio_fator_min")
             fator_variacao = cfg_get(cfg, "tectonica_raio_fator_variacao")
@@ -172,10 +219,6 @@ class TileCartographer:
 
             R = self.calcular_raio_efetivo(cont, cfg)
 
-            # Culling (Fase 0.3, otimização medida em 2-4x no zoom alto): pula o
-            # continente cujo raio de influência máximo não alcança a janela pedida —
-            # `fator_radial` só pode ser não-nulo dentro de `alcance` do centro (T5
-            # garante que ligar/desligar isto não muda o resultado, bit a bit).
             alcance = R * (fator_min + fator_variacao) + irreg * R * fator_distorcao + warp_amplitude
             dist_x = max(x0 - cx, 0.0, cx - x1)
             dist_y = max(y0 - cy, 0.0, cy - y1)
@@ -185,10 +228,10 @@ class TileCartographer:
 
             # Distância euclidiana e raio modulado dinamicamente pelas correntes tectônicas
             distancia = TectonicsProcessor.calculate_distance_grid(grid_x, grid_y, cx, cy, config=cfg, seed=self.seed, oitavas_extra=oitavas_extra)
-            raio_dinamico = TectonicsProcessor.calculate_tectonic_radius(R, ruido_macro, config=cfg)
+            raio_dinamico = TectonicsProcessor.calculate_tectonic_radius(R, ruidos.ruido_macro, config=cfg)
 
             # Distorção costeira
-            dist_perturbada = TectonicsProcessor.apply_coastal_distortion(distancia, ruido_costa, irreg, R, config=cfg)
+            dist_perturbada = TectonicsProcessor.apply_coastal_distortion(distancia, ruidos.ruido_costa, irreg, R, config=cfg)
 
             # Fator de gradiente radial perturbado
             fator_radial = np.clip(1.0 - (dist_perturbada / raio_dinamico), 0.0, 1.0)
@@ -200,7 +243,7 @@ class TileCartographer:
             mask_continente = np.maximum(mask_continente, fator_radial)
 
             # Modelagem do perfil geológico do continente
-            relevo_perfil = TectonicsProcessor.calculate_geological_profile(perfil, relevo_base, grid_x, grid_y, self.seed, config=cfg, oitavas_extra=oitavas_extra)
+            relevo_perfil = TectonicsProcessor.calculate_geological_profile(perfil, ruidos.relevo_base, grid_x, grid_y, self.seed, config=cfg, oitavas_extra=oitavas_extra)
 
             # Altitude continental garantida acima da costa
             f_terra = np.clip((fator_radial - nivel_mar) / (1.0 - nivel_mar), 0.0, 1.0)
@@ -220,70 +263,93 @@ class TileCartographer:
 
         # Máscara de Vignette de Cosseno global para as bordas do mundo
         fator_borda = TectonicsProcessor.apply_cosine_vignette(grid_x, grid_y, map_size=self.tamanho_global, config=cfg)
-
         mask_continente = mask_continente * fator_borda
         relevo_continentes = relevo_continentes * fator_borda
 
         if retornar_donos:
             # A vinheta pode empurrar um pixel de volta pra baixo de `nivel_mar` mesmo que
             # algum continente tenha "vencido" ali antes dela — sincroniza `donos` com a
-            # MESMA condição de terra usada na mesclagem final (:0, abaixo).
+            # MESMA condição de terra usada na mesclagem final.
             donos[mask_continente < nivel_mar] = -1
 
-        # Ruído marinho para fossas e bancos de areia
+        return _MassaContinental(mask_continente=mask_continente, relevo_continentes=relevo_continentes,
+                                  mod_calor_total=mod_calor_total, mod_umidade_total=mod_umidade_total,
+                                  donos=donos)
+
+    def _mesclar_terra_e_mar(self, massa: _MassaContinental, grid_x, grid_y, oitavas_extra):
+        """Canal 0 (Altitude): ruído marinho suave (fossas/bancos de areia) onde não é
+        terra, relevo continental onde é. Retorna a altitude REGIONAL (sem o campo de
+        detalhe local) — é o que alimenta clima e bioma."""
+        cfg = self.config
+        nivel_mar = cfg_get(cfg, "nivel_mar")
+
         f_mar = cfg_get(cfg, "ruido_mar_escala")
         oct_mar = cfg_get(cfg, "ruido_mar_oitavas")
         amp_mar = cfg_get(cfg, "ruido_mar_amplitude")
+        piso_mar = cfg_get(cfg, "ruido_mar_piso")
+        teto_fracao = cfg_get(cfg, "ruido_mar_teto_fracao_nivel_mar")
 
-        ruido_mar = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=f_mar, octaves=oct_mar + oitavas_extra, seed=self.seed, offset=9999)
-        max_ruido_mar = min(nivel_mar * 0.90, 0.02 + amp_mar)
-        ruido_mar_suave = 0.02 + (ruido_mar * (max_ruido_mar - 0.02))
+        ruido_mar = NoiseGenerator.generate_noise_field(grid_x, grid_y, scale=f_mar, octaves=oct_mar + oitavas_extra, seed=self.seed, offset=self.OFFSET_RUIDO_MAR)
+        max_ruido_mar = min(nivel_mar * teto_fracao, piso_mar + amp_mar)
+        ruido_mar_suave = piso_mar + (ruido_mar * (max_ruido_mar - piso_mar))
 
-        # Mesclagem terra-mar final no canal 0 (Altitude)
-        data[:, :, 0] = np.where(
-            mask_continente >= nivel_mar,
-            relevo_continentes,
-            (1.0 - (mask_continente / nivel_mar)) * ruido_mar_suave + (mask_continente / nivel_mar) * nivel_mar
+        return np.where(
+            massa.mask_continente >= nivel_mar,
+            massa.relevo_continentes,
+            (1.0 - (massa.mask_continente / nivel_mar)) * ruido_mar_suave + (massa.mask_continente / nivel_mar) * nivel_mar
         )
 
-        # --- Campo de detalhe local (D2 / Caminho B do DIAGNOSTICO_V3) ---
-        # A altitude SEM detalhe é preservada para alimentar clima e bioma: a classificação
-        # de bioma é regional e foi calibrada na Fase 1 contra este campo. O detalhe é
-        # textura sub-regional; deixá-lo entrar em `classify_biomes` reabriria a calibração
-        # de limiares de deserto/mediterrâneo sem necessidade (medido: 0,00% dos pixels
-        # mudariam de bioma com a amplitude recomendada, mas a margem não é estrutural).
-        altitude_regional = data[:, :, 0].copy()
+    def _aplicar_detalhe_local(self, altitude_regional, grid_x, grid_y, largura, x0, x1):
+        """Campo de detalhe local (D2/Caminho B do DIAGNOSTICO_V3) — textura
+        sub-regional somada por cima da altitude regional, só pra exibição em zoom
+        alto. NÃO entra no cálculo de clima/bioma (esses usam `altitude_regional`,
+        preservada pelo chamador) — a classificação de bioma foi calibrada contra o
+        campo regional, e deixar o detalhe entrar reabriria essa calibração sem
+        necessidade."""
+        cfg = self.config
+        nivel_mar = cfg_get(cfg, "nivel_mar")
+        altitude = altitude_regional
 
         amp_detalhe = cfg_get(cfg, "relevo_detalhe_amplitude")
-        if amp_detalhe > 0.0:
-            passo_mundo_px = (x1 - x0) / largura
-            margem_costa = cfg_get(cfg, "relevo_detalhe_margem_costa")
-            # Envelope: o detalhe nasce em zero na linha d'água e cresce terra adentro.
-            # É o que garante T6 (a costa não pode mudar entre zooms) por construção.
-            envelope = np.clip((data[:, :, 0] - nivel_mar) / max(1e-6, margem_costa), 0.0, 1.0)
-            detalhe = NoiseGenerator.generate_detail_field(
-                grid_x, grid_y,
-                scale=cfg_get(cfg, "relevo_detalhe_escala_px"),
-                octaves=cfg_get(cfg, "relevo_detalhe_oitavas"),
-                seed=self.seed,
-                passo_mundo_px=passo_mundo_px,
-                offset=cfg_get(cfg, "relevo_detalhe_offset_ruido"),
-            )
-            # Piso de segurança: um pixel que é terra nunca pode virar água por causa do
-            # detalhe, nem com envelope. Redundante com o envelope, mantido como rede.
-            piso = np.where(data[:, :, 0] > nivel_mar, nivel_mar + 1e-6, data[:, :, 0])
-            data[:, :, 0] = np.maximum(data[:, :, 0] + amp_detalhe * detalhe * envelope, piso)
+        if amp_detalhe <= 0.0:
+            return altitude
 
-        # 3. Cálculo climático e classificação dos biomas
-        # `map_height`/`map_size` continuam recebendo `self.tamanho_global` (768), NÃO
-        # `altura`/`largura` da janela — passar o tamanho da janela faria a latitude e a
-        # vinheta mudarem com o zoom (bug sutil listado na Fase 0.3 do plano).
-        # Usam `altitude_regional` (sem o campo de detalhe) — ver comentário acima.
+        passo_mundo_px = (x1 - x0) / largura
+        margem_costa = cfg_get(cfg, "relevo_detalhe_margem_costa")
+        # Envelope: o detalhe nasce em zero na linha d'água e cresce terra adentro. É
+        # o que garante T6 (a costa não pode mudar entre zooms) por construção.
+        envelope = np.clip((altitude - nivel_mar) / max(1e-6, margem_costa), 0.0, 1.0)
+        detalhe = NoiseGenerator.generate_detail_field(
+            grid_x, grid_y,
+            scale=cfg_get(cfg, "relevo_detalhe_escala_px"),
+            octaves=cfg_get(cfg, "relevo_detalhe_oitavas"),
+            seed=self.seed,
+            passo_mundo_px=passo_mundo_px,
+            offset=cfg_get(cfg, "relevo_detalhe_offset_ruido"),
+        )
+        # Piso de segurança: um pixel que é terra nunca pode virar água por causa do
+        # detalhe, nem com envelope. Redundante com o envelope, mantido como rede.
+        piso = np.where(altitude > nivel_mar, nivel_mar + 1e-6, altitude)
+        return np.maximum(altitude + amp_detalhe * detalhe * envelope, piso)
+
+    def _classificar_clima_e_bioma(self, altitude_regional, altitude_final, massa: _MassaContinental,
+                                    grid_x, grid_y, retornar_donos):
+        """Canais 1-3 (temperatura/umidade/bioma), a partir da altitude REGIONAL (sem
+        detalhe — ver `_aplicar_detalhe_local`). `map_height`/`map_size` recebem
+        `self.tamanho_global`, NÃO a largura/altura da janela — passar o tamanho da
+        janela faria a latitude e a vinheta mudarem com o zoom."""
+        cfg = self.config
+        nivel_mar = cfg_get(cfg, "nivel_mar")
+        nivel_montanha = cfg_get(cfg, "nivel_montanha")
+        altura, largura = grid_x.shape
+
+        data = np.zeros((altura, largura, 4), dtype=np.float32)
+        data[:, :, 0] = altitude_final
         data[:, :, 1] = ClimateProcessor.calculate_temperature(
-            grid_y, altitude_regional, mod_calor_total, map_height=self.tamanho_global, config=cfg
+            grid_y, altitude_regional, massa.mod_calor_total, map_height=self.tamanho_global, config=cfg
         )
         data[:, :, 2] = ClimateProcessor.calculate_humidity(
-            altitude_regional, mod_umidade_total, config=cfg, nivel_mar=nivel_mar,
+            altitude_regional, massa.mod_umidade_total, config=cfg, nivel_mar=nivel_mar,
             grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )
         # `classify_biomes` usa `octaves=1` fixo internamente para o dithering de
@@ -295,5 +361,5 @@ class TileCartographer:
         )
 
         if retornar_donos:
-            return data, donos
+            return data, massa.donos
         return data

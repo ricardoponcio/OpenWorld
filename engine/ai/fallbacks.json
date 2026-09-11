@@ -1,0 +1,62 @@
+{
+    "nomes_bebe": {
+        "M": ["Arthur", "Alistair", "Tristan", "Cedric", "Edric", "Kaelen", "Gareth", "Rowan", "Elian", "Lucas", "Loran", "Eliot", "Aron"],
+        "F": ["Lyra", "Elora", "Sylvia", "Aria", "Eliana", "Maeve", "Seraphina", "Isolde", "Clara", "Fiona", "Dahlia", "Selene", "Lila"]
+    },
+    "nomes_npc": {
+        "M": ["Erik", "Thorn", "Kaelen", "Fíricus", "Einar", "Elior", "Garrick", "Bram"],
+        "F": ["Elara", "Mila", "Aria", "Lila", "Natalia", "Mariana", "Sylvia", "Vespera"],
+        "sobrenomes": ["Stonefist", "Ironforge", "Moonshadow", "Thornbloom", "Frostwhisper", "Brilhante", "Marinerá", "Soliluna", "Blackwood", "Thorne", "Stormwind", "Ironfist", "Greycastle", "Oakheart"]
+    },
+    "racas": {"Humano": 0.7, "Elfo": 0.1, "Anão": 0.1, "Orc": 0.1},
+    "personalidades": [
+        "Extremamente calmo, prefere resolver conflitos conversando pacientemente.",
+        "Um pouco desconfiado de estranhos, mas extremamente leal com os amigos próximos.",
+        "Sempre otimista, vê o lado bom de qualquer situação desafiadora.",
+        "Obstinado e focado em seu trabalho, às vezes esquece de descansar.",
+        "Curioso sobre mistérios antigos e segredos esquecidos do reino."
+    ],
+    "backgrounds": [
+        "Cresceu nas redondezas da vila sonhando em dominar a arte de {profissao}.",
+        "Após anos viajando pelas estradas do reino, decidiu se estabelecer na tranquilidade da comunidade.",
+        "Vem de uma antiga linhagem de trabalhadores dedicados da região.",
+        "Perdeu tudo em uma antiga crise e reconstrói sua vida honestamente na colônia.",
+        "Um aprendiz talentoso que busca deixar sua própria marca lendária no mundo."
+    ],
+    "locais_oficina": ["Oficina do Dragão", "Ferrearia da Guilda", "Moinho de Vento", "Serraria Real"],
+    "locais_sociais": ["Taverna do Dragão", "Praça das Estrelas", "Arena da Vila", "Jardim Botânico"],
+    "eventos_globais": [
+        {
+            "titulo": "Nevasca Súbita",
+            "descricao": "Uma nevasca misteriosa cobre a vila de frio, dificultando movimentações na rua.",
+            "tipo": "METEOROLOGICO",
+            "modificadores": {"SOCIALIZAR": -5},
+            "duracao_ticks": 6,
+            "acoes_mundo": []
+        },
+        {
+            "titulo": "Mercado Próspero",
+            "descricao": "Comerciantes de terras distantes chegam, trazendo oportunidades e prosperidade.",
+            "tipo": "ECONOMICO",
+            "modificadores": {"SOCIALIZAR": -5},
+            "duracao_ticks": 6,
+            "acoes_mundo": []
+        },
+        {
+            "titulo": "Epidemia Leve",
+            "descricao": "Um resfriado sazonal se espalha, fazendo com que as pessoas prefiram descansar.",
+            "tipo": "ECONOMICO",
+            "modificadores": {"SOCIALIZAR": -5},
+            "duracao_ticks": 6,
+            "acoes_mundo": []
+        },
+        {
+            "titulo": "Dia de Sol",
+            "descricao": "Um dia extremamente ensolarado e alegre, perfeito para happy hour na taverna.",
+            "tipo": "METEOROLOGICO",
+            "modificadores": {"SOCIALIZAR": 10},
+            "duracao_ticks": 6,
+            "acoes_mundo": []
+        }
+    ]
+}

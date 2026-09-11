@@ -1,10 +1,14 @@
 """
 SCRIPT: repair_db.py
 OBJETIVO: Saneamento e Reabilitação do Banco de Dados.
-MOMENTO DE USO: Use este script quando notar NPCs travados na coordenada (0,0) ou quando o banco de dados 
+MOMENTO DE USO: Use este script quando notar NPCs travados na coordenada (0,0) ou quando o banco de dados
                 apresentar inconsistências após migrações de esquema (ex: strings de profissão em colunas de ID).
-MOTIVAÇÃO: Criado após um evento crítico de 'Desvio de Colunas' onde IDs de casas foram sobrescritos por 
+MOTIVAÇÃO: Criado após um evento crítico de 'Desvio de Colunas' onde IDs de casas foram sobrescritos por
            nomes de profissões (como 'guarda' ou 'ocioso'), causando o isolamento dos NPCs no limbo do mapa.
+
+⚠️ FERRAMENTA MANUAL DE DIAGNÓSTICO. Roda fora da engine, com conexão SQLite própria e
+caminho relativo à raiz do projeto. Não importe estes módulos de dentro de engine/,
+web/ ou cartographer/ — eles não fazem parte do runtime.
 """
 import sqlite3
 import json
