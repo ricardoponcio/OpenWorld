@@ -246,21 +246,50 @@ class TileCartographer:
             (1.0 - (mask_continente / nivel_mar)) * ruido_mar_suave + (mask_continente / nivel_mar) * nivel_mar
         )
 
+        # --- Campo de detalhe local (D2 / Caminho B do DIAGNOSTICO_V3) ---
+        # A altitude SEM detalhe é preservada para alimentar clima e bioma: a classificação
+        # de bioma é regional e foi calibrada na Fase 1 contra este campo. O detalhe é
+        # textura sub-regional; deixá-lo entrar em `classify_biomes` reabriria a calibração
+        # de limiares de deserto/mediterrâneo sem necessidade (medido: 0,00% dos pixels
+        # mudariam de bioma com a amplitude recomendada, mas a margem não é estrutural).
+        altitude_regional = data[:, :, 0].copy()
+
+        amp_detalhe = cfg_get(cfg, "relevo_detalhe_amplitude")
+        if amp_detalhe > 0.0:
+            passo_mundo_px = (x1 - x0) / largura
+            margem_costa = cfg_get(cfg, "relevo_detalhe_margem_costa")
+            # Envelope: o detalhe nasce em zero na linha d'água e cresce terra adentro.
+            # É o que garante T6 (a costa não pode mudar entre zooms) por construção.
+            envelope = np.clip((data[:, :, 0] - nivel_mar) / max(1e-6, margem_costa), 0.0, 1.0)
+            detalhe = NoiseGenerator.generate_detail_field(
+                grid_x, grid_y,
+                scale=cfg_get(cfg, "relevo_detalhe_escala_px"),
+                octaves=cfg_get(cfg, "relevo_detalhe_oitavas"),
+                seed=self.seed,
+                passo_mundo_px=passo_mundo_px,
+                offset=cfg_get(cfg, "relevo_detalhe_offset_ruido"),
+            )
+            # Piso de segurança: um pixel que é terra nunca pode virar água por causa do
+            # detalhe, nem com envelope. Redundante com o envelope, mantido como rede.
+            piso = np.where(data[:, :, 0] > nivel_mar, nivel_mar + 1e-6, data[:, :, 0])
+            data[:, :, 0] = np.maximum(data[:, :, 0] + amp_detalhe * detalhe * envelope, piso)
+
         # 3. Cálculo climático e classificação dos biomas
         # `map_height`/`map_size` continuam recebendo `self.tamanho_global` (768), NÃO
         # `altura`/`largura` da janela — passar o tamanho da janela faria a latitude e a
         # vinheta mudarem com o zoom (bug sutil listado na Fase 0.3 do plano).
+        # Usam `altitude_regional` (sem o campo de detalhe) — ver comentário acima.
         data[:, :, 1] = ClimateProcessor.calculate_temperature(
-            grid_y, data[:, :, 0], mod_calor_total, map_height=self.tamanho_global, config=cfg
+            grid_y, altitude_regional, mod_calor_total, map_height=self.tamanho_global, config=cfg
         )
         data[:, :, 2] = ClimateProcessor.calculate_humidity(
-            data[:, :, 0], mod_umidade_total, config=cfg, nivel_mar=nivel_mar,
+            altitude_regional, mod_umidade_total, config=cfg, nivel_mar=nivel_mar,
             grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )
         # `classify_biomes` usa `octaves=1` fixo internamente para o dithering de
         # fronteira (macro-onda lisa e intencional) — não recebe `oitavas_extra`.
         data[:, :, 3] = ClimateProcessor.classify_biomes(
-            data[:, :, 0], data[:, :, 1], data[:, :, 2], config=cfg,
+            altitude_regional, data[:, :, 1], data[:, :, 2], config=cfg,
             nivel_mar=nivel_mar, nivel_montanha=nivel_montanha,
             grid_x=grid_x, grid_y=grid_y, seed=self.seed
         )

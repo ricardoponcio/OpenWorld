@@ -20,6 +20,9 @@ let mouseY = -1;
 let hoveredTooltip = null;
 
 let cityEntities = { locais: [], npcs: [], bbox: null };
+// D7 do DIAGNOSTICO_V3: posição do marcador agregado desenhado por drawCityGridAndEntities
+// (canvas em pixel de TELA, já com offset/scale aplicados) — usado só pro hit-test do hover.
+let cityAggregateMarker = null;
 let cachedContinents = [];
 
 // Query memory cache
@@ -141,8 +144,8 @@ function animateLoop() {
 }
 
 // Fase 2.1 (P0.3): `loc.coordenadas` é pixel de MUNDO (Seção 2.3), não mais um índice
-// de grade 0-40. Converte mundo -> pixel da imagem da cidade usando a bbox devolvida
-// por `/api/cidade/<nome>/entities` (mesma janela que gerou a imagem em si).
+// de grade 0-40. Converte mundo -> pixel da imagem da região devolvida por
+// `/api/regiao/<nome>/entities` (mesma janela que gerou a imagem em si — D7).
 function mundoParaImagemCidade(x, y) {
     const bbox = cityEntities.bbox;
     if (!bbox) return { x: 0, y: 0 };
@@ -151,89 +154,44 @@ function mundoParaImagemCidade(x, y) {
     return { x: ix, y: iy };
 }
 
+// D7 do DIAGNOSTICO_V3 (2026-09-11), Seção 9.5 Passo 4: nesta janela REGIONAL (~190km de
+// raio) todos os locais de uma cidade caem no mesmo punhado de pixels de imagem — a
+// cidade inteira é sub-pixel na escala do mundo (Seção 2.4). Desenhar cada local como um
+// marcador próprio empilhava 85 retângulos no mesmo lugar (era literalmente o "1px" que o
+// usuário reportou). Agora é UM marcador agregado com a contagem; o layout de verdade
+// (ruas/edifícios/lotes individuais) é a camada vetorial do Mapa Live (D3), que não é
+// sub-pixel porque é desenhada em coordenada de mundo exata, não amostrada num raster.
 function drawCityGridAndEntities() {
     if (!cityEntities.bbox) return; // ainda carregando /entities
+    if (cityEntities.locais.length === 0 && cityEntities.npcs.length === 0) return;
 
-    const marcadorPx = 10; // tamanho do marcador em pixel de imagem (não mais "tile")
+    // Centroide de todos os locais (ou dos NPCs, se não houver locais) em pixel de imagem.
+    const pontos = cityEntities.locais.length > 0
+        ? cityEntities.locais.map(l => mundoParaImagemCidade(l.coordenadas[0], l.coordenadas[1]))
+        : [mundoParaImagemCidade(cityEntities.bbox.min_x + (cityEntities.bbox.max_x - cityEntities.bbox.min_x) / 2,
+                                   cityEntities.bbox.min_y + (cityEntities.bbox.max_y - cityEntities.bbox.min_y) / 2)];
+    const centroX = pontos.reduce((s, p) => s + p.x, 0) / pontos.length;
+    const centroY = pontos.reduce((s, p) => s + p.y, 0) / pontos.length;
 
-    const categoryColors = {
-        'residencia': '#8B4513',
-        'fazenda': '#228B22',
-        'quartel': '#4682B4',
-        'taverna': '#D2691E',
-        'publico': '#696969',
-        'mercado': '#FFD700',
-        'forja': '#A9A9A9',
-        'universidade': '#5D3FD3',
-        'generic': '#808080'
-    };
-    // Use seeded random for stable jittering
-    function pseudoRandom(seed) {
-        let x = Math.sin(seed++) * 10000;
-        return x - Math.floor(x);
-    }
+    const px = offsetX + centroX * scale;
+    const py = offsetY + centroY * scale;
+    const raio = Math.max(6, 9 * scale);
 
-    // Draw Locais
-    cityEntities.locais.forEach(loc => {
-        const p = mundoParaImagemCidade(loc.coordenadas[0], loc.coordenadas[1]);
-        const px = offsetX + p.x * scale;
-        const py = offsetY + p.y * scale;
-        const size = marcadorPx * scale;
+    ctx.beginPath();
+    ctx.arc(px, py, raio, 0, 2 * Math.PI);
+    ctx.fillStyle = '#d4a017';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-        ctx.fillStyle = categoryColors[loc.categoria] || '#ffffff';
-        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🏰', px, py);
 
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2 * scale;
-        ctx.strokeRect(px - size / 2, py - size / 2, size, size);
-    });
-
-    // Draw NPCs
-    cityEntities.npcs.forEach((npc, idx) => {
-        let wx, wy;
-        if (npc.coords && Array.isArray(npc.coords)) {
-            wx = npc.coords[0];
-            wy = npc.coords[1];
-        } else if (npc.localizacao_atual_id) {
-            const loc = cityEntities.locais.find(l => l.id === npc.localizacao_atual_id);
-            if (loc) {
-                wx = loc.coordenadas[0];
-                wy = loc.coordenadas[1];
-            }
-        }
-
-        if (wx !== undefined && wy !== undefined) {
-            const p = mundoParaImagemCidade(wx, wy);
-            // Jitter em pixel de imagem (antes era em unidade de "tile", que não existe mais)
-            const jx = (pseudoRandom(idx * 2) - 0.5) * marcadorPx;
-            const jy = (pseudoRandom(idx * 2 + 1) - 0.5) * marcadorPx;
-
-            const targetX = p.x + jx;
-            const targetY = p.y + jy;
-
-            // Initialize or Lerp
-            if (!npcAnimations[npc.id]) {
-                npcAnimations[npc.id] = { x: targetX, y: targetY };
-            } else {
-                npcAnimations[npc.id].x = lerp(npcAnimations[npc.id].x, targetX, 0.05);
-                npcAnimations[npc.id].y = lerp(npcAnimations[npc.id].y, targetY, 0.05);
-            }
-
-            const anim = npcAnimations[npc.id];
-            const cx = offsetX + anim.x * scale;
-            const cy = offsetY + anim.y * scale;
-
-            const isFemale = npc.bio ? npc.bio.g === 'F' : (npc.genero === 'F');
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, 3 * scale, 0, 2 * Math.PI);
-            ctx.fillStyle = isFemale ? '#FF69B4' : '#4169E1';
-            ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1 * scale;
-            ctx.stroke();
-        }
-    });
+    cityAggregateMarker = { x: px, y: py, raio, locais: cityEntities.locais.length, npcs: cityEntities.npcs.length };
 }
 
 window.updateMapEntities = function(liveNpcs) {
@@ -291,38 +249,14 @@ canvas.addEventListener('mousemove', function(e) {
         const originalX = Math.floor((canvasX - offsetX) / scale);
         const originalY = Math.floor((canvasY - offsetY) / scale);
         
-        // Tooltip logic for entities and locais
+        // Tooltip logic for the aggregated city marker (D7 do DIAGNOSTICO_V3: um marcador
+        // só, não mais um hit-test por local/NPC individual — eles são sub-pixel aqui).
         hoveredTooltip = null;
-        if (currentMode === 'city' && cityEntities && cityEntities.bbox) {
-            const marcadorPx = 10; // mesmo tamanho usado em drawCityGridAndEntities
-            let found = false;
-
-            // Check NPCs first (circles)
-            for (let npc of cityEntities.npcs) {
-                if (npcAnimations[npc.id]) {
-                    const cx = offsetX + npcAnimations[npc.id].x * scale;
-                    const cy = offsetY + npcAnimations[npc.id].y * scale;
-                    const dist = Math.hypot(canvasX - cx, canvasY - cy);
-                    if (dist < 6 * scale) {
-                        hoveredTooltip = `👤 ${npc.nome}\nProfissão: ${npc.profissao}\nAção: ${npc.acao}\n❤️ ${npc.status ? npc.status.h : '?'}%`;
-                        found = true;
-                        break;
-                    }
-                }
-            }
-
-            // Check Locais (rects)
-            if (!found) {
-                for (let loc of cityEntities.locais) {
-                    const p = mundoParaImagemCidade(loc.coordenadas[0], loc.coordenadas[1]);
-                    const lx = offsetX + (p.x - marcadorPx / 2) * scale;
-                    const ly = offsetY + (p.y - marcadorPx / 2) * scale;
-                    const size = marcadorPx * scale;
-                    if (canvasX >= lx && canvasX <= lx + size && canvasY >= ly && canvasY <= ly + size) {
-                        hoveredTooltip = `🏢 ${loc.nome}\nTipo: ${loc.tipo}\nStatus: ${loc.status === 1 ? 'Ativo' : 'Em Obras'}`;
-                        break;
-                    }
-                }
+        if (currentMode === 'city' && cityAggregateMarker) {
+            const m = cityAggregateMarker;
+            const dist = Math.hypot(canvasX - m.x, canvasY - m.y);
+            if (dist < m.raio + 4) {
+                hoveredTooltip = `🏰 ${currentCityNome}\n${m.locais} locais · ${m.npcs} NPCs\nVeja o Mapa Live (🗾) pra ruas e edifícios`;
             }
         }
 
@@ -562,26 +496,30 @@ function selectCity(nome, btnElement, continenteNome) {
     document.getElementById('status-mapa').style.borderColor = 'var(--warning)';
     document.getElementById('status-mapa').style.color = 'var(--warning)';
 
-    img.src = `/api/cidade/${nome}/imagem`;
-    
+    // D7 do DIAGNOSTICO_V3 (2026-09-11): renomeado de /api/cidade/ para /api/regiao/ —
+    // esta view mostra ONDE a cidade fica no continente (~190km de raio), não o que tem
+    // dentro dela. A vista urbana de verdade (ruas/edifícios/lotes) é a camada vetorial
+    // do Mapa Live (aba 🗾, corrigida no D3) — ela não perde qualidade ao ampliar.
+    img.src = `/api/regiao/${nome}/imagem`;
+
     img.onload = function() {
         btnElement.classList.remove('loading');
-        
+
         canvas.width = 600;
         canvas.height = 600;
-        
+
         minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
         scale = minScale;
         offsetX = (canvas.width - img.width * scale) / 2;
         offsetY = (canvas.height - img.height * scale) / 2;
-        
+
         npcAnimations = {};
         if (!isAnimating) {
             isAnimating = true;
             animateLoop();
         }
-        
-        fetch(`/api/cidade/${nome}/entities`)
+
+        fetch(`/api/regiao/${nome}/entities`)
             .then(res => res.json())
             .then(data => {
                 if (!data.error) {
@@ -590,11 +528,11 @@ function selectCity(nome, btnElement, continenteNome) {
                 }
             });
 
-        document.getElementById('status-mapa').innerText = `🏰 Cidade: ${nome} (Zoom ROI)`;
+        document.getElementById('status-mapa').innerText = `🌍 Região de ${nome} (a cidade é o ponto no centro — veja o Mapa Live pra ruas e edifícios)`;
         document.getElementById('status-mapa').style.borderColor = '#00ffcc';
         document.getElementById('status-mapa').style.color = '#00ffcc';
-        
-        document.getElementById('lblInspectorTitle').innerText = `🔍 Relevo Urbano - ${nome}`;
+
+        document.getElementById('lblInspectorTitle').innerText = `🔍 Relevo Regional - ${nome}`;
         const terrainMetrics = document.getElementById('terrainMetricsContainer');
         if(terrainMetrics) terrainMetrics.style.display = 'none';
 

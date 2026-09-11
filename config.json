@@ -198,6 +198,7 @@
         "tectonica_base_peso_detalhe": 0.3,
 
         "escala_pixel_area_km2": 250,
+        "_comentario_escala_linear": "D1 do DIAGNOSTICO_V3 (2026-09-11): escala_pixel_area_km2 é ÁREA (km² por pixel), não comprimento. Para converter metro -> pixel de mundo use metros_por_px = sqrt(escala_pixel_area_km2) * 1000 = 15811,4 (1 px de mundo = 15,81 km). Erro histórico: generate_city_geometry.py usava escala_pixel_area_km2*1000 (250.000 m/px) e desenhava a cidade 15,81x menor que o projetado. Não crie uma segunda chave tipo escala_pixel_km_linear — ela dessincronizaria da área; derive sempre com sqrt().",
 
         "clima_damping_termico": 0.4,
         "clima_umidade_oceano": 0.8,
@@ -229,18 +230,55 @@
         "cidades_peso_bioma": 0.3,
         "cidades_escala_distancia_costa_px": 8.0,
 
-        "_comentario_cidade_geo": "Fase 4 (P2.2, 2026-09-11): geometria de cidade real (GeoJSON) num sistema LOCAL próprio (origem no centro, metros — Seção 2.1: a cidade é sub-pixel na escala do mundo, 1 px_mundo ≈ 250km, então não há informação de terreno real nessa escala; o 'sítio' usa ruído procedural próprio, seedado pelo nome da cidade, não o terreno do mundo). Transform local(m)->mundo(px): desloc_px = desloc_m / (escala_pixel_area_km2 * 1000). Catálogo de edifícios é um SUBCONJUNTO curado do catálogo aspiracional do plano (~25 entradas cobrindo governo/fé/saber/comércio/artesanato/hospedagem/produção primária — não as ~80 do texto completo); cada entrada tem `categoria` (um dos 9 CategoriaLocal existentes — não criamos categoria nova) e `tipo_local` (nome de sabor). Ampliar o catálogo é só adicionar linha aqui, não código.",
+        "_comentario_d4_sitio": "D4 do DIAGNOSTICO_V3 (2026-09-11): score_costa e score_altitude eram MONÓTONOS e maximizavam os dois no primeiro pixel de terra colado na água — as 15 cidades do mundo medido saíram no percentil 0,00-0,07% de altitude. Agora ambas têm um pico interno (cidades_distancia_costa_ideal_px/cidades_altitude_margem_mar) e existe uma restrição DURA (cidades_distancia_costa_minima_px) que descarta qualquer pixel colado na água antes de pontuar. Valores abaixo são PONTO DE PARTIDA medido, não resposta definitiva — recalibre rodando o script de medição da Seção 6.2/6.6 do diagnóstico depois de gerar cidades. cidades_perfil_por_tipo diferencia o sítio por tipo de cidade: portuária/pesqueira preferem ficar mais perto da costa (mas nunca dentro da zona de exclusão dura); mineira prefere altitude alta, não baixa.",
+        "cidades_distancia_costa_ideal_px": 3.0,
+        "cidades_distancia_costa_largura_px": 1.5,
+        "cidades_distancia_costa_minima_px": 2.0,
+        "cidades_altitude_margem_mar": 0.01,
+        "cidades_perfil_por_tipo": {
+            "portuaria": {"distancia_costa_ideal_px": 2.5, "distancia_costa_largura_px": 1.0},
+            "pesqueira": {"distancia_costa_ideal_px": 2.5, "distancia_costa_largura_px": 1.0},
+            "mineira": {"distancia_costa_ideal_px": 8.0, "distancia_costa_largura_px": 4.0, "prefere_altitude_alta": true, "altitude_alvo_fracao": 0.45}
+        },
+
+        "_comentario_cidade_geo": "Fase 4 (P2.2, 2026-09-11): geometria de cidade real (GeoJSON) num sistema LOCAL próprio (origem no centro, metros — Seção 2.1: a cidade é sub-pixel na escala do mundo, 1 px_mundo = 15,81km [D1 do DIAGNOSTICO_V3, 2026-09-11: corrigido de um erro histórico que dizia 250km — escala_pixel_area_km2 é ÁREA, o comprimento do lado é a raiz dela], então não há informação de terreno real nessa escala; o 'sítio' usa ruído procedural próprio, seedado pelo nome da cidade, não o terreno do mundo [ATUALIZAÇÃO D2/Caminho B: desde a Seção 13 do DIAGNOSTICO_V3 a cidade passa a amostrar o campo de detalhe do mundo — ver generate_city_geometry.py]). Transform local(m)->mundo(px): desloc_px = desloc_m / (sqrt(escala_pixel_area_km2) * 1000). Catálogo de edifícios é um SUBCONJUNTO curado do catálogo aspiracional do plano (~25 entradas cobrindo governo/fé/saber/comércio/artesanato/hospedagem/produção primária — não as ~80 do texto completo); cada entrada tem `categoria` (um dos 9 CategoriaLocal existentes — não criamos categoria nova) e `tipo_local` (nome de sabor). Ampliar o catálogo é só adicionar linha aqui, não código.",
         "cidade_geo_raio_m_por_tamanho": {"pequeno": 350, "medio": 600, "grande": 900},
         "cidade_geo_num_portoes_por_tamanho": {"pequeno": 2, "medio": 3, "grande": 4},
         "cidade_geo_num_aneis_por_tamanho": {"pequeno": 2, "medio": 3, "grande": 4},
         "cidade_geo_irregularidade_via": 0.15,
         "cidade_geo_lote_area_alvo_m2": 24000,
         "cidade_geo_recuo_rua_m": 3.0,
+        "_comentario_via_largura": "Largura das vias em METROS, por classe de via. O frontend converte pra px de tela a cada zoom (mapa_leaflet.js, estiloRua): px_por_metro = 2^zoom / metros_por_pixel_mundo. Antes a espessura era um `weight` fixo em px de TELA, o que deixava a rua com largura real inversamente proporcional ao zoom — 11,6 m no z11 e 0,7 m no z15, ou seja, ela encolhia justo quando você chegava perto, e por isso parecia linha imaginária em vez de rua. A classe de cada via é gravada em `classe_via` pelo gerador (fato semântico: 'principal' é a radial que liga um portão ao centro), mas a largura fica AQUI e é servida por /api/continentes, pra calibrar sem regerar as 15 cidades. `cidade_via_largura_min_px` é o piso em px de tela: no zoom em que a camada de rua acende a cidade inteira ainda tem ~310 px, e a via de verdade daria 2 px — sem o piso ela sumiria justamente na primeira aparição.",
+        "cidade_via_largura_m_por_classe": {
+            "principal": 11.0,
+            "anel": 7.0,
+            "secundaria": 5.0
+        },
+        "cidade_via_largura_min_px": 1.5,
         "cidade_geo_muralha_folga_m": 40,
         "cidade_geo_muralha_torres_espacamento_m": 90,
         "cidade_geo_muralha_tamanhos": ["medio", "grande"],
+        "_comentario_relevo_detalhe": "D2/Caminho B do DIAGNOSTICO_V3 (2026-09-11): campo de detalhe fino somado à altitude de terra, com limite de banda por oitava (antialiasing por Nyquist). Resolve o teto de detalhe do raster, que saturava no z6 — sem ele, todo zoom acima disso é ampliação pura e a cidade fica desenhada sobre mancha lisa. NÃO tente obter o mesmo efeito subindo tile_oitavas_max: a cauda do fBm global tem amplitude ~1e-4 e é invisível (ver Seção 13.2 do diagnóstico). relevo_detalhe_escala_px é o comprimento de onda da oitava MAIS GROSSA, em px de mundo — 0.5 px = 7,9 km; abaixo de 0.5 o campo começa a vazar para o mapa-múndi. relevo_detalhe_oitavas define até onde o detalhe desce: a oitava mais fina tem escala/2^(oitavas-1), então 10 oitavas chegam a 0,00098 px = 15 m. relevo_detalhe_margem_costa é a faixa de altitude acima do nível do mar em que o detalhe entra em fade-in, preservando a linha d'água (T6).",
+        "relevo_detalhe_amplitude": 0.006,
+        "relevo_detalhe_escala_px": 0.5,
+        "relevo_detalhe_oitavas": 10,
+        "relevo_detalhe_margem_costa": 0.05,
+        "relevo_detalhe_offset_ruido": 31337,
+
         "cidade_geo_praca_raio_m": 25,
         "cidade_geo_fracao_residencial": 0.55,
+        "_comentario_zoom_min_camada": "Largura QUE A CIDADE INTEIRA precisa ter na tela, em px, pra cada camada acender. O zoom_min sai daí: ceil(log2(alvo_px_de_tela / diametro_px_de_mundo)), com diametro = 2*cidade_geo_raio_m_por_tamanho/(sqrt(escala_pixel_area_km2)*1000). Só os alvos ficam aqui — a tabela (camada x tamanho) é DERIVADA em cartographer/cities/escala.py, nunca escrita à mão, senão ela e a fórmula divergem (foi o que aconteceu quando o dict fixo sobreviveu à correção de escala do D1). Recalibrado em 2026-09-11: os alvos anteriores (120/350/700/1400) só acendiam o edifício quando a cidade já era maior que a viewport, ou seja, nunca dava pra ver a cidade E os prédios juntos. Os de agora deixam a cidade media inteira em ~620 px quando os edifícios aparecem.",
+        "cidade_geo_zoom_min_alvo_px_por_camada": {
+            "muralha": 48,
+            "torre": 48,
+            "portao": 48,
+            "praca": 48,
+            "rua": 200,
+            "quarteirao": 200,
+            "edificio": 400,
+            "lote": 800
+        },
+        "cidade_geo_declividade_max": 0.35,
         "cidade_geo_catalogo_edificios": [
             {"tipo_local": "Castelo", "categoria": "publico", "peso": 0.3, "min": 0, "max": 1, "tamanhos": ["grande"], "tipos_cidade": ["capital", "fortaleza"], "capacidade": 20, "salario_base": 200},
             {"tipo_local": "Prefeitura", "categoria": "publico", "peso": 0.5, "min": 0, "max": 1, "tamanhos": ["medio", "grande"], "tipos_cidade": ["capital", "comercial"], "capacidade": 15, "salario_base": 150},
@@ -336,14 +374,16 @@
         "_comentario_fase0": "Fase 0 (docs/PLANO_EVOLUCAO_V2.md, 2026-09-10): o tile deixou de ser recorte de mosaico pré-renderizado e passou a ser gerar_janela() avaliada sob demanda com cache em disco. tile_oitavas_extra_por_zoom/tile_oitavas_max controlam o LOD (mais oitavas = mais detalhe real, nunca reescala — F3, corrigido pela normalização por soma infinita em noise.py). tile_zoom_maximo_ui é decisão de custo/UI para o Leaflet, não limite técnico (o raster pode ser gerado em qualquer zoom). janela_padding_px substitui zoom_border_padding_px (mesmo papel, nome genérico pois não há mais recorte 'de continente' específico). cidade_janela_raio_px é o raio (em px de mundo) da janela ao redor do pixel-âncora da cidade.",
         "tile_oitavas_extra_por_zoom": 1,
         "tile_oitavas_max": 12,
-        "_comentario_fase4_zoom": "Fase 4 (2026-09-11): tile_zoom_maximo_ui subiu de 7 pra 16 — a geometria de cidade (ruas/muralha/edifícios) só começa a aparecer em z11+ (zoom_min calculado em generate_city_geometry.py a partir do tamanho real da cidade em px de mundo), e precisa chegar a ~z14 pra ficar navegável. O raster nesses zooms não tem detalhe NOVO (oitavas saturam perto de z9 — P1.6/P1.7), só estica; é esperado e documentado (Seção 4 do plano, 'o teto honesto').",
-        "tile_zoom_maximo_ui": 16,
+        "_comentario_fase4_zoom": "D1/D5 do DIAGNOSTICO_V3 (2026-09-11): tile_zoom_maximo_ui baixou de 16 para 15 depois da correção do erro de escala 15,81x (D1) — com a geometria de cidade no tamanho certo, z15 já põe uma cidade grande ocupando ~2 telas (zoom_min calculado em cartographer/cities/escala.py a partir do tamanho real da cidade em px de mundo, via cidade_geo_zoom_min_alvo_px_por_camada). Ir além de z15 não mostra nada novo, nem vetor nem raster. tile_max_native_zoom (abaixo) é o zoom em que o RASTER para de renderizar de verdade e o Leaflet passa a esticar — bem menor que 15 porque o raster é vetor só depois do campo de detalhe (D2/Caminho B).",
+        "tile_zoom_maximo_ui": 15,
         "tile_prewarm_zoom_max": 2,
         "janela_padding_px": 20,
-        "cidade_janela_raio_px": 12,
+        "_comentario_regiao_janela": "D7 do DIAGNOSTICO_V3 (2026-09-11), Passo 3(a): renomeado de cidade_janela_raio_px pra deixar claro que esta é a janela da vista REGIONAL ('onde a cidade fica no continente'), não uma vista urbana — 12 px de mundo = 190km de raio é correto pra essa leitura (Seção 9.5). A vista URBANA ('o que tem dentro da cidade') não usa raster nenhum: o raster do mundo é sub-pixel nessa escala (Seção 2.4) e não carrega informação — quem cobre isso é a camada vetorial de detalhe de cidade (rua/edifício/lote/muralha) já visível no Mapa Live (aba 🗾, D3), que não perde qualidade ao ampliar por ser vetor.",
+        "regiao_janela_raio_px": 12,
         "imagem_janela_resolucao_alvo_px": 1200,
 
-        "_comentario_fase3": "Fase 3 (P2.1, 2026-09-11): camada vetorial GeoJSON sobre o Leaflet. zoom_min por tamanho de cidade — cidade grande aparece de longe (zoom baixo), pequena só perto. maxNativeZoom continua igual a tile_zoom_maximo_ui (não calibrado separadamente ainda — ver pendência da Fase 1.2).",
+        "_comentario_maxnativezoom": "D5/D2 do DIAGNOSTICO_V3 (2026-09-11): acima deste zoom o raster não tem detalhe NOVO, então o Leaflet estica em vez de pedir tile ao servidor. Com o campo de detalhe local (D2/Caminho B, Seção 13) implementado, o valor é 11, derivado por maxNativeZoom = ceil(log2(2^relevo_detalhe_oitavas / relevo_detalhe_escala_px)) = ceil(log2(2^10/0.5)) = 11 (Seção 13.7 do diagnóstico). Se relevo_detalhe_oitavas ou relevo_detalhe_escala_px mudar, recalcule este valor com a mesma fórmula — deixá-los dessincronizados desperdiça CPU ou perde detalhe. tile_zoom_maximo_ui continua maior porque as camadas VETORIAIS de cidade precisam de zoom alto — são vetor, não perdem qualidade ao ampliar.",
+        "tile_max_native_zoom": 11,
         "mapa_features_zoom_min_por_tamanho": {"pequeno": 4, "medio": 2, "grande": 0},
         "mapa_features_tooltip_zoom_min": 5
     }

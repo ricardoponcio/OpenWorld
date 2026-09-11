@@ -641,6 +641,108 @@ com y negativo, xadrez de bioma nas cidades) — **falta o autor rodar `reset_ca
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
 
+- **2026-09-11 (parte 18, ruas com largura real)** — Pedido do autor depois de ver a cidade
+  funcionando: "engrossar as ruas para não parecerem linhas imaginárias". A espessura era
+  `weight: 1.5` fixo em px de TELA, então a largura real da via era inversamente proporcional
+  ao zoom: 11,6 m no z11 e 0,7 m no z15, encolhendo justo quando você chega perto. Agora a
+  largura é em METROS por classe de via (`cidade_via_largura_m_por_classe`, servida por
+  `/api/continentes`) e o frontend converte a cada zoom em `estiloRua`, com piso em px pra
+  via não sumir no zoom em que a camada acende. O gerador passou a gravar `classe_via`: a
+  radial que termina num portão é `principal` (11 m), os anéis são `anel` (7 m), as demais
+  radiais são `secundaria` (5 m) — hierarquia viária de verdade, com tom e opacidade
+  próprios e junta arredondada pro cruzamento fechar. `cartographer/cities/zoom_levels.py`
+  virou `escala.py` e ganhou `metros_por_pixel_mundo`, agora o único lugar onde metro, px de
+  mundo e px de tela se convertem (o `math.sqrt(...)` inline sumiu do gerador).
+  **Bug achado no caminho**: o espaçamento mínimo entre portões era
+  `num_setores // (num_portoes * 2)`, e como `num_setores` nunca passa de `num_portoes * 2`
+  isso dava sempre 1 — a guarda não guardava nada. 12 das 14 cidades tinham portões colados
+  (Aurora Vales com os três nos setores 3, 4 e 5). Invisível enquanto a rua era um fio, mas
+  com a principal a 11 m viraria três avenidas grudadas. Corrigido para o espaçamento ideal,
+  com queda pra rotação uniforme mais plana quando o guloso se encurrala. As 14 cidades agora
+  saem com vãos perfeitos. Geometria confirmada idêntica fora isso (bbox da muralha de Aurora
+  Vales inalterada). **Próximo passo combinado**: lotes menores e variados, com pré-geração
+  cara aceita pelo autor. 10/10 testes passam. Nada commitado.
+
+- **2026-09-11 (parte 17, D9 — a cidade construída nunca aparecia)** — O autor reportou, com
+  print, que depois do D1/D3 o zoom ia mais fundo e a muralha aparecia, mas os prédios não.
+  Não era render nem geração: `carregarFeaturesVisiveisLeaflet` montava a bbox da consulta
+  com `latLngParaPixel`, que **arredonda para inteiro** (ela existe pra consulta de clique,
+  que indexa um array por pixel). Como a cidade mede 0,076 px de mundo, acima do zoom ~10 a
+  viewport inteira cabe num pixel, os dois cantos arredondavam para o mesmo inteiro e a bbox
+  virava um **ponto de área zero**. Sobreviviam só as feições cuja caixa englobava aquele
+  ponto exato (muralha, praça, ruas); edifício, torre e portão são pontos em coordenada
+  quebrada e nunca cruzavam. Pior, os dois filtros não tinham interseção: edifício pedia
+  `z >= 14` e uma bbox utilizável exigia `z <= 9`, então **nenhum zoom** mostrava a cidade
+  construída. Corrigido com `latLngParaPixelExato` (fracionário) para a bbox, mantendo a
+  versão inteira só para o clique; `z` passou a ser `Math.floor`, não `Math.round` (com
+  `zoomSnap` 0,25 a camada acendia meio nível cedo). Junto: a tabela
+  `cidade_geo_zoom_min_por_camada_tamanho` (escrita à mão) virou
+  `cartographer/cities/escala.py`, que **deriva** `{tamanho: {camada: zoom_min}}` da
+  fórmula `ceil(log2(alvo_px_de_tela / diametro_px_de_mundo))` — só os alvos ficam no
+  config (`cidade_geo_zoom_min_alvo_px_por_camada`), e foram recalibrados de 120/350/700/1400
+  para 48/200/400/800, porque os antigos só acendiam o edifício quando a cidade já era maior
+  que a tela. Medido depois: cidade média com 622 px na tela e os 32 edifícios no z13,
+  contra nada em zoom nenhum antes. `/api/continentes` passou a devolver a mesma tabela, e o
+  popup/duplo-clique/rótulo do seletor pararam de repetir números escritos à mão (já
+  divergiam do config). 10/10 testes passam. Nada commitado.
+
+- **2026-09-11 (parte 16, correção dos achados do DIAGNOSTICO_V3)** — Implementadas as 5 primeiras
+  etapas da ordem de execução do diagnóstico (Seção 11): **D1** (`generate_city_geometry.py`
+  corrigido pra `metros_por_px = sqrt(escala_pixel_area_km2)*1000`; `ZOOM_MIN_POR_CAMADA` virou
+  config-driven por camada+tamanho, recalibrado; muralha de Pelamont mede 0,1158 px de mundo, na
+  faixa esperada ~0,1138±5%); **D3** (`lote` registrado e estilizado no Leaflet, grupo de detalhe
+  de cidade ligado por padrão, afordância de zoom + duplo-clique no marcador); **D5** (`maxNativeZoom`
+  calibrado direto pro valor final — 11 — combinado com D2, `tile_zoom_maximo_ui` 16→15); **D4**
+  (`_pontuar_sitio` reescrita: `score_costa` e `score_altitude` ganharam pico interno em vez de
+  monótono, mais restrição dura por distância mínima da costa e perfil por tipo de cidade —
+  medição dry-run no continente Grendalia real: percentil de altitude do melhor sítio subiu de
+  0,00-0,07% pra 10-58%, água nos vizinhos 3x3 zerou); **D2/Caminho B** (campo de detalhe local
+  implementado exatamente como especificado na Seção 13 — `NoiseGenerator.generate_detail_field`
+  com limite de banda por Nyquist, injetado em `gerar_janela` entre a mesclagem terra-mar e o
+  clima, cidade passou a amostrar o terreno real pra posicionar praça/portões/rejeitar lote
+  íngreme e gravar `properties.altitude` em cada edifício). 10/10 testes passam (7 antigos + T7/T8/T9
+  novos). Reprodução da tabela de textura da Seção 13.6 no mundo real (não só no protótipo):
+  estável de z4 (28,6) a z14 (32,5) em vez de despencar, e z0/z2 idênticos ao comportamento sem
+  detalhe. Invariante da costa (0 flips) confirmado no mundo real, não só na fixture de teste.
+  **D4 não foi aplicado de verdade** (só a medição dry-run, sem escrita): rodar o aceite oficial
+  chamaria a IA pra fundar cidades NOVAS, substituindo as 15 atuais — e `database/openworld.db`
+  já tem `npcs`/`locais`/`eventos` referenciando essas cidades por nome, então isso quebraria esse
+  vínculo. Devolvido ao usuário como decisão antes de agir — confirmou **não aplicar por agora**,
+  o fix fica pronto no código. **Validação visual (print no navegador) pedida pelos critérios de
+  aceite de D2/D3/D5 não foi feita** — a extensão Claude in Chrome não estava conectada neste
+  ambiente; validação ficou só no nível de API/backend. Depois do checkpoint da Etapa 6, o usuário
+  decidiu **D7: as duas vistas (regional + urbana), telas separadas**. Vista regional corrigida:
+  `/api/cidade/<nome>/imagem` virou `/api/regiao/<nome>/imagem` (mesmo pra `/entities`),
+  `cidade_janela_raio_px` virou `regiao_janela_raio_px`, e o canvas do `mapa_composto.js` parou de
+  empilhar 85 marcadores de local no mesmo pixel — agora é um marcador agregado com contagem.
+  Vista urbana: em vez do Caminho C literal (mapa Leaflet novo com CRS próprio em metros),
+  reaproveitada a aba Mapa Live já corrigida pelo D3 — decisão de escopo sinalizada explicitamente
+  no diagnóstico pra revisão do usuário, não é o que a Seção 9.5 pedia ao pé da letra. D6 e D8 não
+  iniciados. Nada commitado.
+
+- **2026-09-11 (parte 15, validação humana + diagnóstico)** — O usuário validou o mapa e apontou
+  três sintomas (zoom borrado/infinito, "a cidade não existe / é 1px", "cidade na água"). A
+  investigação virou [`docs/DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md): **8 achados medidos**, sendo o
+  principal um **erro de unidade** — `generate_city_geometry.py` usava `escala_pixel_area_km2`
+  (que é **área**, km²/px) como se fosse escala **linear**, desenhando toda a cidade **15,81×
+  menor** que o projetado (`sqrt(250)`). Outros achados: as 15 cidades caem no pixel exato da
+  linha d'água (a função de pontuação de sítio tem dois termos que maximizam no mesmo ponto); a
+  camada "Detalhe da Cidade" nunca é ligada por padrão no Leaflet (e `lote` nem está registrada),
+  o que explica "a cidade não existe"; falta `maxNativeZoom` (o raster para de ganhar detalhe no
+  z6, medido por gradiente, mas o Leaflet pede tile real até o z16 a 0,19–0,55 s cada); e a "vista
+  de cidade" renderiza 380 km de lado, onde os 85 locais colapsam em 0,3 px.
+  Em seguida o usuário escolheu o **Caminho B do D2** (campo de detalhe local, o mais custoso
+  dos três) e pediu a especificação de implementação. Ela virou a **Seção 13 do
+  DIAGNOSTICO_V3**: campo de ruído dedicado somado à altitude de terra, com **limite de banda
+  por oitava** (antialiasing por Nyquist) — é isso que permite ter detalhe sub-pixel sem
+  serrilhar o mapa-múndi e sem violar a pureza F1. Foi **prototipado e medido** antes de ser
+  escrito: T2 passa bit a bit, T6 dá 0 flips, a costa fica idêntica à do mundo atual (nenhum
+  reset necessário), 0,00% dos pixels mudam de bioma, o custo sobe 4% no z4 e 10% no z12, e a
+  textura da imagem no z14 vai de 11,8 para 39,6 e passa a ser **constante do z4 ao z14** em vez
+  de despencar. Duas descobertas baratearam o trabalho: o hillshading já compensa o zoom, e a
+  decisão terra/água usa `mask_continente`, não o relevo, então somar detalhe não move a costa.
+  **Nenhum código do projeto foi alterado nesta sessão — só documentação.** Nada commitado.
+
 - **2026-09-11 (parte 14, sessão autônoma)** — **Plano V2/V3 executado até o fim do Bloco II core:
   Fases 0, 1, 2, 3 e 4 implementadas, testadas e verificadas** (docs/PLANO_EVOLUCAO_V2.md tem o
   detalhe completo de cada uma, incluindo achados de bug reais no caminho). Resumo do que mudou de

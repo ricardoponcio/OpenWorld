@@ -1,0 +1,62 @@
+"""
+Escala da geometria de cidade: metros, px de mundo e zoom do mapa.
+
+A cidade é gerada num sistema local em METROS, o mundo é indexado em PIXELS e o Leaflet
+desenha em PIXELS DE TELA. Toda conversão entre esses três vive aqui, num lugar só, porque
+cada vez que uma delas foi feita à mão em outro arquivo saiu errada: o D1 confundiu área com
+comprimento, e a largura de rua nasceu em px de tela, o que a deixava mais estreita quanto
+mais perto você chegava.
+
+A cidade é sub-pixel na escala do mundo (Seção 2.1/2.3 do docs/DIAGNOSTICO_V3.md: 1 px de
+mundo = 15,81 km, então a cidade "grande" tem 0,114 px de mundo de diâmetro). Sem um
+`zoom_min` por camada, ruas e edifícios apareceriam amontoados num ponto em qualquer zoom
+baixo.
+
+A regra é uma só: a camada acende quando a CIDADE INTEIRA atinge um tamanho alvo na tela.
+
+    zoom_min = ceil(log2(alvo_px_de_tela / diametro_px_de_mundo))
+
+(no L.CRS.Simple do Leaflet, 1 px de mundo ocupa 2^zoom px de tela, daí o log2.)
+
+Este módulo é o único lugar onde essa conta existe. O gerador de geometria grava o
+resultado em cada feature, e /api/continentes devolve a mesma tabela pro frontend saber a
+que zoom levar o usuário — os dois precisam concordar. Mantido leve de propósito (só
+stdlib) pra poder ser importado do web sem arrastar numpy/render junto.
+"""
+
+import math
+
+from config.resolver import cfg_get
+
+
+def metros_por_pixel_mundo(config):
+    """Lado do pixel de mundo, em metros.
+
+    `escala_pixel_area_km2` é ÁREA (km² por pixel), então o lado é a RAIZ dela. Confundir
+    as duas coisas foi o D1: dava um erro de sqrt(250) = 15,81x no tamanho das cidades.
+    """
+    return math.sqrt(cfg_get(config, "escala_pixel_area_km2")) * 1000.0
+
+
+def diametro_px_de_mundo(config, tamanho):
+    """Diâmetro da cidade em px de MUNDO, a partir do raio em metros do seu tamanho."""
+    raio_m = cfg_get(config, "cidade_geo_raio_m_por_tamanho").get(tamanho, 500)
+    return 2.0 * raio_m / metros_por_pixel_mundo(config)
+
+
+def zoom_min_por_camada(config, tamanho):
+    """`{camada: zoom_min}` para uma cidade deste tamanho."""
+    diametro = diametro_px_de_mundo(config, tamanho)
+    alvos = cfg_get(config, "cidade_geo_zoom_min_alvo_px_por_camada")
+    return {
+        camada: int(math.ceil(math.log2(alvo / diametro)))
+        for camada, alvo in alvos.items()
+    }
+
+
+def tabela_zoom_min(config):
+    """`{tamanho: {camada: zoom_min}}` para todos os tamanhos de cidade."""
+    return {
+        tamanho: zoom_min_por_camada(config, tamanho)
+        for tamanho in cfg_get(config, "cidade_geo_raio_m_por_tamanho")
+    }

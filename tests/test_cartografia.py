@@ -143,3 +143,53 @@ def test_coerencia_entre_zooms():
     nm = CARTOGRAPHER_CONFIG["nivel_mar"]
     flips = int(((a[:, :, 0] >= nm) != (b[:, :, 0] >= nm)).sum())
     assert flips == 0
+
+
+def test_detalhe_nao_vaza_para_zoom_baixo():
+    """T7 — D2/Caminho B (DIAGNOSTICO_V3 Seção 13.5): o campo de detalhe tem que ser
+    invisível nos zooms onde a janela não o resolve. Se este teste falhar, o mapa-múndi
+    ganhou ruído de amostragem (aliasing)."""
+    tc = _cartografo_de_teste()
+    # z0: passo de 1 px de mundo; a oitava mais grossa do detalhe tem 0,5 px.
+    com = tc.gerar_janela(300, 300, 556, 556, 256, 256, oitavas_extra=0)
+    cfg = CARTOGRAPHER_CONFIG
+    amp = cfg["relevo_detalhe_amplitude"]
+    cfg["relevo_detalhe_amplitude"] = 0.0
+    try:
+        sem = tc.gerar_janela(300, 300, 556, 556, 256, 256, oitavas_extra=0)
+    finally:
+        cfg["relevo_detalhe_amplitude"] = amp
+    assert np.allclose(com[:, :, 0], sem[:, :, 0], atol=1e-6)
+
+
+def test_detalhe_preserva_a_costa():
+    """T8 — D2/Caminho B: somar detalhe não pode mover a linha d'água em nenhum zoom. É
+    o que separa 'textura de relevo' de 'outro mundo'."""
+    tc = _cartografo_de_teste()
+    nm = CARTOGRAPHER_CONFIG["nivel_mar"]
+    cfg = CARTOGRAPHER_CONFIG
+    amp = cfg["relevo_detalhe_amplitude"]
+    for z in (4, 8, 12):
+        lado = 256 / (2 ** z)
+        com = tc.gerar_janela(300, 300, 300 + lado, 300 + lado, 128, 128, oitavas_extra=min(z, 9))
+        cfg["relevo_detalhe_amplitude"] = 0.0
+        try:
+            sem = tc.gerar_janela(300, 300, 300 + lado, 300 + lado, 128, 128, oitavas_extra=min(z, 9))
+        finally:
+            cfg["relevo_detalhe_amplitude"] = amp
+        assert int(((com[:, :, 0] >= nm) != (sem[:, :, 0] >= nm)).sum()) == 0, f"costa mudou no z={z}"
+
+
+def test_detalhe_produz_relevo_na_escala_da_cidade():
+    """T9 — D2/Caminho B: o objetivo do campo. Numa janela do tamanho de uma cidade
+    grande ainda tem que haver variação de altitude. Sem o campo, essa janela é um plano.
+    Ponto de teste (300, 400) é o CENTRO do continente TesteA da fixture — INTERIOR,
+    altitude ~0,45, margem de 0,099 acima do nível do mar (bem acima de
+    relevo_detalhe_margem_costa=0,05, então o envelope de costa não atenua o detalhe
+    aqui). Não usar um ponto perto da costa: o envelope zera o detalhe por design, e
+    mediria "sem efeito" por engano (D4 do diagnóstico — mesma armadilha do protótipo)."""
+    tc = _cartografo_de_teste()
+    lado = 0.1138          # diâmetro de uma cidade grande, em px de mundo (Seção 2.3)
+    j = tc.gerar_janela(300, 400, 300 + lado, 400 + lado, 128, 128, oitavas_extra=9)
+    alt = j[:, :, 0]
+    assert float(alt.max() - alt.min()) > 5e-4, "janela de cidade continua plana"

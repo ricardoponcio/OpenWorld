@@ -7,6 +7,7 @@ import math
 from web.helpers import render_npz_map_to_bytes, render_npz_array, obter_manifesto
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.tiles.render import obter_cartografo, config_hash_atual, oitavas_extra_por_zoom
+from cartographer.cities.escala import metros_por_pixel_mundo, tabela_zoom_min
 from config import cfg_get
 
 composed_bp = Blueprint('composed', __name__)
@@ -144,7 +145,12 @@ def api_continentes():
                 "dimensao_global": cfg_get(CARTOGRAPHER_CONFIG, "mundo_tiles_por_lado") * cfg_get(CARTOGRAPHER_CONFIG, "tile_size_px"),
                 "janela_padding_px": cfg_get(CARTOGRAPHER_CONFIG, "janela_padding_px"),
                 "tile_zoom_maximo_ui": cfg_get(CARTOGRAPHER_CONFIG, "tile_zoom_maximo_ui"),
+                "tile_max_native_zoom": cfg_get(CARTOGRAPHER_CONFIG, "tile_max_native_zoom"),
                 "mapa_features_tooltip_zoom_min": cfg_get(CARTOGRAPHER_CONFIG, "mapa_features_tooltip_zoom_min"),
+                "cidade_zoom_min_por_tamanho": tabela_zoom_min(CARTOGRAPHER_CONFIG),
+                "metros_por_pixel_mundo": metros_por_pixel_mundo(CARTOGRAPHER_CONFIG),
+                "cidade_via_largura_m_por_classe": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_m_por_classe"),
+                "cidade_via_largura_min_px": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_min_px"),
             })
 
         continentes = []
@@ -171,9 +177,28 @@ def api_continentes():
             # Zoom máximo do Leaflet (Fase 0.6): decisão de custo/UI, não limite técnico —
             # o raster pode ser gerado em qualquer zoom (`gerar_janela` é resolução-livre).
             "tile_zoom_maximo_ui": cfg_get(CARTOGRAPHER_CONFIG, "tile_zoom_maximo_ui"),
+            # D5/D2 do DIAGNOSTICO_V3: acima deste zoom o raster não tem detalhe NOVO — o
+            # Leaflet estica em vez de pedir tile novo ao servidor (ver maxNativeZoom).
+            "tile_max_native_zoom": cfg_get(CARTOGRAPHER_CONFIG, "tile_max_native_zoom"),
             # Fase 3: acima deste zoom, o nome da cidade fica permanentemente visível
             # (sem precisar de hover) — antes um número solto no JS.
-            "mapa_features_tooltip_zoom_min": cfg_get(CARTOGRAPHER_CONFIG, "mapa_features_tooltip_zoom_min")
+            "mapa_features_tooltip_zoom_min": cfg_get(CARTOGRAPHER_CONFIG, "mapa_features_tooltip_zoom_min"),
+            # `{tamanho: {camada: zoom_min}}`, a MESMA tabela que o gerador grava em cada
+            # feature de cidade (cartographer/cities/escala.py). O frontend precisa
+            # dela pra dizer ao usuário a que zoom as ruas e os edifícios aparecem e pra
+            # levá-lo até lá — antes eram dois números escritos à mão no popup, que já
+            # estavam errados em relação ao config.
+            "cidade_zoom_min_por_tamanho": tabela_zoom_min(CARTOGRAPHER_CONFIG),
+            # Lado do pixel de mundo em metros. É o que deixa o frontend desenhar em
+            # unidade real: largura de rua, recuo, footprint. Sem isso ele só conhece px de
+            # tela, e foi assim que a rua acabou com largura inversamente proporcional ao
+            # zoom. Derivado da ÁREA do pixel (D1), nunca escrito à mão.
+            "metros_por_pixel_mundo": metros_por_pixel_mundo(CARTOGRAPHER_CONFIG),
+            # Largura das vias em metros por classe, e o piso em px de tela pra via não
+            # sumir no zoom em que a camada acende. Servido (não gravado na feature) pra
+            # calibrar sem regerar as cidades.
+            "cidade_via_largura_m_por_classe": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_m_por_classe"),
+            "cidade_via_largura_min_px": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_min_px"),
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -290,11 +315,14 @@ def _encontrar_cidade(manifest, nome):
     return None
 
 
-def _janela_cidade(cidade, manifest):
+def _janela_regiao(cidade, manifest):
     """Bbox de mundo (raio fixo ao redor do pixel-âncora) + resolução de imagem alvo
-    para a janela da cidade — mesma janela usada por `/imagem` e `/entities`, pra
-    bbox e imagem nunca divergirem (Fase 2.1)."""
-    raio = cfg_get(CARTOGRAPHER_CONFIG, "cidade_janela_raio_px")
+    para a vista REGIONAL da cidade — mesma janela usada por `/imagem` e `/entities`, pra
+    bbox e imagem nunca divergirem (Fase 2.1). D7 do DIAGNOSTICO_V3 (2026-09-11): esta é a
+    janela de 'onde a cidade fica no continente' (raio regional, ~190km) — não confundir
+    com a cidade em si, que é sub-pixel nessa escala (Seção 2.4) e só existe como geometria
+    vetorial (ver /api/mapa/features, camada de detalhe de cidade, D3)."""
+    raio = cfg_get(CARTOGRAPHER_CONFIG, "regiao_janela_raio_px")
     cx, cy = cidade["x_global"], cidade["y_global"]
     dimensao_global = manifest.get("dimensao_global", 768)
     x0, y0 = max(0, cx - raio), max(0, cy - raio)
@@ -308,17 +336,22 @@ def _janela_cidade(cidade, manifest):
     return x0, y0, x1, y1, largura_img, altura_img
 
 
-@composed_bp.route('/api/cidade/<nome>/imagem')
-def api_cidade_imagem(nome):
+@composed_bp.route('/api/regiao/<nome>/imagem')
+def api_regiao_imagem(nome):
     """
-    Retorna a imagem renderizada da vizinhança da cidade: janela de mundo centrada em
-    `(x_global, y_global)` com raio `cidade_janela_raio_px`, avaliada por
+    D7 do DIAGNOSTICO_V3 (2026-09-11): renomeado de `/api/cidade/<nome>/imagem` — o nome
+    antigo prometia "a cidade" e entregava 380km de terreno regional (Seção 9), o que o
+    usuário reportou como "ainda é 1px na cidade". Esta rota é explicitamente a vista
+    REGIONAL: onde a cidade fica no continente, não o que tem dentro dela (isso é a camada
+    vetorial de detalhe de cidade, D3, visível no Mapa Live).
+
+    Retorna a imagem renderizada da região ao redor da cidade: janela de mundo centrada em
+    `(x_global, y_global)` com raio `regiao_janela_raio_px`, avaliada por
     `TileCartographer.gerar_janela()` sob demanda — Fase 0, não é mais um recorte de
     `.npz` pré-gerado (a fonte antiga usava índice local, P0.4).
 
-    ⚠️ Isto continua sendo o paliativo da Seção 2.1: a cidade é sub-pixel nesta escala de
-    mundo (1 px ≈ 15,8 km) — esta imagem mostra o TERRENO ao redor da cidade, não a cidade
-    em si (ruas/muralha/edifícios). Isso só existe a partir da Fase 4 (GeoJSON vetorial).
+    ⚠️ A cidade é sub-pixel nesta escala de mundo (1 px = 15,81 km, Seção 2.2/2.4) — esta
+    imagem mostra o TERRENO ao redor da cidade, não a cidade em si (ruas/muralha/edifícios).
     """
     try:
         manifest = obter_manifesto()
@@ -328,7 +361,7 @@ def api_cidade_imagem(nome):
         if not cidade:
             return jsonify({"error": "Cidade não encontrada"}), 404
 
-        x0, y0, x1, y1, largura_img, altura_img = _janela_cidade(cidade, manifest)
+        x0, y0, x1, y1, largura_img, altura_img = _janela_regiao(cidade, manifest)
 
         dados, mundo_px_por_img_px = _gerar_janela_com_cache(
             f"cidade:{nome.lower()}", x0, y0, x1, y1, largura_img, altura_img)
@@ -344,14 +377,17 @@ def api_cidade_imagem(nome):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@composed_bp.route('/api/cidade/<nome>/entities')
-def api_cidade_entities(nome):
+@composed_bp.route('/api/regiao/<nome>/entities')
+def api_regiao_entities(nome):
     """
-    Retorna locais e NPCs para serem renderizados sobre o mapa da cidade na UI.
+    D7 do DIAGNOSTICO_V3: renomeado de `/api/cidade/<nome>/entities`, mesma razão da rota
+    de imagem acima — isto é a vista REGIONAL.
+
+    Retorna locais e NPCs para serem renderizados sobre o mapa da região na UI.
 
     Fase 2.1 (P0.3): `locais.coordenadas` agora é pixel de MUNDO (Seção 2.3), não mais
     um par 5-35 numa grade local sem relação com o mapa real. O frontend precisa saber
-    a janela (bbox em mundo) e a resolução em que `/api/cidade/<nome>/imagem` foi
+    a janela (bbox em mundo) e a resolução em que `/api/regiao/<nome>/imagem` foi
     renderizada pra poder converter mundo -> pixel de imagem (mesma fórmula da Seção
     2.3: `ix = (x-mnx)/(mxx-mnx)*w`) — por isso a bbox e a resolução vêm aqui, e não
     são mais um número solto no JS.
@@ -397,7 +433,7 @@ def api_cidade_entities(nome):
 
         bbox = None
         if cidade_manifesto:
-            x0, y0, x1, y1, largura_img, altura_img = _janela_cidade(cidade_manifesto, manifest)
+            x0, y0, x1, y1, largura_img, altura_img = _janela_regiao(cidade_manifesto, manifest)
             bbox = {"min_x": x0, "min_y": y0, "max_x": x1, "max_y": y1,
                     "largura_img": largura_img, "altura_img": altura_img}
 

@@ -106,6 +106,56 @@ class NoiseGenerator:
         return (total_normalizado + 1.0) / 2.0
 
     @staticmethod
+    def generate_detail_field(grid_x, grid_y, scale, octaves, seed, passo_mundo_px,
+                              offset=0, persistencia=0.5, lacunaridade=2.0):
+        """
+        Campo de detalhe fino com LIMITE DE BANDA (D2/Caminho B do DIAGNOSTICO_V3).
+
+        Diferença para `generate_noise_field`: cada oitava cujo comprimento de onda é menor
+        que o dobro do passo de amostragem da janela (`passo_mundo_px`, em px de MUNDO por
+        amostra) é apagada suavemente antes de entrar na soma. Sem isso, um campo de escala
+        sub-pixel vira ruído de amostragem ("sal e pimenta") no mapa-múndi.
+
+        Isto NÃO viola F1 (pureza). O campo é sempre o mesmo em todo ponto do mundo; o que o
+        passo controla é quanto dele a janela consegue representar — é antialiasing, o mesmo
+        papel de um mipmap. T2 (subdivisão) continua exata porque subdividir uma janela em
+        quadrantes na mesma resolução preserva o passo.
+
+        Normaliza pela soma da série INFINITA, como `generate_noise_field` (correção F3 da
+        Fase 0.2): apagar oitavas nunca reescala o que sobrou.
+
+        Retorna a faixa [-1, 1] (centrada em zero), não [0, 1] — este campo é uma PERTURBAÇÃO
+        somada a uma altitude que já existe, não uma altitude por si.
+        """
+        grid_x = np.asarray(grid_x, dtype=np.float32)
+        grid_y = np.asarray(grid_y, dtype=np.float32)
+        scale = max(1e-6, float(scale))
+        passo = max(1e-12, float(passo_mundo_px))
+
+        total = np.zeros_like(grid_x, dtype=np.float32)
+        amplitude = 1.0
+        frequency = 1.0
+
+        for i in range(octaves):
+            comprimento_onda = scale / frequency
+            # Nyquist: >1 significa que a janela tem amostras de sobra para esta oitava.
+            razao = comprimento_onda / (2.0 * passo)
+            t = float(np.clip(razao - 1.0, 0.0, 1.0))
+            fade = t * t * (3.0 - 2.0 * t)          # smoothstep: sem degrau entre zooms
+            if fade > 0.0:
+                total += perlin_noise_2d_vectorized(
+                    (grid_x / scale) * frequency,
+                    (grid_y / scale) * frequency,
+                    seed=seed + offset + i * 100,
+                ) * amplitude * fade
+            amplitude *= persistencia
+            frequency *= lacunaridade
+
+        soma_infinita = 1.0 / (1.0 - persistencia) if persistencia < 1.0 else 1.0
+        limite = soma_infinita * 0.707
+        return np.clip(total / limite, -1.0, 1.0)
+
+    @staticmethod
     def generate_tectonic_base(grid_x, grid_y, seed, config, oitavas_extra=0):
         """
         Gera a base geológica unindo macro-formas tectônicas e micro-detalhes de alta frequência.

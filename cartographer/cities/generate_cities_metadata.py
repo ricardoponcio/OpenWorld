@@ -21,22 +21,41 @@ MANIFEST_PATH = "database/world_manifest.json"
 NPZ_PATH = "database/mapa_composto.npz"
 
 
-def _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, cfg):
+def _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, cfg, tipo=None):
     """
-    Fase 1.4 (P1.4): pontuação de sítio — substitui `random.choice` entre pixels do bioma
-    por uma escolha informada. 3 critérios, cada um em [0,1], combinados por peso de config:
-    adjacência à costa (porto), altitude baixa/plana (construível), e bioma pedido.
+    D4 do DIAGNOSTICO_V3 (2026-09-11): reescrita da pontuação de sítio (era Fase 1.4/P1.4).
+    Antes, score_costa (exp(-dist/escala)) e score_altitude (1 - clip((alt-nivel_mar)/faixa))
+    eram MONÓTONOS e maximizavam os dois no mesmo lugar: o primeiro pixel de terra, colado
+    na água. Com peso_costa=0.4 + peso_altitude=0.3, 70% da pontuação empurrava toda cidade
+    pra beira d'água — foi assim que as 15 cidades do mundo medido saíram no percentil
+    0,00-0,07% de altitude (Seção 6.2 do diagnóstico). Agora as duas curvas têm um PICO
+    interno (perto demais da água é alagado; longe demais não tem acesso a água), e um
+    descarte DURO remove candidatos colados na água antes mesmo de pontuar — não é possível
+    pontuação boa o bastante pra escapar dessa restrição.
     """
     if distance_transform_edt is not None:
-        # Distância (em px) até o pixel de água/fora-da-bbox mais próximo — pontuação alta
-        # perto da costa, sem precisar varrer vizinhança manualmente.
+        # Distância (em px) até o pixel de água/fora-da-bbox mais próximo.
         dist_costa = distance_transform_edt(is_terra)
     else:
         dist_costa = np.full(is_terra.shape, 10.0, dtype=np.float32)  # fallback neutro sem scipy
-    escala_costa = cfg_get(cfg, "cidades_escala_distancia_costa_px")
-    score_costa = np.exp(-dist_costa / max(1e-6, escala_costa))
 
-    score_altitude = 1.0 - np.clip((sub_alt - nivel_mar) / max(1e-6, nivel_montanha - nivel_mar), 0.0, 1.0)
+    perfil = cfg_get(cfg, "cidades_perfil_por_tipo").get(tipo or "", {})
+
+    ideal = perfil.get("distancia_costa_ideal_px", cfg_get(cfg, "cidades_distancia_costa_ideal_px"))
+    largura = perfil.get("distancia_costa_largura_px", cfg_get(cfg, "cidades_distancia_costa_largura_px"))
+    score_costa = np.exp(-((dist_costa - ideal) ** 2) / (2.0 * max(1e-6, largura) ** 2))
+
+    margem = cfg_get(cfg, "cidades_altitude_margem_mar")
+    if perfil.get("prefere_altitude_alta", False):
+        # D4 Passo 4: cidade mineira prefere altitude alta, não baixa — o alvo fica a uma
+        # fração do caminho entre o nível do mar e o nível de montanha.
+        fracao = perfil.get("altitude_alvo_fracao", 0.5)
+        alt_ideal = nivel_mar + (nivel_montanha - nivel_mar) * fracao
+    else:
+        # D4 Passo 2: terreno baixo é bom; terreno NO nível do mar é pântano. O alvo fica
+        # ligeiramente acima do nível do mar, nunca em cima dele.
+        alt_ideal = nivel_mar + margem
+    score_altitude = 1.0 - np.clip(np.abs(sub_alt - alt_ideal) / max(1e-6, nivel_montanha - alt_ideal), 0.0, 1.0)
 
     score_bioma = np.where(sub_bioma == bioma_id, 1.0, 0.3)
 
@@ -45,7 +64,11 @@ def _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_mont
     peso_bioma = cfg_get(cfg, "cidades_peso_bioma")
 
     score = peso_costa * score_costa + peso_altitude * score_altitude + peso_bioma * score_bioma
-    score = np.where(is_terra, score, -np.inf)
+
+    # D4 Passo 3: restrição DURA. Um pixel cuja vizinhança já é metade água nunca é sítio
+    # de cidade, por melhor que a pontuação dele seja.
+    dist_min = cfg_get(cfg, "cidades_distancia_costa_minima_px")
+    score = np.where(is_terra & (dist_costa >= dist_min), score, -np.inf)
     return score
 
 def gerar_metadados_cidades(uuid_ou_nome: str):
@@ -133,7 +156,7 @@ def gerar_metadados_cidades(uuid_ou_nome: str):
         bioma_str = cid.get("bioma_desejado", biomas_disponiveis[0] if biomas_disponiveis else "Floresta Temperada").title()
         bioma_id = biome_map_to_id.get(bioma_str, ClimateProcessor.BIOME_IDS.get("FLORESTA_TEMPERADA", 4))
 
-        score = _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, CARTOGRAPHER_CONFIG)
+        score = _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, CARTOGRAPHER_CONFIG, tipo=(cid.get("tipo") or "").lower())
 
         # Restrição dura: rejeita candidatos perto de uma cidade já colocada.
         for (ox, oy) in cidades_ja_colocadas:

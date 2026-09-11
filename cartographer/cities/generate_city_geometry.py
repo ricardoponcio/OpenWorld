@@ -4,12 +4,12 @@ FUNÇÃO: Gera a geometria vetorial real de uma cidade (Fase 4, P2.2) — ruas, 
         lotes, edifícios nomeados e muralha — em `database/cidades/<slug>.geojson`.
 
 CONCEITO CENTRAL (Seção 2.1 do plano): a cidade é SUB-PIXEL na escala do mundo (1 px de
-mundo ≈ 250 km). Não existe informação de terreno real nessa escala — então a geometria
-NÃO é derivada do terreno do mundo, é gerada num sistema de coordenadas LOCAL próprio
-(origem no centro da cidade, unidade = metro), determinístico a partir do nome da cidade
-(`zlib.crc32`, nunca `hash()`), e só convertida pra pixel de mundo no fim:
+mundo = 15,81 km — escala_pixel_area_km2 é ÁREA, o lado do pixel é sqrt(250) = 15,81 km;
+ver D1 do docs/DIAGNOSTICO_V3.md). A geometria é gerada num sistema de coordenadas LOCAL
+próprio (origem no centro da cidade, unidade = metro), determinístico a partir do nome da
+cidade (`zlib.crc32`, nunca `hash()`), e só convertida pra pixel de mundo no fim:
 
-    desloc_px = desloc_m / (escala_pixel_area_km2 * 1000)
+    desloc_px = desloc_m / (sqrt(escala_pixel_area_km2) * 1000)
 
 Isso é MENOS do que o catálogo aspiracional da Seção 4.3 do plano (~80 categorias, regras
 de coerência por bioma/rio/adjacência a água) — implementado aqui um SUBCONJUNTO curado
@@ -34,6 +34,8 @@ if raiz not in sys.path:
 
 import numpy as np
 from cartographer.config import CARTOGRAPHER_CONFIG
+from cartographer.tiles.render import obter_cartografo
+from cartographer.cities.escala import metros_por_pixel_mundo, zoom_min_por_camada
 from config import cfg_get
 
 MANIFEST_PATH = "database/world_manifest.json"
@@ -65,18 +67,42 @@ class GeradorCidade:
         self.recuo_rua = cfg_get(config, "cidade_geo_recuo_rua_m")
         self.praca_raio = cfg_get(config, "cidade_geo_praca_raio_m")
         self.fracao_residencial_base = cfg_get(config, "cidade_geo_fracao_residencial")
-        self.escala_pixel_area_km2 = cfg_get(config, "escala_pixel_area_km2")
+        # Toda conversão metro <-> px de mundo passa por aqui (cartographer/cities/escala.py).
+        self.metros_por_px = metros_por_pixel_mundo(config)
+        self.zoom_min_camada = zoom_min_por_camada(config, self.tamanho)
 
         self.num_setores = max(6, self.num_portoes * 2)
         self.features = []
         self._contagem_catalogo = {}  # tipo_local -> quantos já colocados
 
+        # D2/Caminho B (DIAGNOSTICO_V3 Seção 13.5 Passo 5): o terreno na escala da cidade
+        # passou a existir. Amostrar aqui é o que liga a geometria urbana ao relevo do
+        # mundo — antes isto era ruído inventado localmente, sem relação com o continente.
+        # `obter_cartografo()` é o TileCartographer de processo único montado a partir do
+        # manifesto — não instanciar um novo aqui, um layout diferente geraria terreno
+        # diferente do que o mapa mostra.
+        cartografo = obter_cartografo()
+        self.terreno = None
+        self._grad_y = None
+        self._grad_x = None
+        self._declividade_max = cfg_get(config, "cidade_geo_declividade_max")
+        if cartografo is not None:
+            lado_px = 2.0 * self.raio_m / self.metros_por_px
+            janela = cartografo.gerar_janela(
+                self.cx_mundo - lado_px / 2, self.cy_mundo - lado_px / 2,
+                self.cx_mundo + lado_px / 2, self.cy_mundo + lado_px / 2,
+                64, 64,
+                oitavas_extra=cfg_get(config, "tile_oitavas_max") - cfg_get(config, "ruido_macro_oitavas"),
+            )
+            self.terreno = janela[:, :, 0]
+            self._grad_y, self._grad_x = np.gradient(self.terreno)
+
     # ------------------------------------------------------------------
     # Transform local(m) -> mundo(px) — Seção 2.1/2.3 do plano
     # ------------------------------------------------------------------
     def _mundo(self, x_m, y_m):
-        metros_por_px = self.escala_pixel_area_km2 * 1000.0
-        return self.cx_mundo + x_m / metros_por_px, self.cy_mundo + y_m / metros_por_px
+        return (self.cx_mundo + x_m / self.metros_por_px,
+                self.cy_mundo + y_m / self.metros_por_px)
 
     def _geojson_coord(self, x_m, y_m):
         """[lng, lat] = [x_mundo, -y_mundo] — mesma conversão de pixelParaLatLng (Seção 2.3),
@@ -84,18 +110,39 @@ class GeradorCidade:
         x_mundo, y_mundo = self._mundo(x_m, y_m)
         return [round(x_mundo, 6), round(-y_mundo, 6)]
 
-    # A cidade é sub-pixel na escala do mundo (Seção 2.1: cidade "grande" tem ~0,007 px
-    # de mundo de diâmetro) — sem isso, a geometria inteira (ruas, edifícios) apareceria
-    # amontoada em qualquer zoom baixo. `zoom_min` calculado pra cada camada só aparecer
-    # quando 1 tile (256px) já cobre uma fração comparável ao tamanho real da cidade —
-    # medido: em z11 a cidade ocupa ~6% de um tile (dá pra ver que "tem algo ali"); em
-    # z13 ~23%; em z14 ~46% (bom pra andar pelas ruas). `tile_zoom_maximo_ui` (config)
-    # precisa alcançar isso — foi subido de 7 pra 16 junto com esta mudança.
-    ZOOM_MIN_POR_CAMADA = {
-        "muralha": 11, "torre": 11, "portao": 11, "praca": 11,
-        "rua": 12, "quarteirao": 12,
-        "lote": 14, "edificio": 13,
-    }
+    # ------------------------------------------------------------------
+    # D2/Caminho B (DIAGNOSTICO_V3 Seção 13.5 Passo 5): leitura do terreno local, sobre
+    # a grade 64x64 amostrada em __init__. Coordenadas de entrada são metros locais
+    # (mesma origem no centro da cidade usada pelo resto da geometria).
+    # ------------------------------------------------------------------
+    def _indice_terreno(self, x_m, y_m):
+        n = self.terreno.shape[0]
+        lado_m = 2.0 * self.raio_m
+        fx = (x_m + self.raio_m) / lado_m
+        fy = (y_m + self.raio_m) / lado_m
+        ix = int(np.clip(fx * n, 0, n - 1))
+        iy = int(np.clip(fy * n, 0, n - 1))
+        return iy, ix
+
+    def _altitude_local(self, x_m, y_m):
+        if self.terreno is None:
+            return None
+        iy, ix = self._indice_terreno(x_m, y_m)
+        return float(self.terreno[iy, ix])
+
+    def _declividade_local(self, x_m, y_m):
+        """Magnitude do gradiente de altitude no ponto, em unidade de altitude por metro
+        — usado pra rejeitar lote íngreme demais (edifício) e preferir setor mais plano
+        (praça, portão)."""
+        if self.terreno is None:
+            return 0.0
+        iy, ix = self._indice_terreno(x_m, y_m)
+        m_por_celula = (2.0 * self.raio_m) / self.terreno.shape[0]
+        return float(math.hypot(self._grad_x[iy, ix], self._grad_y[iy, ix]) / m_por_celula)
+
+    # `zoom_min` é calculado em cartographer/cities/escala.py a partir do raio real da
+    # cidade e dos alvos em px de tela do config.json — nunca uma tabela escrita à mão, que
+    # é como a anterior acabou calibrada CONTRA o bug de escala do D1 (4 níveis altos demais).
 
     def _add_feature(self, geom_type, coords_m, camada, props=None):
         if geom_type == "Point":
@@ -104,7 +151,7 @@ class GeradorCidade:
             coords = [self._geojson_coord(*p) for p in coords_m]
             if geom_type == "Polygon":
                 coords = [coords]
-        p = {"camada": camada, "zoom_min": self.ZOOM_MIN_POR_CAMADA.get(camada, 8)}
+        p = {"camada": camada, "zoom_min": self.zoom_min_camada.get(camada, 8)}
         if props:
             p.update(props)
         self.features.append({"type": "Feature", "geometry": {"type": geom_type, "coordinates": coords}, "properties": p})
@@ -112,6 +159,26 @@ class GeradorCidade:
     @staticmethod
     def _polar(raio, angulo):
         return (raio * math.cos(angulo), raio * math.sin(angulo))
+
+    def _melhor_centro_praca(self, raio_banda0):
+        """D2/Caminho B (Seção 13.5 Passo 5): procura, entre alguns candidatos dentro do
+        anel central, o de menor declividade — sem ultrapassar o raio da banda 0 (onde
+        nenhum lote é gerado), pra nunca invadir o quarteirão vizinho."""
+        if self.terreno is None:
+            return (0.0, 0.0)
+        raio_disponivel = max(0.0, raio_banda0 - self.praca_raio) * 0.6
+        if raio_disponivel <= 0.0:
+            return (0.0, 0.0)
+        melhor = (0.0, 0.0)
+        melhor_declive = self._declividade_local(0.0, 0.0)
+        n_candidatos = 12
+        for k in range(n_candidatos):
+            ang = 2 * math.pi * k / n_candidatos
+            x, y = raio_disponivel * math.cos(ang), raio_disponivel * math.sin(ang)
+            declive = self._declividade_local(x, y)
+            if declive < melhor_declive:
+                melhor_declive, melhor = declive, (x, y)
+        return melhor
 
     # ------------------------------------------------------------------
     # 4.2.2/4.2.3 — Núcleo, portões e malha viária (radiais + anéis, organica/medieval)
@@ -139,22 +206,81 @@ class GeradorCidade:
             borda.append(self._polar(r, angulos[i]))
         vertices.append(borda)
 
-        # Ruas: cada anel (loop fechado) + cada radial (centro -> borda)
+        # Portões: subconjunto dos setores, na borda externa. D2/Caminho B (Seção 13.5
+        # Passo 5): quando há terreno, prefere os setores de menor declividade — é por
+        # onde uma estrada real sairia. Mantém espaçamento mínimo entre portões pra não
+        # agrupar todos no mesmo lado plano; sem terreno, cai no espaçamento uniforme
+        # original.
+        #
+        # Calculado ANTES de emitir as ruas porque é ele que define quais radiais são
+        # via principal (a que liga o portão ao centro). Nenhum sorteio acontece aqui, só
+        # ordenação por declividade, então adiantar este bloco não mexe na sequência do
+        # RNG nem, portanto, na geometria gerada.
+        passo = max(1, self.num_setores // self.num_portoes)
+
+        def _rotacao_uniforme(deslocamento):
+            """Os portões igualmente espaçados, girados de `deslocamento` setores."""
+            return [(deslocamento + k * passo) % self.num_setores for k in range(self.num_portoes)]
+
+        if self.terreno is not None:
+            declividades = [self._declividade_local(*borda[i]) for i in range(self.num_setores)]
+            ordem = sorted(range(self.num_setores), key=lambda i: declividades[i])
+            # O espaçamento mínimo é o próprio espaçamento ideal. Era
+            # `num_setores // (num_portoes * 2)`, que como num_setores nunca passa de
+            # `num_portoes * 2` dava sempre 1 — ou seja, "não pode ser o vizinho imediato"
+            # virava "pode qualquer coisa", e a guarda não guardava nada: 12 das 14 cidades
+            # saíam com portões colados (Aurora Vales tinha os três nos setores 3, 4 e 5,
+            # com um vão de 4 setores do outro lado). Passava despercebido enquanto a rua
+            # era um fio; com a via principal a 11 m isso vira três avenidas grudadas.
+            espacamento_min = passo
+            indices_portao = []
+            for i in ordem:
+                if all(min((i - j) % self.num_setores, (j - i) % self.num_setores) >= espacamento_min
+                       for j in indices_portao):
+                    indices_portao.append(i)
+                if len(indices_portao) == self.num_portoes:
+                    break
+            if len(indices_portao) < self.num_portoes:
+                # O guloso pode se encurralar (escolher um setor que inviabiliza o resto).
+                # Cai na rotação uniforme mais plana: espaçamento perfeito garantido, e o
+                # terreno ainda decide qual das `passo` rotações. A versão anterior
+                # completava com setores fixos sem checar distância, o que reintroduzia
+                # exatamente os portões colados que o bloco acima tenta evitar.
+                indices_portao = min(
+                    (_rotacao_uniforme(d) for d in range(passo)),
+                    key=lambda ids: sum(declividades[i] for i in ids),
+                )
+        else:
+            indices_portao = _rotacao_uniforme(0)
+
+        # Ruas: cada anel (loop fechado) + cada radial (centro -> borda). `classe_via` é a
+        # hierarquia viária (larguras em cidade_via_largura_m_por_classe), `tipo_via`
+        # continua descrevendo o papel geométrico na malha — perguntas diferentes.
+        # A radial que termina num portão é a via principal: numa cidade real é o caminho
+        # que a estrada de fora vira ao entrar, e por isso a rua mais larga.
+        setores_portao = set(indices_portao)
         for j, linha in enumerate(vertices):
-            self._add_feature("LineString", linha + [linha[0]], "rua", {"tipo_via": "anel", "indice": j})
+            self._add_feature("LineString", linha + [linha[0]], "rua",
+                              {"tipo_via": "anel", "classe_via": "anel", "indice": j})
         for i in range(self.num_setores):
             pontos = [(0.0, 0.0)] + [vertices[j][i] for j in range(self.num_aneis + 1)]
-            self._add_feature("LineString", pontos, "rua", {"tipo_via": "radial", "indice": i})
+            classe = "principal" if i in setores_portao else "secundaria"
+            self._add_feature("LineString", pontos, "rua",
+                              {"tipo_via": "radial", "classe_via": classe, "indice": i})
 
-        # Portões: subconjunto dos setores, evenly spaced, na borda externa
-        passo = max(1, self.num_setores // self.num_portoes)
-        indices_portao = [(k * passo) % self.num_setores for k in range(self.num_portoes)]
         for i in indices_portao:
             self._add_feature("Point", borda[i], "portao", {"nome": f"Portão de {self.nome} #{i}"})
 
         # Praça central — círculo decorativo; NENHUM lote/edifício entra na banda 0
-        # (reservada pra praça), então não há checagem de sobreposição a fazer.
-        circulo = [self._polar(self.praca_raio, 2 * math.pi * k / 16) for k in range(16)]
+        # (reservada pra praça), então não há checagem de sobreposição a fazer. D2/Caminho
+        # B (Seção 13.5 Passo 5): em vez do centro geométrico fixo, procura o ponto mais
+        # plano dentro do próprio anel central — sem mover a malha viária, que continua
+        # ancorada em (0,0) (Seção 13.5: "não troque as duas coisas ao mesmo tempo").
+        centro_praca = self._melhor_centro_praca(raios_base[0])
+        circulo = []
+        for k in range(16):
+            dx, dy = self._polar(self.praca_raio, 2 * math.pi * k / 16)
+            circulo.append((centro_praca[0] + dx, centro_praca[1] + dy))
         self._add_feature("Polygon", circulo + [circulo[0]], "praca", {"nome": f"Praça Central de {self.nome}"})
 
         self._vertices = vertices
@@ -268,6 +394,13 @@ class GeradorCidade:
             cx = sum(p[0] for p in lote) / len(lote)
             cy = sum(p[1] for p in lote) / len(lote)
 
+            # D2/Caminho B (Seção 13.5 Passo 5): rejeita lote íngreme demais — vira
+            # espaço vazio (sem feature "edificio"), não um edifício empurrado pro lugar
+            # errado. O polígono do lote em si já foi adicionado em
+            # `_gerar_quarteiroes_e_lotes` e continua de pé.
+            if self.terreno is not None and self._declividade_local(cx, cy) > self._declividade_max:
+                continue
+
             # Fração residencial cresce com a banda (zoneamento: comércio perto do
             # centro, residencial nas bordas — Seção 4.2.8, versão simplificada).
             frac_residencial_banda = min(0.9, self.fracao_residencial_base + 0.12 * (banda - 1))
@@ -295,6 +428,7 @@ class GeradorCidade:
             slug_id = f"{self.nome.lower().replace(' ', '_')}_{idx_edificio:03d}"
             nome_completo = f"{nome_tipo} de {self.nome}" if nome_tipo != "Residência" else f"Residência {idx_edificio:03d} — {bairro}"
 
+            altitude_local = self._altitude_local(cx, cy)
             self._add_feature("Point", (cx, cy), "edificio", {
                 "id": slug_id,
                 "nome": nome_completo,
@@ -304,6 +438,9 @@ class GeradorCidade:
                 "salario_base": salario,
                 "bairro": bairro,
                 "dono_npc_id": "",
+                # D2/Caminho B (Seção 13.5 Passo 5): abre a porta pra Fase 5 gerar
+                # narrativa coerente ("a forja fica na parte alta da cidade").
+                "altitude": round(altitude_local, 6) if altitude_local is not None else None,
             })
 
     # ------------------------------------------------------------------

@@ -1,5 +1,12 @@
 # PLANO DE EVOLUÇÃO V2 — Guia de Execução
 
+> 🔴 **LEIA ANTES DE CONTINUAR ESTE PLANO (2026-09-11)**: a validação humana das Fases 0–4
+> encontrou 8 defeitos, incluindo um **erro de unidade que deixa toda cidade 15,81× menor que o
+> projetado** e um algoritmo que põe **todas as cidades na linha d'água**. Eles estão medidos,
+> com causa raiz e solução prescritiva, em **[`DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md)**.
+> **Corrija D1, D3, D4 e D5 antes de iniciar a Fase 5** — a Fase 5 (narrativa por IA) gera texto
+> em cima de cidades cuja posição e escala estão erradas.
+
 > **Para quem é este documento**: para o modelo/desenvolvedor que vai executar as próximas
 > alterações. Ele é **auto-suficiente**: contém o mapa do código, os contratos de dados, o
 > diagnóstico medido e as fases com passos prescritivos e critério de aceite executável.
