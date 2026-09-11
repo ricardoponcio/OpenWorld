@@ -38,15 +38,22 @@ def metros_por_pixel_mundo(config):
     return math.sqrt(cfg_get(config, "escala_pixel_area_km2")) * 1000.0
 
 
-def diametro_px_de_mundo(config, tamanho):
-    """Diâmetro da cidade em px de MUNDO, a partir do raio em metros do seu tamanho."""
-    raio_m = cfg_get(config, "cidade_geo_raio_m_por_tamanho").get(tamanho, 500)
+def diametro_px_de_mundo(config, raio_m):
+    """Diâmetro da cidade em px de MUNDO, a partir do raio REAL da cidade em metros.
+
+    ESPEC_TECIDO_URBANO.md Seção 6/E6 (2026-09-11): recebia `tamanho` e buscava o raio
+    NOMINAL da tabela (`cidade_geo_raio_m_por_tamanho`). Desde que o raio passou a ser
+    sorteado por cidade dentro de uma faixa (Seção 5.6), isso teria feito toda cidade
+    'media' acender rua/edifício no mesmo zoom, apagando a variedade que a E6 introduz.
+    Quem quer a aproximação por tamanho nominal (o popup do frontend) usa `tabela_zoom_min`
+    abaixo, que documenta a aproximação explicitamente.
+    """
     return 2.0 * raio_m / metros_por_pixel_mundo(config)
 
 
-def zoom_min_por_camada(config, tamanho):
-    """`{camada: zoom_min}` para uma cidade deste tamanho."""
-    diametro = diametro_px_de_mundo(config, tamanho)
+def zoom_min_por_camada(config, raio_m):
+    """`{camada: zoom_min}` para uma cidade com este raio REAL, em metros."""
+    diametro = diametro_px_de_mundo(config, raio_m)
     alvos = cfg_get(config, "cidade_geo_zoom_min_alvo_px_por_camada")
     return {
         camada: int(math.ceil(math.log2(alvo / diametro)))
@@ -55,8 +62,14 @@ def zoom_min_por_camada(config, tamanho):
 
 
 def tabela_zoom_min(config):
-    """`{tamanho: {camada: zoom_min}}` para todos os tamanhos de cidade."""
+    """`{tamanho: {camada: zoom_min}}` usando o RAIO NOMINAL de cada tamanho
+    (`cidade_geo_raio_m_por_tamanho`) — é uma APROXIMAÇÃO: desde a E6 cada cidade sorteia
+    seu próprio raio dentro de uma faixa (`cidade_geo_raio_m_faixa_por_tamanho`), então o
+    zoom_min real gravado nas features de uma cidade específica pode diferir um pouco do
+    que esta tabela diz. Ela alimenta só o texto do popup e o alvo do duplo-clique no
+    frontend (`/api/continentes`), onde essa aproximação é aceitável — documentado aqui
+    para não repetir a divergência silenciosa corrigida no D9."""
     return {
-        tamanho: zoom_min_por_camada(config, tamanho)
-        for tamanho in cfg_get(config, "cidade_geo_raio_m_por_tamanho")
+        tamanho: zoom_min_por_camada(config, raio_m)
+        for tamanho, raio_m in cfg_get(config, "cidade_geo_raio_m_por_tamanho").items()
     }

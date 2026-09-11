@@ -54,8 +54,19 @@ def _importar_locais_da_geometria(db, cidade):
         if props.get("camada") != "edificio":
             continue
 
-        # Desfaz [lng,lat] = [x_mundo, -y_mundo] (Seção 2.3) de volta pra pixel de mundo.
-        lng, lat = feat["geometry"]["coordinates"]
+        # E4 (ESPEC_TECIDO_URBANO.md Seção 6): `edificio` virou Polygon (footprint dentro
+        # do lote, Seção 5.3) — o Local usa o centroide do anel externo. Mantém
+        # compatibilidade com Point (GeoJSON antigo em disco, ou o paliativo abaixo, que
+        # continua produzindo ponto) — desfaz [lng,lat] = [x_mundo, -y_mundo] (Seção 2.3)
+        # de volta pra pixel de mundo, ponto a ponto se for polígono.
+        geom = feat["geometry"]
+        if geom["type"] == "Point":
+            lng, lat = geom["coordinates"]
+        else:
+            anel_externo = geom["coordinates"][0]
+            pontos = anel_externo[:-1] if len(anel_externo) > 1 and anel_externo[0] == anel_externo[-1] else anel_externo
+            lng = sum(p[0] for p in pontos) / len(pontos)
+            lat = sum(p[1] for p in pontos) / len(pontos)
         x_mundo, y_mundo = lng, -lat
 
         loc = Local(

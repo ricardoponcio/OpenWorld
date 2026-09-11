@@ -27,6 +27,7 @@ import json
 import math
 import random
 import zlib
+from datetime import datetime
 
 raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
@@ -59,19 +60,48 @@ class GeradorCidade:
         self.rng = random.Random(self.seed)
         self.np_rng = np.random.default_rng(self.seed)
 
-        self.raio_m = cfg_get(config, "cidade_geo_raio_m_por_tamanho").get(self.tamanho, 500)
+        # E6 (Seção 5.6): raio e nº de anéis deixam de ser um valor fixo por tamanho —
+        # sorteados dentro de uma faixa com `self.rng` (determinístico por nome), é isso
+        # que faz duas cidades "media" saírem diferentes. `cidade_geo_raio_m_por_tamanho`
+        # sobrevive só como raio NOMINAL (usado por escala.py:tabela_zoom_min pro popup).
+        faixa_raio = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(
+            self.tamanho, [500.0, 500.0])
+        self.raio_m = self.rng.uniform(*faixa_raio)
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(self.tamanho, 2)
-        self.num_aneis = cfg_get(config, "cidade_geo_num_aneis_por_tamanho").get(self.tamanho, 2)
+        faixa_aneis = cfg_get(config, "cidade_geo_num_aneis_faixa_por_tamanho").get(
+            self.tamanho, [2, 2])
+        self.num_aneis = self.rng.randint(int(faixa_aneis[0]), int(faixa_aneis[1]))
         self.irreg = cfg_get(config, "cidade_geo_irregularidade_via")
-        self.lote_area_alvo = cfg_get(config, "cidade_geo_lote_area_alvo_m2")
+        # E2 (Seção 5.2): alvo de área do lote passa a depender da banda (centro denso,
+        # borda folgada) e de um fator sorteado por cidade — ver `_area_alvo_lote`.
+        self.lote_area_base = cfg_get(config, "cidade_geo_lote_area_base_m2")
+        self.lote_fator_por_banda = cfg_get(config, "cidade_geo_lote_fator_por_banda")
+        self.lote_profundidade_max = cfg_get(config, "cidade_geo_lote_profundidade_max")
+        faixa_fator_cidade = cfg_get(config, "cidade_geo_lote_fator_cidade_faixa")
+        self.lote_fator_cidade = self.rng.uniform(*faixa_fator_cidade)
+        self.quadra_area_minima = cfg_get(config, "cidade_geo_quadra_area_minima_m2")
         self.recuo_rua = cfg_get(config, "cidade_geo_recuo_rua_m")
+        self.via_largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
+        # E3 (Seção 5.3): footprint da edificação — recuo da divisa do lote e taxa de
+        # ocupação (com jitter por construção, pra quadra não virar tabuleiro perfeito).
+        self.edificacao_recuo = cfg_get(config, "cidade_geo_edificacao_recuo_m")
+        self.edificacao_taxa_ocupacao = cfg_get(config, "cidade_geo_edificacao_taxa_ocupacao")
+        self.edificacao_jitter = cfg_get(config, "cidade_geo_edificacao_jitter")
         self.praca_raio = cfg_get(config, "cidade_geo_praca_raio_m")
         self.fracao_residencial_base = cfg_get(config, "cidade_geo_fracao_residencial")
         # Toda conversão metro <-> px de mundo passa por aqui (cartographer/cities/escala.py).
         self.metros_por_px = metros_por_pixel_mundo(config)
-        self.zoom_min_camada = zoom_min_por_camada(config, self.tamanho)
+        # E6: recebe o RAIO REAL sorteado acima, não o rótulo de tamanho — senão toda
+        # cidade "media" acenderia rua/edifício no mesmo zoom, apagando a variedade.
+        self.zoom_min_camada = zoom_min_por_camada(config, self.raio_m)
 
-        self.num_setores = max(6, self.num_portoes * 2)
+        # E6: `max(6, num_portoes*2)` amarrava o número de setores ao de portões e forçava
+        # o espaçamento dos portões a ser sempre perfeito. Agora é sorteado dentro de
+        # `cidade_geo_setores_por_portao_faixa`, com piso em `num_portoes*2` (abaixo disso
+        # não sobra setor pra alternar portão/não-portão).
+        faixa_setores_por_portao = cfg_get(config, "cidade_geo_setores_por_portao_faixa")
+        sorteio_setores = self.rng.uniform(*faixa_setores_por_portao)
+        self.num_setores = max(self.num_portoes * 2, round(self.num_portoes * sorteio_setores))
         self.features = []
         self._contagem_catalogo = {}  # tipo_local -> quantos já colocados
 
@@ -259,6 +289,7 @@ class GeradorCidade:
         # A radial que termina num portão é a via principal: numa cidade real é o caminho
         # que a estrada de fora vira ao entrar, e por isso a rua mais larga.
         setores_portao = set(indices_portao)
+        self._setores_portao = setores_portao  # reusado pela E1 (_gerar_quarteiroes_e_lotes)
         for j, linha in enumerate(vertices):
             self._add_feature("LineString", linha + [linha[0]], "rua",
                               {"tipo_via": "anel", "classe_via": "anel", "indice": j})
@@ -290,24 +321,110 @@ class GeradorCidade:
     # 4.2.4/4.2.5 — Quarteirões e lotes (subdivisão recursiva pelo lado maior)
     # ------------------------------------------------------------------
     @staticmethod
-    def _area_quad(quad):
-        """Fórmula do shoelace — área de um polígono simples (aqui sempre convexo o
-        bastante pra não importar orientação)."""
+    def _area_sinalizada(quad):
+        """Shoelace COM sinal — positivo/negativo conforme a orientação (horário vs.
+        anti-horário). `_area_quad` é o valor absoluto disto; a E1 usa o sinal pra
+        detectar quad invertido depois do inset (`_encolher_quad`)."""
         area = 0.0
         n = len(quad)
         for i in range(n):
             x1, y1 = quad[i]
             x2, y2 = quad[(i + 1) % n]
             area += x1 * y2 - x2 * y1
-        return abs(area) / 2.0
+        return area / 2.0
 
-    def _subdividir_lote(self, quad, profundidade=0, max_profundidade=5):
+    @classmethod
+    def _area_quad(cls, quad):
+        """Fórmula do shoelace — área de um polígono simples (aqui sempre convexo o
+        bastante pra não importar orientação)."""
+        return abs(cls._area_sinalizada(quad))
+
+    @staticmethod
+    def _interseccao_retas(p1, d1, p2, d2):
+        """Interseção de duas retas em forma ponto + t*direção (sistema 2x2). `None` se
+        as retas forem paralelas (determinante ~0) — cabe ao chamador decidir o fallback
+        (Seção 6/E1: "use o ponto deslocado direto")."""
+        x1, y1 = p1
+        dx1, dy1 = d1
+        x2, y2 = p2
+        dx2, dy2 = d2
+        denom = dx1 * dy2 - dy1 * dx2
+        if abs(denom) < 1e-9:
+            return None
+        t = ((x2 - x1) * dy2 - (y2 - y1) * dx2) / denom
+        return (x1 + dx1 * t, y1 + dy1 * t)
+
+    def _encolher_quad(self, quad, distancias):
+        """Desloca cada aresta do quad para DENTRO por distancias[k] e reintercepta.
+        `quad` tem 4 vértices em sentido consistente; `distancias[k]` é o recuo da aresta
+        k (de quad[k] para quad[k+1]), em metros. Retorna o quad encolhido, ou None se ele
+        degenerar (quadra estreita demais pra caber a rua, ou polígono invertido) — Seção
+        6/E1 do ESPEC_TECIDO_URBANO.md."""
+        n = len(quad)
+        cx = sum(p[0] for p in quad) / n
+        cy = sum(p[1] for p in quad) / n
+        orientacao_original = self._area_sinalizada(quad)
+
+        arestas = []  # (ponto_deslocado, direcao_normalizada) por aresta k
+        for k in range(n):
+            p0, p1 = quad[k], quad[(k + 1) % n]
+            dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+            comprimento = math.hypot(dx, dy)
+            if comprimento < 1e-9:
+                return None
+            dx, dy = dx / comprimento, dy / comprimento
+            # Normal a 90° da aresta — testada contra o centroide, nunca presumida
+            # (o mesmo bug de orientação já pago em `_subdividir_lote`, ver comentário lá).
+            nx, ny = -dy, dx
+            mx, my = (p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0
+            if (cx - mx) * nx + (cy - my) * ny < 0:
+                nx, ny = -nx, -ny
+            dist = distancias[k]
+            arestas.append(((p0[0] + nx * dist, p0[1] + ny * dist), (dx, dy)))
+
+        novo = []
+        for k in range(n):
+            p_prev, d_prev = arestas[(k - 1) % n]
+            p_cur, d_cur = arestas[k]
+            pt = self._interseccao_retas(p_prev, d_prev, p_cur, d_cur)
+            if pt is None:
+                # Arestas paralelas: usa o ponto deslocado direto (média dos dois pontos
+                # de referência), como orienta a Seção 6/E1.
+                pt = ((p_prev[0] + p_cur[0]) / 2.0, (p_prev[1] + p_cur[1]) / 2.0)
+            novo.append(pt)
+
+        # Degeneração geométrica: um inset que "virou do avesso" (recuo maior que o quad
+        # aguenta) produz um quad com orientação oposta à original, ou área ~0 — descarta
+        # em vez de emitir polígono invertido. O piso de área ESPECÍFICO de cada uso
+        # (quadra mínima urbanizável na E1, nenhum na E3) fica por conta do chamador —
+        # `_encolher_quad` é geometria pura, não sabe se está encolhendo quarteirão ou
+        # footprint de edifício.
+        if self._area_quad(novo) < 1e-6:
+            return None
+        if self._area_sinalizada(novo) * orientacao_original <= 0:
+            return None
+        return novo
+
+    def _classe_via_radial(self, indice_setor):
+        return "principal" if indice_setor in self._setores_portao else "secundaria"
+
+    def _distancia_faixa_dominio(self, classe):
+        largura = self.via_largura_por_classe.get(classe, self.via_largura_por_classe.get("secundaria", 5.0))
+        return largura / 2.0 + self.recuo_rua
+
+    def _area_alvo_lote(self, banda):
+        """E2 (Seção 5.2): alvo de área do lote cresce com a banda (centro denso, borda
+        folgada) e leva um fator por cidade sorteado da seed do nome, pra duas cidades do
+        mesmo tamanho não serem idênticas."""
+        return self.lote_area_base * (self.lote_fator_por_banda ** (banda - 1)) * self.lote_fator_cidade
+
+    def _subdividir_lote(self, quad, area_alvo, profundidade=0):
         """Corta o quadrilátero ao meio pelo lado mais longo, recursivamente, até a área
         ficar perto do alvo — é a "subdivisão recursiva pelo lado maior" da Seção 4.2.5,
         aplicada a um quad em vez de um polígono arbitrário (a malha radial+anel só
         produz quads, nunca formas mais complexas)."""
         area = self._area_quad(quad)
-        if area <= self.lote_area_alvo * 1.6 or profundidade >= max_profundidade:
+        if area <= area_alvo * 1.6 or profundidade >= self.lote_profundidade_max:
             return [quad]
 
         # Acha o lado mais longo e corta pelo meio dele e do seu oposto. Fórmula em
@@ -328,12 +445,17 @@ class GeradorCidade:
         parte1 = [m0, quad[(i0 + 1) % n], quad[(i0 + 2) % n], m1]
         parte2 = [m1, quad[(i0 + 3) % n], quad[i0 % n], m0]
 
-        return (self._subdividir_lote(parte1, profundidade + 1, max_profundidade) +
-                self._subdividir_lote(parte2, profundidade + 1, max_profundidade))
+        return (self._subdividir_lote(parte1, area_alvo, profundidade + 1) +
+                self._subdividir_lote(parte2, area_alvo, profundidade + 1))
 
     def _gerar_quarteiroes_e_lotes(self):
         """Bandas 1..num_aneis (banda 0 é a praça — Seção 4.2.8 adaptada: zoneamento por
-        distância ao centro, comércio/artesanato perto, residencial pra fora)."""
+        distância ao centro, comércio/artesanato perto, residencial pra fora).
+
+        E1 (Seção 5.1): cada quad encolhe pra dentro pela faixa de domínio da rua que o
+        limita ANTES de virar quarteirão/lote — a rua passa a existir como vazio entre
+        construções, não como traço por cima do chão. Quadra que degenera (estreita demais
+        depois do recuo) é descartada, não vira polígono invertido."""
         self._lotes = []  # lista de (quad, bairro, banda)
         for j in range(1, self.num_aneis + 1):
             raio_interno = self._vertices[j - 1]
@@ -343,9 +465,24 @@ class GeradorCidade:
             for i in range(self.num_setores):
                 i2 = (i + 1) % self.num_setores
                 quad = [raio_interno[i], raio_externo[i], raio_externo[i2], raio_interno[i2]]
-                self._add_feature("Polygon", quad + [quad[0]], "quarteirao", {"bairro": bairro, "banda": j})
 
-                lotes = self._subdividir_lote(quad)
+                # As 4 arestas do quad caem, cada uma, sobre a linha de centro de uma rua
+                # (Seção 6/E1, tabela de correspondência aresta -> rua).
+                distancias = [
+                    self._distancia_faixa_dominio(self._classe_via_radial(i)),   # interno[i] -> externo[i]
+                    self._distancia_faixa_dominio("anel"),                       # externo[i] -> externo[i2]
+                    self._distancia_faixa_dominio(self._classe_via_radial(i2)),  # externo[i2] -> interno[i2]
+                    self._distancia_faixa_dominio("anel"),                       # interno[i2] -> interno[i]
+                ]
+                quad_urbanizavel = self._encolher_quad(quad, distancias)
+                if quad_urbanizavel is None or self._area_quad(quad_urbanizavel) < self.quadra_area_minima:
+                    continue  # quadra degenerada, ou pequena demais pra urbanizar (E1)
+
+                self._add_feature("Polygon", quad_urbanizavel + [quad_urbanizavel[0]], "quarteirao",
+                                  {"bairro": bairro, "banda": j})
+
+                area_alvo = self._area_alvo_lote(j)
+                lotes = self._subdividir_lote(quad_urbanizavel, area_alvo)
                 for lote in lotes:
                     self._add_feature("Polygon", lote + [lote[0]], "lote", {"bairro": bairro, "banda": j})
                     self._lotes.append((lote, bairro, j))
@@ -373,10 +510,27 @@ class GeradorCidade:
         idx = self.np_rng.choice(len(candidatos_disponiveis), p=pesos)
         return candidatos_disponiveis[idx]
 
+    def _footprint_edificio(self, lote):
+        """E3 (Seção 5.3): footprint poligonal dentro do lote — recuo da divisa (mesmo
+        inset da E1, `_encolher_quad`, com distância igual nos 4 lados) e depois um
+        segundo encolhimento em torno do centroide pela RAIZ da taxa de ocupação (a área
+        escala com o quadrado do fator linear). `jitter` varia a taxa por construção pra
+        a quadra não virar um tabuleiro perfeito. Retorna `None` se o lote for estreito
+        demais pro recuo (mesmo caso de degeneração da E1)."""
+        recuado = self._encolher_quad(lote, [self.edificacao_recuo] * 4)
+        if recuado is None:
+            return None
+        jitter = self.rng.uniform(-self.edificacao_jitter, self.edificacao_jitter)
+        taxa_efetiva = min(0.95, max(0.15, self.edificacao_taxa_ocupacao + jitter))
+        fator_linear = math.sqrt(taxa_efetiva)
+        cx = sum(p[0] for p in recuado) / len(recuado)
+        cy = sum(p[1] for p in recuado) / len(recuado)
+        return [(cx + (x - cx) * fator_linear, cy + (y - cy) * fator_linear) for x, y in recuado]
+
     def _gerar_edificios(self):
-        """Um edifício por lote — Point no centroide (o schema de `Local` só guarda
-        `coordenadas` como ponto, então o footprint poligonal do lote já é a
-        representação visual; o edifício em si não precisa de forma própria)."""
+        """Um edifício por lote — Polygon (footprint dentro do lote, Seção 5.3), não mais
+        um Point no centroide. `builder/populate.py` importa isso como `Local` calculando
+        o centroide do anel externo (E4)."""
         candidatos = self._candidatos_catalogo()
 
         # Obrigatórios primeiro (min > 0), na ordem em que aparecem no catálogo.
@@ -399,6 +553,12 @@ class GeradorCidade:
             # errado. O polígono do lote em si já foi adicionado em
             # `_gerar_quarteiroes_e_lotes` e continua de pé.
             if self.terreno is not None and self._declividade_local(cx, cy) > self._declividade_max:
+                continue
+
+            # E3: footprint poligonal dentro do lote. Lote estreito demais pro recuo
+            # (mesma degeneração da E1) também vira espaço vazio, não um prédio espremido.
+            footprint = self._footprint_edificio(lote)
+            if footprint is None:
                 continue
 
             # Fração residencial cresce com a banda (zoneamento: comércio perto do
@@ -429,7 +589,7 @@ class GeradorCidade:
             nome_completo = f"{nome_tipo} de {self.nome}" if nome_tipo != "Residência" else f"Residência {idx_edificio:03d} — {bairro}"
 
             altitude_local = self._altitude_local(cx, cy)
-            self._add_feature("Point", (cx, cy), "edificio", {
+            self._add_feature("Polygon", footprint + [footprint[0]], "edificio", {
                 "id": slug_id,
                 "nome": nome_completo,
                 "categoria": categoria,
@@ -479,6 +639,41 @@ class GeradorCidade:
             "x_global": self.cx_mundo, "y_global": self.cy_mundo,
         }}
 
+    def indice(self, slug):
+        """E5 (Seção 5.5/6): bbox da cidade em px de MUNDO + contagem/zoom_min por camada,
+        pro `web/composed_routes.py` descartar a cidade inteira sem abrir o arquivo quando
+        ela não intersecta o bbox pedido, ou quando nenhuma camada visível já acendeu
+        naquele zoom. Reaproveita a mesma conversão [lng,lat]=[x_mundo,-y_mundo] (Seção
+        2.3) usada nas features — desfaz aqui pra voltar a px de mundo."""
+        xs, ys = [], []
+        camadas = {}
+        for feat in self.features:
+            props = feat["properties"]
+            camada = props["camada"]
+            info = camadas.setdefault(camada, {"n": 0, "zoom_min": props.get("zoom_min", 0)})
+            info["n"] += 1
+            coords = feat["geometry"]["coordinates"]
+            for lng, lat in self._achatar_coords(coords):
+                xs.append(lng)
+                ys.append(-lat)
+        bbox = {"min_x": min(xs), "min_y": min(ys), "max_x": max(xs), "max_y": max(ys)} if xs else None
+        return {
+            "slug": slug, "nome": self.nome, "tamanho": self.tamanho,
+            "raio_m": self.raio_m, "bbox": bbox, "camadas": camadas,
+        }
+
+    @staticmethod
+    def _achatar_coords(coords):
+        """Percorre coordinates de qualquer geometry (Point/LineString/Polygon) até o par
+        [lng,lat] mais interno — mesma lógica de `achatar` em web/composed_routes.py."""
+        if not coords:
+            return
+        if isinstance(coords[0], (int, float)):
+            yield coords
+        else:
+            for c in coords:
+                yield from GeradorCidade._achatar_coords(c)
+
 
 def gerar_geometria_para_manifesto(nome_filtro=None):
     if not os.path.exists(MANIFEST_PATH):
@@ -488,6 +683,17 @@ def gerar_geometria_para_manifesto(nome_filtro=None):
         manifest = json.load(f)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # E5: índice por cidade (database/cidades/_indice.json — extensão .json, não
+    # .geojson, pra `_listar_arquivos_geojson_cidades` não confundir com uma "cidade"
+    # fantasma). Regeração de UMA cidade (nome_filtro) faz merge com o índice existente
+    # em vez de sobrescrever as outras 14.
+    indice_path = os.path.join(OUTPUT_DIR, "_indice.json")
+    indice_por_slug = {}
+    if nome_filtro and os.path.exists(indice_path):
+        with open(indice_path, "r", encoding="utf-8") as f:
+            indice_por_slug = {c["slug"]: c for c in json.load(f).get("cidades", [])}
+
     total = 0
     for cont in manifest.get("continentes", []):
         for cidade in cont.get("cidades", []):
@@ -501,11 +707,18 @@ def gerar_geometria_para_manifesto(nome_filtro=None):
             caminho = os.path.join(OUTPUT_DIR, f"{slug}.geojson")
             with open(caminho, "w", encoding="utf-8") as f:
                 json.dump(geojson, f, ensure_ascii=False, indent=2)
+            indice_por_slug[slug] = gerador.indice(slug)
             n_edificios = sum(1 for feat in geojson["features"] if feat["properties"].get("camada") == "edificio")
             print(f"  🏰 {cidade['nome']:<24} -> {caminho} ({n_edificios} edifícios)")
             total += 1
 
-    print(f"✅ [GEOMETRIA-CIDADE] {total} cidade(s) geradas.")
+    with open(indice_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "gerado_em": datetime.now().isoformat(timespec="seconds"),
+            "cidades": list(indice_por_slug.values()),
+        }, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ [GEOMETRIA-CIDADE] {total} cidade(s) geradas. Índice: {indice_path}")
 
 
 if __name__ == "__main__":

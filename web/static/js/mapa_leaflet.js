@@ -54,7 +54,11 @@ const CAMADAS_DETALHE_CIDADE = ['muralha', 'torre', 'portao', 'praca', 'rua', 'q
 const CAMADAS_VETORIAIS_DISPONIVEIS = [...CAMADAS_MUNDO, ...CAMADAS_DETALHE_CIDADE];
 const CAMADAS_NOMES_AMIGAVEIS = { cidades: '🏰 Cidades', pois: '📍 Pontos de Interesse', estradas: '🛣️ Estradas', fronteiras: '🗺️ Fronteiras' };
 const TIPO_CIDADE_EMOJI = { capital: '👑', fortaleza: '🏯', portuaria: '⚓', pesqueira: '🎣', comercial: '💰', mistica: '🔮', 'mística': '🔮', mineira: '⛏️', agricola: '🌾', 'agrícola': '🌾', residencial: '🏠' };
-const CATEGORIA_EDIFICIO_COR = { residencia: '#8B4513', fazenda: '#228B22', quartel: '#4682B4', taverna: '#D2691E', publico: '#696969', mercado: '#FFD700', forja: '#A9A9A9', universidade: '#5D3FD3', generic: '#808080' };
+// A residência é massa construída, não informação — tom neutro único, sem cor de
+// categoria (Seção 6/E3 do ESPEC_TECIDO_URBANO.md: com ~1.350 residências e ~48 prédios
+// notáveis por cidade, dar cor de categoria a todas empasta a tela). A cor de categoria
+// fica reservada pros notáveis, que são os que o jogador procura.
+const CATEGORIA_EDIFICIO_COR = { residencia: '#9c8a76', fazenda: '#228B22', quartel: '#4682B4', taverna: '#D2691E', publico: '#696969', mercado: '#FFD700', forja: '#A9A9A9', universidade: '#5D3FD3', generic: '#808080' };
 
 function pixelParaLatLng(px, py) {
     return L.latLng(-py, px);
@@ -195,6 +199,19 @@ function estiloRua(feature) {
     };
 }
 
+// E3 do ESPEC_TECIDO_URBANO.md: `edificio` virou Polygon (footprint dentro do lote), não
+// mais um Point desenhado por `criarMarcadorDetalheCidade` — passa a usar `style` como
+// rua/quarteirao/lote. Preenchimento sólido (é massa construída), contorno bem discreto
+// pra não competir com o traço do lote por baixo.
+function estiloEdificio(feature) {
+    const categoria = (feature.properties || {}).categoria;
+    const cor = CATEGORIA_EDIFICIO_COR[categoria] || CATEGORIA_EDIFICIO_COR.generic;
+    return {
+        color: '#2b2b2b', weight: 0.5, opacity: 0.4,
+        fillColor: cor, fillOpacity: categoria === 'residencia' ? 0.55 : 0.9,
+    };
+}
+
 const ESTILO_CAMADA_CIDADE = {
     muralha: { color: '#d4a017', weight: 3, opacity: 0.9 },
     rua: estiloRua,
@@ -203,6 +220,7 @@ const ESTILO_CAMADA_CIDADE = {
     // D3 do DIAGNOSTICO_V3: lote nunca tinha estilo porque a camada nunca era registrada.
     // Mais fino que quarteirao (é o lote individual dentro dele).
     lote: { color: '#6a5acd', weight: 0.5, opacity: 0.35, fillOpacity: 0.06 },
+    edificio: estiloEdificio,
 };
 
 function criarCamadasVetoriaisLeaflet() {
@@ -223,6 +241,18 @@ function criarCamadasVetoriaisLeaflet() {
     CAMADAS_DETALHE_CIDADE.forEach(nome => {
         const opcoes = ESTILO_CAMADA_CIDADE[nome] ? { style: ESTILO_CAMADA_CIDADE[nome] } : {};
         opcoes.pointToLayer = (feature, latlng) => criarMarcadorDetalheCidade(feature, latlng, nome);
+        // E3: `edificio` é Polygon agora — pointToLayer não é chamado pra ele, então o
+        // popup (nome/tipo/bairro) precisa vir de onEachFeature, o caminho que L.geoJSON
+        // usa pra qualquer geometria, não só Point.
+        if (nome === 'edificio') {
+            opcoes.onEachFeature = (feature, layer) => {
+                const props = feature.properties || {};
+                layer.bindPopup(`
+                    <strong>${props.nome || 'Edifício'}</strong><br>
+                    <span style="opacity:0.8">${props.tipo_local || ''}${props.bairro ? ' · ' + props.bairro : ''}</span>
+                `);
+            };
+        }
         const layer = L.geoJSON(null, opcoes);
         leafletCamadasVetoriais[nome] = layer;
         layer.addTo(grupoDetalheCidade);
@@ -244,15 +274,9 @@ function criarCamadasVetoriaisLeaflet() {
 function criarMarcadorDetalheCidade(feature, latlng, camada) {
     const props = feature.properties || {};
 
-    if (camada === 'edificio') {
-        const cor = CATEGORIA_EDIFICIO_COR[props.categoria] || CATEGORIA_EDIFICIO_COR.generic;
-        const marker = L.circleMarker(latlng, { radius: 5, color: '#fff', weight: 1, fillColor: cor, fillOpacity: 0.9 });
-        marker.bindPopup(`
-            <strong>${props.nome || 'Edifício'}</strong><br>
-            <span style="opacity:0.8">${props.tipo_local || ''}${props.bairro ? ' · ' + props.bairro : ''}</span>
-        `);
-        return marker;
-    }
+    // `edificio` virou Polygon (E3) — este `pointToLayer` só é chamado pra geometrias
+    // Point (portao, torre); o estilo/popup de edificio agora vive em
+    // ESTILO_CAMADA_CIDADE.edificio e no onEachFeature de criarCamadasVetoriaisLeaflet.
     if (camada === 'portao') {
         return L.circleMarker(latlng, { radius: 4, color: '#fff', weight: 1, fillColor: '#8B4513', fillOpacity: 1 })
             .bindPopup(props.nome || 'Portão');

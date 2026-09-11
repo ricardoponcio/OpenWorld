@@ -461,22 +461,47 @@ def get_tile(z, x, y):
 
 
 # Cache em memória dos GeoJSON de camada, autoinvalidável por mtime (mesmo padrão de
-# `obter_mapa_do_cache`). Cada camada é um arquivo pequeno (< algumas centenas de
-# features nesta fase) — cache é só pra não reabrir/reparsear o arquivo a cada request.
+# `obter_mapa_do_cache`). E5 (ESPEC_TECIDO_URBANO.md Seção 5.5): guarda também a bbox de
+# CADA feição, calculada uma vez no carregamento — antes `_bbox_geometria` rodava a cada
+# requisição para cada feição candidata (o gargalo medido na Seção 3.6).
 _FEATURES_CACHE = {}
 
 
 def _carregar_geojson_cache(caminho):
+    """Retorna `(geojson_dict, bboxes)`, onde `bboxes[i]` é a bbox (Seção 2.3) da feição
+    `geojson_dict["features"][i]`, ou `None` se a feição não tiver coordenada."""
     if not os.path.exists(caminho):
-        return {"type": "FeatureCollection", "features": []}
+        return {"type": "FeatureCollection", "features": []}, []
     mtime = os.path.getmtime(caminho)
     cache = _FEATURES_CACHE.get(caminho)
     if cache and cache[0] == mtime:
-        return cache[1]
+        return cache[1], cache[2]
     with open(caminho, "r", encoding="utf-8") as f:
         dados = json.load(f)
-    _FEATURES_CACHE[caminho] = (mtime, dados)
-    return dados
+    bboxes = [_bbox_geometria(f.get("geometry") or {}) for f in dados.get("features", [])]
+    _FEATURES_CACHE[caminho] = (mtime, dados, bboxes)
+    return dados, bboxes
+
+
+# E5: índice por cidade (database/cidades/_indice.json, escrito por
+# generate_city_geometry.py) — bbox de cada cidade em px de mundo, e por camada a
+# contagem e o zoom_min. Permite descartar a cidade INTEIRA sem nem abrir o arquivo.
+_INDICE_CIDADES_PATH = os.path.join(CIDADES_DIR, "_indice.json")
+_INDICE_CIDADES_CACHE = {}
+
+
+def _carregar_indice_cidades():
+    if not os.path.exists(_INDICE_CIDADES_PATH):
+        return None
+    mtime = os.path.getmtime(_INDICE_CIDADES_PATH)
+    cache = _INDICE_CIDADES_CACHE.get(_INDICE_CIDADES_PATH)
+    if cache and cache[0] == mtime:
+        return cache[1]
+    with open(_INDICE_CIDADES_PATH, "r", encoding="utf-8") as f:
+        dados = json.load(f)
+    cidades = dados.get("cidades", [])
+    _INDICE_CIDADES_CACHE[_INDICE_CIDADES_PATH] = (mtime, cidades)
+    return cidades
 
 
 # Fase 4 (P2.2): geometria interna de cidade (ruas, quarteirões, lotes, edifícios,
@@ -517,15 +542,47 @@ def _bbox_intersecta(a, b):
     return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
 
 
-def _coletar_features_camada(camada):
+def _coletar_features_camada(camada, bbox=None, z=None):
+    """Retorna `[(feature, bbox_da_feature), ...]` da camada pedida.
+
+    E5 (Seção 5.5): pra camada interna de cidade, usa o índice pra descartar a cidade
+    INTEIRA sem abrir o arquivo — quando a bbox da cidade não intersecta a bbox pedida, ou
+    quando a camada nem existe/nem atingiu seu `zoom_min` naquela cidade. Só abre (e só
+    então usa o cache de `_carregar_geojson_cache`, que já vem com bbox por feição
+    pré-calculada) as cidades que sobrevivem ao filtro."""
     if camada in CAMADAS_INTERNAS_CIDADE:
         feats = []
-        for caminho in _listar_arquivos_geojson_cidades():
-            geojson = _carregar_geojson_cache(caminho)
-            feats.extend(f for f in geojson.get("features", []) if f.get("properties", {}).get("camada") == camada)
+        indice = _carregar_indice_cidades()
+        if indice is not None:
+            for cidade_idx in indice:
+                info_camada = cidade_idx.get("camadas", {}).get(camada)
+                if not info_camada or not info_camada.get("n"):
+                    continue
+                if z is not None and info_camada.get("zoom_min", 0) > z:
+                    continue
+                cidade_bbox = cidade_idx.get("bbox")
+                if bbox is not None and cidade_bbox is not None:
+                    cbbox = (cidade_bbox["min_x"], cidade_bbox["min_y"], cidade_bbox["max_x"], cidade_bbox["max_y"])
+                    if not _bbox_intersecta(cbbox, bbox):
+                        continue
+                caminho = os.path.join(CIDADES_DIR, f"{cidade_idx['slug']}.geojson")
+                geojson, bboxes = _carregar_geojson_cache(caminho)
+                for feat, bbox_feat in zip(geojson.get("features", []), bboxes):
+                    if feat.get("properties", {}).get("camada") == camada:
+                        feats.append((feat, bbox_feat))
+        else:
+            # Mundo sem índice ainda gerado (geometria antiga) — cai no caminho antigo,
+            # abrindo todos os arquivos. `generate_city_geometry.py` sempre escreve o
+            # índice hoje; isto é só pra não quebrar um `database/cidades/` velho.
+            for caminho in _listar_arquivos_geojson_cidades():
+                geojson, bboxes = _carregar_geojson_cache(caminho)
+                for feat, bbox_feat in zip(geojson.get("features", []), bboxes):
+                    if feat.get("properties", {}).get("camada") == camada:
+                        feats.append((feat, bbox_feat))
         return feats
     caminho = os.path.join(FEATURES_DIR, f"{camada}.geojson")
-    return _carregar_geojson_cache(caminho).get("features", [])
+    geojson, bboxes = _carregar_geojson_cache(caminho)
+    return list(zip(geojson.get("features", []), bboxes))
 
 
 @composed_bp.route('/api/mapa/features')
@@ -558,14 +615,15 @@ def api_mapa_features():
         resultado = {}
         for camada in camadas:
             feats = []
-            for feat in _coletar_features_camada(camada):
+            # E5: bbox da cidade já filtrou a maior parte do trabalho em
+            # `_coletar_features_camada` (sem abrir arquivo); a bbox de cada feição aqui
+            # vem pré-calculada do cache de carregamento, nunca recalculada por requisição.
+            for feat, bbox_feat in _coletar_features_camada(camada, bbox=bbox, z=z):
                 props = feat.get("properties", {})
                 if props.get("zoom_min", 0) > z:
                     continue
-                if bbox is not None:
-                    bbox_feat = _bbox_geometria(feat.get("geometry") or {})
-                    if bbox_feat is not None and not _bbox_intersecta(bbox_feat, bbox):
-                        continue
+                if bbox is not None and bbox_feat is not None and not _bbox_intersecta(bbox_feat, bbox):
+                    continue
                 feats.append(feat)
 
             resultado[camada] = {"type": "FeatureCollection", "features": feats}

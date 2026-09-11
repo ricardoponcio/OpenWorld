@@ -637,9 +637,168 @@ com y negativo, xadrez de bioma nas cidades) — **falta o autor rodar `reset_ca
 
 ---
 
+## Frente 7 — Tecido urbano (lotes, edificações e variedade entre cidades)
+
+### Objetivo (nas palavras do autor)
+> "Podemos 'engrossar' as ruas para não parecerem linhas imaginárias? E aumentar também ou
+> desenhar as coisas preenchendo as quadras? por que atualmente é um ponto numa quadra
+> grande." / "eu queria ter cidades variadas pequenas e grandes com numeros de lotes e
+> areas variadas, mesmo que isso custe muito podemos prever uma pré-geração."
+
+A parte das ruas (largura real por classe de via) já tinha sido feita na Frente 6/parte 18.
+Esta frente é o resto, especificado em
+[`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md) (parte 19) e implementado na parte 20.
+
+### Implementado (2026-09-11, parte 20)
+- **E1 — Faixa de domínio da via**: a quadra encolhe pra dentro, afastando-se da linha de
+  centro de cada rua que a limita (`largura/2 + recuo`), via inset geométrico de
+  quadrilátero convexo (`_encolher_quad`, sem `shapely`). Quadra que degenera vira espaço
+  descartado, não polígono invertido.
+- **E2 — Lote realista e variado**: alvo de área por banda (centro denso, borda folgada) e
+  por cidade (fator sorteado da seed), substituindo o lote fixo de 2,4 ha por lotes de
+  ~200-400 m² — o "ponto numa quadra grande" que o autor reportou.
+- **E3 — Edificação poligonal**: `edificio` vira `Polygon` (footprint recuado da divisa do
+  lote, com taxa de ocupação + jitter), não mais um `Point` de raio fixo em px de tela.
+- **E4 — Importador do banco**: `builder/populate.py` aceita `Polygon` (centroide do anel
+  externo), mantendo compatibilidade com `Point` (GeoJSON antigo, paliativo).
+- **E5 — Índice por cidade + bbox cacheada**: `database/cidades/_indice.json` permite à API
+  descartar cidade inteira sem abrir arquivo; bbox de cada feição calculada uma vez no
+  carregamento, não por requisição.
+- **E6 — Variedade entre cidades**: raio, nº de anéis e nº de setores sorteados por faixa
+  (determinístico por nome), soltando a amarra `num_setores = max(6, num_portoes*2)` que
+  forçava portões sempre com espaçamento perfeito.
+
+### Verificado (2026-09-11)
+Números completos, com o comando de cada medição, estão na Seção 11 de
+`ESPEC_TECIDO_URBANO.md`. Resumo:
+- Redução de área de quadra pela faixa de domínio (E1), isolada do efeito da E6: **15,7%**
+  (dentro do alvo 10-25%).
+- Lote mediano 243-380 m², 55-68 lotes por quadra (E2) — dentro do alvo (200-600 m² /
+  20-120). Aurora Vales saiu com 2.017 lotes, 0,85% acima do teto de 2.000 do alvo — não
+  recalibrado, decisão para o autor validar visualmente primeiro.
+- `edificio` é `Polygon` em todas as 15 cidades (E3); perfil de categoria sadio — notáveis
+  batendo exatamente o teto do catálogo (29/43/48 por tamanho), residência 98,3% (E4).
+- `/api/mapa/features` em 24-27 ms no zoom 13 sobre Aurora Vales (E5, era 33 ms com a
+  geometria 60x menor); z0 (mundo inteiro) não abre nenhuma cidade (1,2 ms).
+- 15 cidades com raio/lotes/edifícios diferentes entre si, nenhuma repetida dentro do
+  mesmo tamanho (E6).
+- `pytest tests/ -q`: 10/10. `database/cidades/`: 1,2 MB -> 52 MB. Geração das 15 cidades:
+  0,76s -> 4,37s (autor autorizou até 1h).
+- **Bug achado e corrigido durante a implementação**: `_encolher_quad` reaproveitava o piso
+  de área mínima da E1 (`cidade_geo_quadra_area_minima_m2`, 400 m²) como critério de
+  degeneração também no recuo do footprint do edifício (E3) — como o lote mediano já é
+  menor que isso, quase todo footprint saía `None` (969 de 1.018 edifícios sumiam em
+  Quendorvale). Corrigido separando as responsabilidades: o inset geométrico só detecta
+  degeneração de verdade (aresta zero, polígono invertido); o piso de área específico fica
+  por conta de cada chamador.
+
+### Não verificado / pendências para o autor
+- **Validação visual no dashboard** (zoom 13/14, ruas como vazio, quadra ocupada) — a
+  extensão do Chrome não conectou nesta sessão. Todo o resto foi verificado por medição.
+- Overshoot de lotes em Aurora Vales (item acima) e a colisão de slug pré-existente entre
+  duas cidades chamadas "Cidade do(s) Vento(s)" (ver E4 na Seção 11 do documento — mais
+  visível agora que cada cidade pesa dezenas de milhares de locais).
+
+### Fora de escopo desta frente
+- Interior de edifício, andares, portas — a construção é só um footprint.
+- Estradas entre cidades, rios, muralhas irregulares, emendas visíveis entre tiles.
+- **Indexar `engine.locais` por cidade** — ver Frente 8, nova, aberta nesta sessão.
+
+### Status: 🟡 Implementado e verificado por medição; falta o autor rodar o dashboard e
+confirmar visualmente. Nada commitado.
+
+---
+
+## Frente 8 — Indexar `engine.locais` por cidade (limite de escala do motor)
+
+### Achado (2026-09-11, durante a Frente 7)
+Vários caminhos quentes da engine varrem `engine.locais` **inteiro**, uma vez por NPC por
+tick, sem filtrar pela cidade do NPC: `movement.py:97` (`mover_para_restaurante`),
+`movement.py:118`, `logic.py:86`, `movement.py:68`. Isto é **anterior** à Frente 7 e não foi
+causado por ela — só ficou visível porque a Frente 7 leva o mundo a dezenas de milhares de
+`Local`, o que torna o produto NPCs × locais grande o bastante pra importar.
+
+Medido (`database/`, Python puro):
+
+| locais no mundo | NPCs | por tick | veredito |
+|---|---|---|---|
+| 540 | 20 | 1 ms | ok (situação de hoje) |
+| 21.000 | 20 | 8 ms | ok |
+| 21.000 | 200 | 86 ms | ok |
+| 21.000 | 2.000 | 935 ms | **inviável** — o tick é de 1 s |
+| 21.000 | 2.000, varrendo só a cidade do NPC | 62 ms | ok |
+
+Com os 20 NPCs de hoje (única cidade simulada — `cidade_spawn`) nada disto importa. O
+objetivo declarado do projeto é um mundo cheio (ver citação do autor na Frente 7), e é o
+**produto** NPCs × locais que estoura, não nenhum dos dois isolado.
+
+### Conserto proposto (não implementado)
+Indexar `engine.locais` por `cidade_id` (dict `cidade_id -> [Local]`, mantido junto com o
+dict por id já existente) e trocar as varreduras dos 4 caminhos acima por lookup nesse
+índice, filtrando pela cidade do NPC antes de iterar. Devolve ~15x (935 ms -> 62 ms no
+cenário de 2.000 NPCs).
+
+### Fora de escopo até aqui
+Isto é **motor**, não cartografia — fora do escopo da Frente 7 e da
+`ESPEC_TECIDO_URBANO.md` por decisão explícita (Seção 3.5.1/10 do documento). Registrado
+aqui pra não virar descoberta de última hora quando o mundo for povoado de verdade
+(múltiplas cidades simuladas, mais NPCs).
+
+### Status: 🔴 Não iniciado — vira urgente quando (a) mais de uma cidade passar a ter
+NPCs simulados, ou (b) o número de NPCs por cidade crescer na casa das centenas/milhares.
+
+---
+
 ## Log de Sessões
 
 > Ordem cronológica, mais recente no topo. Uma linha (ou poucas) por sessão: o que mudou de fato.
+
+- **2026-09-11 (parte 20, implementação do tecido urbano — E1 a E6)** — Executada a
+  especificação da parte 19 ([`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md)), etapa por
+  etapa, na ordem E1→E6 (Frente 7, nova, ver acima). Rua ganhou faixa de domínio real
+  (quadra encolhe pra dentro via inset de quadrilátero convexo, sem `shapely`); lote passou
+  de um valor fixo de 2,4 ha pra alvo por banda + fator por cidade (~200-400 m² reais);
+  `edificio` virou `Polygon` (footprint recuado + taxa de ocupação com jitter) em vez de
+  `Point` de raio fixo; `builder/populate.py` passou a importar `Polygon` calculando o
+  centroide (mantendo compatibilidade com `Point`); API de features ganhou índice por
+  cidade + bbox cacheada no carregamento (`/api/mapa/features` de 33ms pra 24-27ms com a
+  geometria ~60x maior); raio/anéis/setores de cada cidade passaram a ser sorteados por
+  faixa (determinístico por nome), soltando a amarra que forçava portões sempre
+  perfeitamente espaçados. **Bug achado e corrigido no processo**: o inset geométrico
+  (`_encolher_quad`) reaproveitava por engano o piso de área mínima da quadra (E1) também
+  no recuo do footprint do edifício (E3) — quase todo footprint saía inválido porque o
+  lote mediano já é menor que esse piso (969 de 1.018 edifícios sumiam numa cidade de
+  teste). Corrigido separando as duas responsabilidades. 32.787 `Local` seriam criados no
+  próximo `populate.py` (era 539) — perfil sadio, notáveis batendo exatamente o teto do
+  catálogo por tamanho (29/43/48), residência 98,3%. `pytest` 10/10.
+  `database/cidades/`: 1,2 MB -> 52 MB, geração das 15 cidades 0,76s -> 4,37s (autor
+  autorizou até 1h). **Não verificado**: aparência real no navegador — a extensão do
+  Chrome não conectou nesta sessão, fica pendente de confirmação visual do autor. Também
+  aberta a Frente 8 (nova, backlog): indexar `engine.locais` por cidade, o limite de escala
+  real do motor identificado (não corrigido) na parte 19. Nada commitado.
+
+- **2026-09-11 (parte 19, especificação do tecido urbano)** — A pedido do autor, escrita a
+  especificação [`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md) para outro modelo executar:
+  quadras preenchidas de construções, faixa de domínio da via, e variedade real entre cidades.
+  Nenhum código alterado nesta entrada. Descoberto e documentado um acoplamento que não estava
+  escrito em lugar nenhum: `builder/populate.py` importa **cada** feature `edificio` como um
+  `Local` do `openworld.db`, um para um (confirmado medindo: 539 features no disco, 539 linhas
+  no banco). **A v1.0 do documento tratou isso como perigoso** e propunha uma camada de
+  edificação decorativa que não viraria `Local`. O autor questionou a premissa ("nao entendi a
+  necessidade de edificacao decorativa"), a medição deu razão a ele — 21.000 locais custam
+  2 MB de banco, 25 ms de carga e 9 ms por tick, menos de 1% do orçamento — e a proposta foi
+  **retirada na v1.1**: toda construção é um `Local` de verdade, o que também é o que o nome
+  OpenWorld pede. O catálogo de edifícios **já** limita os prédios notáveis a 29/43/48 por
+  tamanho de cidade e já cai em "Residência" quando esgota, então o perfil realista sai do
+  código atual sem nada novo. Duas coisas reais sobraram: (a) `edificio` virando `Polygon`
+  quebra o importador, que faz `lng, lat = coordinates`; (b) **o limite de escala verdadeiro**,
+  medido agora, é que as varreduras por tick são O(NPCs × locais do **mundo inteiro**), não da
+  cidade do NPC — aguenta 200 NPCs (86 ms) e não aguenta 2.000 (935 ms, com tick de 1 s).
+  Indexar `engine.locais` por cidade devolve isso a 62 ms. **É frente de motor, anterior a este
+  trabalho, e continua em aberto.** Também medido: o gargalo de servir feições é
+  `_bbox_geometria` recalculada a cada requisição, inclusive para cidades fora da tela (1,6 µs
+  por feição, projetando ~150 ms por pan no cenário mais denso), resolvido por índice por
+  cidade e bbox cacheada no carregamento. Nada commitado.
 
 - **2026-09-11 (parte 18, ruas com largura real)** — Pedido do autor depois de ver a cidade
   funcionando: "engrossar as ruas para não parecerem linhas imaginárias". A espessura era
