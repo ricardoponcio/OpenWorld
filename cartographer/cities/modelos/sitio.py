@@ -21,7 +21,7 @@ from typing import Optional
 import numpy as np
 
 from cartographer.tiles.render import obter_cartografo
-from cartographer.cities.escala import metros_por_pixel_mundo
+from cartographer.cities.escala import metros_por_pixel_mundo, faixa_raio_m
 from config import cfg_get
 
 NPZ_PATH = "database/mapa_composto.npz"
@@ -86,9 +86,7 @@ class SitioCidade:
 
         # Raio efêmero só pra dimensionar a janela de terreno — ver docstring do módulo.
         import random
-        faixa_raio = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(
-            tamanho, [500.0, 500.0])
-        raio_provisorio = random.Random(seed).uniform(*faixa_raio)
+        raio_provisorio = random.Random(seed).uniform(*faixa_raio_m(config, tamanho))
         fator_janela = cfg_get(config, "cidade_geo_janela_terreno_fator")
         raio_janela_m = raio_provisorio * fator_janela
 

@@ -38,6 +38,19 @@ def metros_por_pixel_mundo(config):
     return math.sqrt(cfg_get(config, "escala_pixel_area_km2")) * 1000.0
 
 
+def faixa_raio_m(config, tamanho):
+    """Faixa de raio da cidade, em metros, JÁ multiplicada pela escala global
+    (`cidade_geo_escala`). É o único lugar que lê `cidade_geo_raio_m_faixa_por_tamanho`
+    — tanto `SitioCidade` (que dimensiona a janela de terreno) quanto os modelos (que
+    sorteiam o raio) passam por aqui; se um dos dois lesse a chave crua e o outro
+    passasse pela escala, a janela deixaria de cobrir a cidade e o terreno seria lido
+    errado, silenciosamente, por causa do `np.clip` que G06 removeu (Q04, docs/
+    PLANO_CIDADE_VIVA.md)."""
+    faixa = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(tamanho, [500.0, 500.0])
+    escala = cfg_get(config, "cidade_geo_escala")
+    return [faixa[0] * escala, faixa[1] * escala]
+
+
 def diametro_px_de_mundo(config, raio_m):
     """Diâmetro da cidade em px de MUNDO, a partir do raio REAL da cidade em metros.
 

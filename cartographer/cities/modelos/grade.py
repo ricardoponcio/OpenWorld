@@ -7,6 +7,7 @@ novo a entrar.
 import math
 
 from config import cfg_get
+from cartographer.cities.escala import faixa_raio_m
 from .base import ModeloCidade, Rua, Quadra, Malha, pontos_ao_longo_do_poligono
 
 
@@ -15,9 +16,7 @@ class GradeModelo(ModeloCidade):
 
     def __init__(self, sitio, config, rng):
         super().__init__(sitio, config, rng)  # roda ajustar_por_sitio (calibra self.lado_faixa)
-        faixa_raio = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(
-            sitio.tamanho, [500.0, 500.0])
-        self.raio_m = self.rng.uniform(*faixa_raio)
+        self.raio_m = self.rng.uniform(*faixa_raio_m(config, sitio.tamanho))
         faixa_fator_cidade = cfg_get(config, "cidade_geo_lote_fator_cidade_faixa")
         self.lote_fator_cidade = self.rng.uniform(*faixa_fator_cidade)
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)

@@ -7,6 +7,7 @@ reembalada em `Malha`/`Quadra`/`Rua`.
 import math
 
 from config import cfg_get
+from cartographer.cities.escala import faixa_raio_m
 from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono
 
 # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
@@ -24,9 +25,7 @@ class RadialModelo(ModeloCidade):
         # ⚠️ Ordem de consumo do self.rng idêntica à do GeradorCidade de antes do F4
         # (raio -> anéis -> fator de lote -> setores) — mudar a ordem muda todas as
         # cidades do mundo, silenciosamente (Seção 10 item 1).
-        faixa_raio = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(
-            sitio.tamanho, [500.0, 500.0])
-        self.raio_m = self.rng.uniform(*faixa_raio)
+        self.raio_m = self.rng.uniform(*faixa_raio_m(config, sitio.tamanho))
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)
         # G05: num_aneis deixa de ser sorteado independente do raio — o vão entre anéis
         # (raio_m / (num_aneis+1)) É a profundidade da quadra (Anexo 3 do
