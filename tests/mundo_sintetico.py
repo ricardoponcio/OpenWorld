@@ -32,8 +32,12 @@ class RepositorioFalso:
         self.relacionamentos = []
         self.renomeados = []
 
-    def salvar(self, entidade):
-        self.salvos.append(entidade)
+    def salvar(self, *args):
+        """Aceita tanto `salvar(entidade)` (npcs/locais/eventos) quanto
+        `salvar(chave, valor)` (meta, usado por `GameLoop._avancar_relogio` — V03 do
+        docs/PLANO_CIDADE_VIVA.md). Com 1 argumento guarda o valor cru, pra
+        `entidade in db.X.salvos` continuar funcionando sem mudança nos testes."""
+        self.salvos.append(args[0] if len(args) == 1 else args)
 
     def salvar_relacionamento(self, a_id, b_id, afinidade, vinculo):
         self.relacionamentos.append((a_id, b_id, afinidade, vinculo))
