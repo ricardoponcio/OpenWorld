@@ -64,3 +64,27 @@ class EstadoDoMundo:
             return
         self.indice.remover(local_id)
         self.db.locais.salvar(local)
+
+    # ------------------------------------------------------------------
+    # A03 (docs/PLANO_POPULACAO_E_ESCALA.md): única porta pra "algo de fora da
+    # decisão do próprio NPC mudou o que ele quer, reavalie agora" — a agenda de
+    # decisões (A02) só é segura porque todo evento que precisa de reação imediata
+    # passa por aqui, e o teto de segurança (`simulacao_intervalo_maximo_decisao_min`)
+    # cobre o que alguém esquecer de chamar.
+    # ------------------------------------------------------------------
+    def acordar(self, npc) -> None:
+        """Põe `proximo_instante_decisao` em agora — fura qualquer salto grande que
+        `agenda.calcular_proximo_instante` (A02) tivesse computado. Chame sempre que
+        algo muda o que o NPC quer por um motivo que NÃO é o próprio metabolismo dele:
+        contratação/demissão, fechamento/colapso do local de trabalho, nascimento na
+        casa, casamento, mudança de casa, evento global, ação do Modo Mestre."""
+        npc.proximo_instante_decisao = self.data_simulada
+
+    def acordar_cidade(self, cidade_id) -> None:
+        """`acordar` pra todo NPC vivo de uma cidade — evento global (clima,
+        economia). Ainda é O(NPCs): sem um índice por cidade mantido (A04, que este
+        plano ainda não implementou nesta sessão) não tem como evitar a varredura.
+        Trocar por uma consulta ao índice é um one-liner quando A04 existir."""
+        for npc in self.npcs:
+            if npc.cidade_id == cidade_id and npc.esta_vivo():
+                self.acordar(npc)

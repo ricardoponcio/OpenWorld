@@ -117,6 +117,11 @@ class NPCMarriageManager:
         # Salvar NPCs no banco
         self._mundo.db.npcs.salvar(n1)
         self._mundo.db.npcs.salvar(n2)
+        # A03: casamento (e possível mudança de casa) muda o que os dois querem —
+        # reavaliar agora, sem esperar o próximo instante que a agenda (A02) já
+        # tivesse calculado pra eles antes de casarem.
+        self._mundo.acordar(n1)
+        self._mundo.acordar(n2)
 
         # Registrar Evento de União no RPG
         timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)

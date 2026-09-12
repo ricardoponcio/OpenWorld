@@ -128,6 +128,7 @@ class InfrastructureManager:
             if npc.local_trabalho_id == local_id and npc.esta_vivo():
                 npc.local_trabalho_id = None
                 self._mundo.db.npcs.salvar(npc)
+                self._mundo.acordar(npc)  # A03: perdeu o emprego, reavalia agora
                 WorldLogger.debug(
                     f"  └─ {npc.nome} ficou desempregado(a) — local fechado por deterioração.",
                     npc=npc,
@@ -159,6 +160,7 @@ class InfrastructureManager:
             if npc.local_trabalho_id == local_id and npc.esta_vivo():
                 npc.local_trabalho_id = None
                 self._mundo.db.npcs.salvar(npc)
+                self._mundo.acordar(npc)  # A03: perdeu o emprego, reavalia agora
 
     # ------------------------------------------------------------------
     # Reparos espontâneos (chamada diária, após processar_desgaste)

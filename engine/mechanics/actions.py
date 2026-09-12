@@ -255,6 +255,7 @@ class NPCActionManager:
                     m.casa_id = obra.id
                     m.localizacao_atual_id = obra.id
                     self._mundo.db.npcs.salvar(m)
+                    self._mundo.acordar(m)  # A03: mudou de casa, reavalia agora
 
             self._mundo.registrar_local(obra)  # P02: status virou 1 — reindexa (ex.: residencias_ativas)
             self._mundo.db.lotes.concluir(obra.id, obra.id)  # O01: lote passa de 'obra' pra 'ocupado'
