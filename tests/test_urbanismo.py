@@ -13,6 +13,13 @@ def _config_urbanismo(**overrides):
         "nome_padrao_por_categoria": {"taverna": "Taverna"},
         "capacidade_padrao_estabelecimento": 15,
         "salario_padrao_estabelecimento": 95,
+        # X01: limiares de saturação — 0 nos testes de O02 (que não semeiam nenhuma
+        # cidade em `mundo.cidades`) pra `avaliar_expansao` nunca satisfazer a condição
+        # (livres < 0 é sempre falso) e cair fora antes de tocar `_aplicar_arrabalde`.
+        "lotes_livres_minimo": 0,
+        "fracao_livre_minima": 0.0,
+        "arrabalde_comprimento_m": 180,
+        "arrabalde_comprimento_max_m": 520,
     }
     base.update(overrides)
     return {"urbanismo": base}

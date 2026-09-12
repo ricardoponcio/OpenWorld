@@ -121,6 +121,19 @@ class RepositorioLoteFalso:
             lote.local_id = ""
             lote.dono_npc_id = ""
 
+    def contar_por_estado(self, cidade_id):
+        """X01: gatilho de auto-expansão — `{estado: contagem}` só dos lotes da cidade."""
+        contagem = {}
+        for lote in self.lotes.values():
+            if lote.cidade_id == cidade_id:
+                contagem[lote.estado] = contagem.get(lote.estado, 0) + 1
+        return contagem
+
+    def salvar_em_lote(self, lotes):
+        """X03: importação inicial (T02) e arrabalde novo (X03) inserem em lote."""
+        for lote in lotes:
+            self.lotes[lote.id] = lote
+
 
 class _EstadosView:
     """Só pra compatibilidade com testes antigos que faziam

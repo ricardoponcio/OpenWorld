@@ -141,6 +141,7 @@ class TipoEvento(Enum):
     MAIORIDADE = "MAIORIDADE"
     CONVERSA = "CONVERSA"
     DISCUSSAO = "DISCUSSAO"
+    EXPANSAO_URBANA = "EXPANSAO_URBANA"
 
 class VinculoSocial(Enum):
     """Classificação qualitativa de uma relação, derivada da afinidade acumulada
