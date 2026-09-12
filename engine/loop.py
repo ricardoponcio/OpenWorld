@@ -279,7 +279,16 @@ class GameLoop:
                 npc.saude = min(ESCALA_MAXIMA, npc.saude + cfg_get(cfg_bio, "dormir_ganho_saude"))
 
     def _remover_falecidos(self):
+        """Achado de A04: só reconstrói `mundo.npcs` quando `mundo.ha_falecidos_pendentes`
+        está marcado (por `EstadoDoMundo.remover_npc`, chamado de dentro de
+        `processar_morte`) — sem essa checagem, esta lista era recriada (um objeto
+        NOVO) todo tick mesmo sem morte nenhuma, e `_atualizar_dependentes` (N04)
+        interpretava a troca de identidade como "tudo mudou", recalculando o mundo
+        inteiro a cada tick (medido: 108 dos 132 ms/tick com 25.000 NPCs)."""
+        if not self._mundo.ha_falecidos_pendentes:
+            return
         self._mundo.npcs = [n for n in self._mundo.npcs if n.saude > 0]
+        self._mundo.ha_falecidos_pendentes = False
 
     def _podar_eventos_antigos(self):
         """E02 (docs/PLANO_POPULACAO_E_ESCALA.md): varredura diária — apaga da

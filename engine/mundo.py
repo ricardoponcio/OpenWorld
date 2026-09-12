@@ -44,6 +44,12 @@ class EstadoDoMundo:
     npcs_por_localizacao: Dict = field(default=None, repr=False, compare=False)
     npcs_por_cidade: Dict = field(default=None, repr=False, compare=False)
 
+    # Achado de A04: sinaliza pra `GameLoop._remover_falecidos` que existe falecido
+    # pendente — sem isto, `_remover_falecidos` reconstruiria `self.npcs` (uma lista
+    # NOVA) todo tick, mesmo sem morte nenhuma, e a troca de identidade faria
+    # `_atualizar_dependentes` recalcular o mundo inteiro por engano.
+    ha_falecidos_pendentes: bool = field(default=False, repr=False, compare=False)
+
     def __post_init__(self):
         if self.indice is None:
             self.indice = IndiceDeLocais(self.locais)
@@ -152,10 +158,15 @@ class EstadoDoMundo:
     def remover_npc(self, npc) -> None:
         """Um NPC que morreu sai dos três índices (mas continua em `self.npcs` até
         `GameLoop._remover_falecidos` filtrar a lista no fim do tick — narrativa e
-        auditoria ainda podem precisar dele até lá)."""
+        auditoria ainda podem precisar dele até lá). Marca `self.ha_falecidos_pendentes`
+        pra `GameLoop` saber que precisa filtrar — sem isto ele filtraria (e
+        recriaria a lista) todo tick, mesmo nos ~99% em que ninguém morreu (achado de
+        A04: recriar `self.npcs` sem necessidade troca a IDENTIDADE do objeto e faz
+        `_atualizar_dependentes` achar que TUDO mudou, e recalcular o mundo inteiro)."""
         self._remover_de_bucket(self.npcs_por_casa, npc.casa_id, npc)
         self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
         self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
+        self.ha_falecidos_pendentes = True
 
     @staticmethod
     def _remover_de_bucket(indice: dict, chave, npc) -> None:
