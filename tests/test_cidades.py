@@ -143,6 +143,35 @@ def test_encolher_quad_rejeita_quad_concavo():
     assert gerador._encolher_quad(bowtie, [3.0] * 4) is None
 
 
+def _ponto_dentro_poligono(p, poligono):
+    x, y = p
+    dentro = False
+    n = len(poligono)
+    for i in range(n):
+        x1, y1 = poligono[i]
+        x2, y2 = poligono[(i + 1) % n]
+        if ((y1 > y) != (y2 > y)) and (x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-15) + x1):
+            dentro = not dentro
+    return dentro
+
+
+def test_quadra_dentro_da_muralha():
+    """G03 — Seção 1.3: a muralha é derivada da borda real (envolver_poligono), então
+    todo vértice de toda quadra tem que estar dentro do contorno, por construção — não
+    por sorte. Só vale para modelo que precisa de muralha (`precisa_muralha()`)."""
+    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    for nome, cls in MODELOS.items():
+        rng = random.Random(sitio.seed)
+        modelo = cls(sitio, CARTOGRAPHER_CONFIG, rng)
+        if not modelo.precisa_muralha():
+            continue
+        malha = modelo.construir_malha()
+        for quadra in malha.quadras:
+            for vertice in quadra.vertices:
+                assert _ponto_dentro_poligono(vertice, malha.contorno), (
+                    f"modelo {nome}: vértice de quadra fora do contorno da muralha")
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()

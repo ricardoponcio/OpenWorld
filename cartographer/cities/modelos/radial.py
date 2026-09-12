@@ -9,7 +9,7 @@ import math
 import numpy as np
 
 from config import cfg_get
-from .base import ModeloCidade, Rua, Quadra, Malha
+from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono
 
 # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
 # amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
@@ -236,15 +236,20 @@ class RadialModelo(ModeloCidade):
         # emite. Isso preserva a ordem de consumo do np_rng idêntica à de antes do F4
         # (perturb -> perturb_nucleo -> perturb_muralha), sem precisar saber aqui se a
         # cidade vai ter muralha ou não (essa pergunta é o gancho `precisa_muralha`).
-        folga = cfg_get(self.cfg, "cidade_geo_muralha_folga_m")
+        #
+        # G03 (Seção 1.3): a muralha é derivada da BORDA real que as quadras usam, não
+        # de um raio+array de aleatórios paralelo e descorrelacionado — antes disso a
+        # folga configurada (40 m) não bastava e quadra ficava até 103 m fora do muro.
+        # `envolver_poligono` garante por construção que todo vértice da borda fica
+        # DENTRO do contorno; a variação orgânica só pode somar folga (nunca subtrair),
+        # daí o `abs`.
+        folga_base = cfg_get(self.cfg, "cidade_geo_muralha_folga_m")
         espacamento_torres = cfg_get(self.cfg, "cidade_geo_muralha_torres_espacamento_m")
-        raio_muralha = self.raio_m + folga
         perturb_muralha = self.np_rng.uniform(-1.0, 1.0, size=self.num_setores)
-        contorno = [self._polar(raio_muralha * (1.0 + self.irreg * 0.3 * perturb_muralha[i]), angulos[i])
-                    for i in range(self.num_setores)]
-        perimetro = raio_muralha * 2 * math.pi
-        num_torres = max(4, int(perimetro / max(1.0, espacamento_torres)))
-        torres = [self._polar(raio_muralha, 2 * math.pi * k / num_torres) for k in range(num_torres)]
+        folgas = [folga_base * (1.0 + self.irreg * 0.3 * abs(perturb_muralha[i]))
+                  for i in range(self.num_setores)]
+        contorno = envolver_poligono(borda, folgas)
+        torres = pontos_ao_longo_do_poligono(contorno, espacamento_torres)
 
         return Malha(ruas=ruas, quadras=quadras, portoes=portoes, centro_praca=centro_praca,
                      raio_praca=self.praca_raio, raio_nucleo=raio_nucleo,

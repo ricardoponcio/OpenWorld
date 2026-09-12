@@ -43,6 +43,26 @@ def pontos_ao_longo_do_poligono(poligono, espacamento):
     return pontos
 
 
+def envolver_poligono(poligono, folga):
+    """Infla um polígono radialmente em torno do próprio centroide, garantindo que todo
+    vértice original fique DENTRO do resultado com ao menos `folga` de sobra. Usado pela
+    muralha: ela tem que envolver a cidade por construção, não por sorte (Seção 1.3 do
+    docs/PLANO_CIDADE_VIVA.md).
+
+    `folga` aceita um único float (mesma folga em todo vértice) ou uma sequência do
+    mesmo tamanho de `poligono` (folga por vértice — variação orgânica na muralha só
+    pode SOMAR folga, nunca subtrair, senão ela deixa de envolver por construção)."""
+    cx = sum(p[0] for p in poligono) / len(poligono)
+    cy = sum(p[1] for p in poligono) / len(poligono)
+    folgas = folga if hasattr(folga, "__len__") else [folga] * len(poligono)
+    envolvido = []
+    for (x, y), f in zip(poligono, folgas):
+        dx, dy = x - cx, y - cy
+        d = math.hypot(dx, dy) or 1.0
+        envolvido.append((cx + dx * (d + f) / d, cy + dy * (d + f) / d))
+    return envolvido
+
+
 @dataclass
 class Rua:
     pontos: list          # [(x_m, y_m), ...] em metros locais
