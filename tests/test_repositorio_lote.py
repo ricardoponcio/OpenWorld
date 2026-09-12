@@ -84,3 +84,29 @@ def test_liberar_nao_atropela_lote_ja_reocupado(tmp_path):
     db.lotes.liberar("l1")  # chamada tardia/duplicada de decay.py — não deve atropelar
 
     assert db.lotes.contar_por_estado(1) == {"obra": 1}
+
+
+def test_reservar_livre_desempata_pela_banda_mais_externa(tmp_path):
+    """O01: dois lotes livres à MESMA distância — o desempate prefere a banda mais
+    externa (casal jovem não compra terreno no centro)."""
+    db = _db(tmp_path)
+    centro = _lote("centro"); centro.x, centro.y = 1.0, 0.0; centro.banda = 1
+    borda = _lote("borda"); borda.x, borda.y = -1.0, 0.0; borda.banda = 5
+    db.lotes.salvar_em_lote([centro, borda])
+
+    escolhido = db.lotes.reservar_livre(cidade_id=1, npc_id="npc_a", perto_de=(0.0, 0.0))
+
+    assert escolhido == "borda"
+
+
+def test_buscar_por_id(tmp_path):
+    db = _db(tmp_path)
+    lote = _lote("l1"); lote.x, lote.y = 5.0, 7.0; lote.bairro = "Bairro Externo"
+    db.lotes.salvar_em_lote([lote])
+
+    encontrado = db.lotes.buscar_por_id("l1")
+
+    assert encontrado.x == 5.0 and encontrado.y == 7.0
+    assert encontrado.bairro == "Bairro Externo"
+
+    assert db.lotes.buscar_por_id("nao_existe") is None

@@ -150,17 +150,35 @@ def test_obra_nao_duplica_para_casal_que_ja_constroi(config):
     assert len([l for l in mundo.locais.values() if l.status == 0]) == 1
 
 
-def test_obra_nasce_na_coordenada_da_cidade_do_npc(config):
+def test_obra_reserva_um_lote_real(config):
+    """O01 (docs/PLANO_CIDADE_VIVA.md): a obra nasce no lote livre mais próximo da
+    casa atual do casal — não mais numa coordenada sorteada em terra firme. O id do
+    Local É o id do lote (armadilha 3), e o lote passa a 'obra'."""
     solteiro = adulto("npc_1", "Kai Solitário")
     cidade = Cidade(1, "uuid", "Vila", "pequena", "vila", 2048, 1024)
     mundo = mundo_de(npcs=[solteiro], locais=[casa()], cidades=[cidade])
+    mundo.db.lotes.adicionar("lote_1", cidade_id=1, x=10.0, y=20.0, bairro="Centro")
 
     assert NPCHousingManager(mundo, config).iniciar_obra_para_casal(solteiro) is True
 
     obras = [l for l in mundo.locais.values() if l.status == 0]
     assert len(obras) == 1
+    assert obras[0].id == "lote_1"
     assert obras[0].dono_npc_id == "npc_1"
+    assert obras[0].coordenadas == [10.0, 20.0]
+    assert obras[0].bairro == "Centro"
     assert obras[0] in mundo.db.locais.salvos
+    assert mundo.db.lotes.buscar_por_id("lote_1").estado == "obra"
+
+
+def test_obra_sem_lote_livre_nao_constroi_e_nao_quebra(config):
+    """O01: sem lote livre na cidade, `iniciar_obra_para_casal` devolve False (não
+    levanta exceção — estado normal de cidade saturada, ARQUITETURA.md P5)."""
+    solteiro = adulto("npc_1", "Kai Solitário")
+    mundo = mundo_de(npcs=[solteiro], locais=[casa()])
+
+    assert NPCHousingManager(mundo, config).iniciar_obra_para_casal(solteiro) is False
+    assert [l for l in mundo.locais.values() if l.status == 0] == []
 
 
 # ----------------------------------------------------------------------

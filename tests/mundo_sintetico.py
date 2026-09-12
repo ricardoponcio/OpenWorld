@@ -14,7 +14,7 @@ DESCRIÇÃO:
 from datetime import datetime
 
 from engine.models import (
-    NPC, Local, EstagioVida, TipoLocal, CategoriaLocal,
+    NPC, Local, Lote, EstagioVida, TipoLocal, CategoriaLocal, LoteEstado,
 )
 from engine.mundo import EstadoDoMundo
 
@@ -65,19 +65,85 @@ class RepositorioFalso:
 
 
 class RepositorioLoteFalso:
-    """T04 (docs/PLANO_CIDADE_VIVA.md): dublê mínimo de RepositorioLote — guarda
-    `estado` por id de lote, pra `InfrastructureManager` (decay.py) poder liberar o
-    terreno quando um Local vira Ruína, e o teste poder afirmar que voltou a 'livre'."""
+    """T04/O01 (docs/PLANO_CIDADE_VIVA.md): dublê em memória de RepositorioLote — um
+    dict de `Lote` por id, o bastante pra `InfrastructureManager` (decay.py) liberar
+    terreno e `NPCHousingManager` (housing.py) reservar lote real, sem banco."""
 
     def __init__(self):
-        self.estados = {}
+        self.lotes = {}
+        # Compat: `estados` era o dublê original (só T04) — mantido como VIEW sobre
+        # `self.lotes`, pra `db.lotes.estados["x"]` continuar funcionando nos testes
+        # que só se importam com o estado, não com o Lote inteiro.
+        self.estados = _EstadosView(self.lotes)
+
+    def adicionar(self, lote_id, cidade_id=1, x=0.0, y=0.0, bairro="", banda=1,
+                  estado=LoteEstado.LIVRE.value):
+        """Helper só de teste — semeia um lote no dublê (RepositorioLote de verdade
+        recebe isso via `salvar_em_lote` na importação, T02)."""
+        self.lotes[lote_id] = Lote(id=lote_id, cidade_id=cidade_id, quarteirao_id="",
+                                    bairro=bairro, banda=banda, classe_frente="",
+                                    area_m2=0.0, x=x, y=y, estado=estado)
 
     def definir_estado(self, lote_id, estado):
-        self.estados[lote_id] = estado
+        if lote_id not in self.lotes:
+            self.adicionar(lote_id, estado=estado)
+        else:
+            self.lotes[lote_id].estado = estado
+
+    def reservar_livre(self, cidade_id, npc_id, perto_de=None, classe_frente=None):
+        candidatos = [l for l in self.lotes.values()
+                     if l.cidade_id == cidade_id and l.estado == LoteEstado.LIVRE.value
+                     and (classe_frente is None or l.classe_frente == classe_frente)]
+        if not candidatos:
+            return None
+        if perto_de is not None:
+            px, py = perto_de
+            candidatos.sort(key=lambda l: (l.x - px) ** 2 + (l.y - py) ** 2)
+        else:
+            candidatos.sort(key=lambda l: l.id)
+        escolhido = candidatos[0]
+        escolhido.estado = LoteEstado.OBRA.value
+        escolhido.dono_npc_id = npc_id
+        return escolhido.id
+
+    def buscar_por_id(self, lote_id):
+        return self.lotes.get(lote_id)
+
+    def concluir(self, lote_id, local_id):
+        if lote_id in self.lotes:
+            self.lotes[lote_id].estado = LoteEstado.OCUPADO.value
+            self.lotes[lote_id].local_id = local_id
 
     def liberar(self, lote_id):
-        if self.estados.get(lote_id) == "ocupado":
-            self.estados[lote_id] = "livre"
+        lote = self.lotes.get(lote_id)
+        if lote and lote.estado == LoteEstado.OCUPADO.value:
+            lote.estado = LoteEstado.LIVRE.value
+            lote.local_id = ""
+            lote.dono_npc_id = ""
+
+
+class _EstadosView:
+    """Só pra compatibilidade com testes antigos que faziam
+    `db.lotes.estados[lote_id]` diretamente (T04) — lê/escreve o `.estado` do Lote
+    guardado em `self.lotes`, criando um lote mínimo se o id ainda não existir."""
+
+    def __init__(self, lotes: dict):
+        self._lotes = lotes
+
+    def __setitem__(self, lote_id, estado):
+        if lote_id not in self._lotes:
+            self._lotes[lote_id] = Lote(id=lote_id, cidade_id=1, quarteirao_id="",
+                                        bairro="", banda=1, classe_frente="",
+                                        area_m2=0.0, estado=estado)
+        else:
+            self._lotes[lote_id].estado = estado
+
+    def __getitem__(self, lote_id):
+        return self._lotes[lote_id].estado
+
+    def get(self, lote_id, default=None):
+        lote = self._lotes.get(lote_id)
+        return lote.estado if lote else default
 
 
 class BancoFalso:

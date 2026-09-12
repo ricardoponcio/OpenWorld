@@ -45,7 +45,8 @@ class RepositorioLote:
 
         `perto_de` (x, y) ordena pelo lote livre mais próximo por distância AO
         QUADRADO (SQLite não tem função de distância; ao quadrado basta pra ordenar, e
-        evita sqrt). Sem `perto_de`, ordena por id (determinístico)."""
+        evita sqrt), com desempate pela banda mais externa (O01: casal jovem não
+        compra terreno no centro). Sem `perto_de`, ordena por id (determinístico)."""
         filtros = ["cidade_id = ?", "estado = 'livre'"]
         params = [cidade_id]
         if classe_frente is not None:
@@ -53,7 +54,7 @@ class RepositorioLote:
             params.append(classe_frente)
         if perto_de is not None:
             px, py = perto_de
-            ordem_sql = "ORDER BY ((x - ?) * (x - ?) + (y - ?) * (y - ?)) ASC"
+            ordem_sql = "ORDER BY ((x - ?) * (x - ?) + (y - ?) * (y - ?)) ASC, banda DESC"
             ordem_params = [px, px, py, py]
         else:
             ordem_sql = "ORDER BY id ASC"
@@ -71,6 +72,21 @@ class RepositorioLote:
             )
             row = cursor.fetchone()
             return row["id"] if row else None
+
+    def buscar_por_id(self, lote_id: str):
+        """O01: depois de `reservar_livre` devolver só o id, quem chama precisa da
+        geometria do lote (x/y, bairro, área) pra montar o `Local` da obra."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            row = cursor.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
+            if row is None:
+                return None
+            return Lote(
+                id=row["id"], cidade_id=row["cidade_id"], quarteirao_id=row["quarteirao_id"],
+                bairro=row["bairro"], banda=row["banda"], classe_frente=row["classe_frente"],
+                area_m2=row["area_m2"], x=row["x"], y=row["y"], estado=row["estado"],
+                estado_inicial=row["estado_inicial"], local_id=row["local_id"],
+                dono_npc_id=row["dono_npc_id"])
 
     def concluir(self, lote_id: str, local_id: str) -> None:
         with self.db.connection() as conn:

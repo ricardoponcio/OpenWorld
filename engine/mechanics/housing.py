@@ -13,13 +13,9 @@ CORREÇÕES APLICADAS:
     Bug C: A seleção de casais filtra explicitamente por is_adulto() antes de
            verificar tem_conjuge(), evitando que bebês/crianças sejam donos de obras.
 """
-import time
-import random
-import json
 from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
-from ..geo import GeoUtils
 from ..config_loader import cfg_get
 from ..mundo import EstadoDoMundo
 
@@ -36,42 +32,54 @@ class NPCHousingManager:
 
     def iniciar_obra_para_casal(self, n1: NPC, n2: NPC = None) -> bool:
         """
-        Cria uma nova obra de residência alocada no mapa para o casal especificado.
-        Reutilizável para expansão urbana e novos casamentos.
+        Cria uma nova obra de residência num LOTE REAL (O01, docs/PLANO_CIDADE_VIVA.md)
+        — reserva o lote livre mais próximo da casa atual do casal (armadilha 3: o id
+        do Local É o id do lote), em vez de sortear um ponto qualquer em terra firme
+        que podia cair no meio do mato, do outro lado do muro, ou em cima de outro
+        edifício. Reutilizável para expansão urbana e novos casamentos.
         """
         # Evita duplicar se já possui obra ativa em andamento
         if NPCUtils.obter_obra_do_npc(self._mundo, n1) or (n2 and NPCUtils.obter_obra_do_npc(self._mundo, n2)):
             return False
 
         cfg_urbano = cfg_get(self._config, "geracao_urbana")
-        raio = cfg_get(cfg_urbano, "locais_raio_px")
-        nivel_mar = cfg_get(self._config, "cartografia", "nivel_mar")
+        casa_atual = self._mundo.locais.get(n1.casa_id)
+        perto_de = tuple(casa_atual.coordenadas) if casa_atual and casa_atual.coordenadas else None
 
-        cidade = self._mundo.cidades.get(n1.cidade_id)
-        cx, cy = (cidade.x_global, cidade.y_global) if cidade else (0, 0)
+        lote_id = self._mundo.db.lotes.reservar_livre(
+            cidade_id=n1.cidade_id, npc_id=n1.id, perto_de=perto_de)
+        if lote_id is None:
+            self._pedir_expansao(n1.cidade_id)
+            return False
 
-        nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
-        # Fase 2.1 (P0.3): coordenada de MUNDO ao redor da própria cidade do NPC, não
-        # mais uma grade local fake — mesma convenção de builder/populate.py.
-        x, y = GeoUtils.sortear_ponto_em_terra(cx, cy, raio, nivel_mar)
-
+        lote = self._mundo.db.lotes.buscar_por_id(lote_id)
         sobrenome = n1.nome.split()[-1]
 
         obra = Local(
-            id=nova_obra_id,
+            id=lote_id,
             nome=f"Obra de {sobrenome}",
             tipo=TipoLocal.CASA.value,
             categoria=CategoriaLocal.RESIDENCIA.value,
             cidade_id=n1.cidade_id,
             descricao=f"Obra da família {sobrenome}, em construção.",
             dono_npc_id=n1.id,
-            coordenadas=[x, y],
+            coordenadas=[lote.x, lote.y],
             status=0,
             integridade=0,
             capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"),
+            bairro=lote.bairro,
         )
         self._mundo.registrar_local(obra)
         return True
+
+    def _pedir_expansao(self, cidade_id: int) -> None:
+        """X01 (docs/PLANO_CIDADE_VIVA.md): a cidade satura e pede espaço novo — o
+        gatilho de auto-expansão vai morar em `GerenciadorUrbanismo` (Bloco X, ainda não
+        implementado nesta base). Por ora só registra o evento — sem lote livre, o
+        casal simplesmente não constrói agora; tentará de novo no próximo gatilho."""
+        WorldLogger.warning(
+            f"[HABITAÇÃO] Cidade {cidade_id} sem lote livre pra nova obra — "
+            f"auto-expansão (Bloco X) ainda não disparada automaticamente.")
 
     def processar_habitacao(self):
         """
