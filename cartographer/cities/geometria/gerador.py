@@ -7,6 +7,8 @@ em lotes, footprint, distribuição dirigida (F2/F3, em `distribuicao.py`), mura
 emissão de feature, índice. Nenhum modelo reimplementa nada disto.
 """
 import math
+import random
+import zlib
 from collections import namedtuple
 
 from cartographer.cities.escala import zoom_min_por_camada
@@ -140,19 +142,35 @@ class GeradorCidade(DistribuicaoMixin):
         `lotes.py`) — idêntico pra qualquer modelo. Toda quadra rende pátio (0, 1 ou 2 —
         2 só quando funda demais e vira duas) e vielas de serviço (só nesse caso), que
         são emitidas ao FINAL (`_emitir_vielas`) — `_emitir_ruas` já rodou antes desta
-        função, e a viela só existe depois da subdivisão (não reordene `gerar()`)."""
+        função, e a viela só existe depois da subdivisão (não reordene `gerar()`).
+
+        L03 (docs/PLANO_POPULACAO_E_ESCALA.md): cada quadra sorteia com um RNG PRÓPRIO,
+        derivado do id do quarteirão — `self.rng` (compartilhado, sequencial) fazia a
+        contagem de lotes da quadra N depender de quantos sorteios as quadras 0..N-1
+        consumiram. Isso não mordia enquanto X02/X03 só ACRESCENTAVAM quadra (nunca
+        removiam/inseriam no meio), mas o Bloco S (que muda quantas quadras existem
+        por banda) e o Bloco L (que pode descartar uma quadra com `preparar_quadra`
+        devolvendo `None`) tornam isso um problema de verdade: remover/inserir uma
+        quadra deslocaria a sequência de sorteios de TODAS as quadras seguintes,
+        mudando a contagem de lotes delas (não o formato do id, que é posicional —
+        armadilha 3 continua de pé). `zlib.crc32`, nunca `hash()` — o `hash()` de
+        `str` é aleatorizado por processo (`PYTHONHASHSEED`), e destruiria o
+        determinismo entre execuções."""
         self._lotes = []  # lista de _LoteEmitido
         vielas_pendentes = []
         for quadra in malha.quadras:
+            quarteirao_id_str = self._quarteirao_id_str(quadra.id)
+            semente_quadra = self.seed ^ zlib.crc32(quarteirao_id_str.encode("utf-8"))
+            rng_quadra = random.Random(semente_quadra)
+
             preparo = lotes.preparar_quadra(
                 quadra.vertices, quadra.classes_aresta, quadra.banda, self.cfg,
-                self.modelo.lote_fator_cidade, self.rng, self.quadra_area_minima,
+                self.modelo.lote_fator_cidade, rng_quadra, self.quadra_area_minima,
                 self._distancia_faixa_dominio)
             if preparo is None:
                 continue  # quadra degenerada, ou pequena demais pra urbanizar
             quad_urbanizavel, lotes_info, patios, vielas, _ = preparo
 
-            quarteirao_id_str = self._quarteirao_id_str(quadra.id)
             self._add_feature("Polygon", quad_urbanizavel + [quad_urbanizavel[0]], "quarteirao",
                               {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str})
 

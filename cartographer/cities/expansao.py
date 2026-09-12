@@ -9,6 +9,7 @@ features novas + metadados de lote. Quem decide QUANDO chamar é
 """
 import math
 import random
+import zlib
 
 from config import cfg_get
 
@@ -226,14 +227,20 @@ def _gerar_features_e_lotes(eixo_pontos, banda_arrabalde, bairro, numero_arrabal
     for quadra in quadras:
         if _quadra_conflita_com_existentes(quadra.vertices, existentes_locais):
             continue  # invadiria a última banda existente perto do portão — descarta
+        quarteirao_id_str = _quarteirao_id_str(quadra.id)
+        # L03 (docs/PLANO_POPULACAO_E_ESCALA.md): mesmo raciocínio de
+        # `GeradorCidade._gerar_quarteiroes_e_lotes` — cada quadra do arrabalde sorteia
+        # com um RNG PRÓPRIO, derivado do id do quarteirão, em vez de um `rng`
+        # sequencial compartilhado entre todas. `zlib.crc32`, nunca `hash()`.
+        semente_quadra = seed_expansao ^ zlib.crc32(quarteirao_id_str.encode("utf-8"))
+        rng_quadra = random.Random(semente_quadra)
         preparo = lotes.preparar_quadra(
             quadra.vertices, quadra.classes_aresta, quadra.banda, config,
-            lote_fator_cidade, rng, quadra_area_minima, _dist_faixa)
+            lote_fator_cidade, rng_quadra, quadra_area_minima, _dist_faixa)
         if preparo is None:
             continue
         quad_urbanizavel, lotes_info, patios, vielas, _ = preparo
 
-        quarteirao_id_str = _quarteirao_id_str(quadra.id)
         _add("Polygon", quad_urbanizavel, "quarteirao",
              {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str,
               "arrabalde": numero_arrabalde, "arrabalde_portao_idx": portao_idx})

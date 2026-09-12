@@ -407,3 +407,47 @@ def test_sem_lote_em_aresta_cega():
             continue
         assert f["properties"]["classe_frente"] != "sem_via", (
             f"lote {f['properties'].get('id')} com frente pra uma aresta sem via")
+
+
+def test_id_de_lote_estavel_quando_uma_quadra_e_removida():
+    """L03/V01 (docs/PLANO_POPULACAO_E_ESCALA.md): o pendente que V01 não conseguiu
+    fechar — "monte uma malha, gere, remova uma quadra do meio, gere de novo, afirme
+    que os ids dos lotes que sobraram não mudaram". Só é verdade agora que cada quadra
+    sorteia com o próprio RNG (derivado do id do quarteirão): antes, um `self.rng`
+    sequencial compartilhado fazia a contagem de lotes da quadra N depender de quantos
+    sorteios as quadras 0..N-1 tinham consumido — remover uma quadra do meio deslocava
+    a sequência de TODAS as quadras seguintes."""
+    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+
+    def _lotes_por_quarteirao(malha_quadras):
+        rng = random.Random(sitio.seed)
+        modelo = MODELOS["radial"](sitio, CARTOGRAPHER_CONFIG, rng)
+        gerador = GeradorCidade(modelo)
+        modelo.malha = type(modelo.construir_malha())(
+            ruas=[], quadras=malha_quadras, portoes=[], centro_praca=(0.0, 0.0),
+            raio_praca=1.0, raio_nucleo=0.0, num_bandas=1, contorno=[])
+        gerador._gerar_quarteiroes_e_lotes(modelo.malha)
+        por_quarteirao = {}
+        for lote in gerador._lotes:
+            por_quarteirao.setdefault(gerador._quarteirao_id_str(lote.quadra.id), []).append(lote.id)
+        return {qid: sorted(ids) for qid, ids in por_quarteirao.items()}
+
+    rng_base = random.Random(sitio.seed)
+    modelo_base = MODELOS["radial"](sitio, CARTOGRAPHER_CONFIG, rng_base)
+    quadras_completas = modelo_base.construir_malha().quadras
+    assert len(quadras_completas) >= 3, "cidade de teste pequena demais pra este teste"
+
+    lotes_completo = _lotes_por_quarteirao(quadras_completas)
+
+    meio = len(quadras_completas) // 2
+    id_removido = quadras_completas[meio].id
+    quadras_sem_meio = quadras_completas[:meio] + quadras_completas[meio + 1:]
+    lotes_sem_meio = _lotes_por_quarteirao(quadras_sem_meio)
+
+    id_removido_str = "_".join(str(p) for p in id_removido) if isinstance(id_removido, tuple) else str(id_removido)
+    for quarteirao_id, ids_completo in lotes_completo.items():
+        if quarteirao_id == id_removido_str:
+            continue
+        assert lotes_sem_meio.get(quarteirao_id) == ids_completo, (
+            f"quarteirão {quarteirao_id}: ids de lote mudaram depois de remover outra "
+            f"quadra ({id_removido_str}) da lista")
