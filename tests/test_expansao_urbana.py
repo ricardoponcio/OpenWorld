@@ -96,6 +96,13 @@ def test_avaliar_expansao_satura_e_cria_arrabalde(cidade_no_disco):
     with open(caminho, "r", encoding="utf-8") as f:
         geojson_novo = json.load(f)
     assert len(geojson_novo["features"]) > len(geojson["features"])
+
+    # Armadilha 3 (o padrão de crescimento real deste projeto é sempre ACRESCENTAR,
+    # nunca remover/renumerar — X02/X03 nunca editam feature existente): toda feature
+    # original sobrevive intacta, byte a byte, na mesma posição — nenhum id ou
+    # geometria pré-existente foi tocado por causa das features novas.
+    assert geojson_novo["features"][:len(geojson["features"])] == geojson["features"]
+
     lotes_novos_feats = [f for f in geojson_novo["features"]
                          if f["properties"].get("camada") == "lote"
                          and f["properties"].get("arrabalde") is not None]

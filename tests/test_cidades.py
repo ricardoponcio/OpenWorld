@@ -10,6 +10,9 @@ import sys
 import os
 import json
 import random
+import statistics
+
+import pytest
 
 raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if raiz not in sys.path:
@@ -306,6 +309,36 @@ def test_ocupacao_inicial_nunca_ultrapassa_o_alvo():
         assert fracao_real <= alvo + tolerancia_pp, (
             f"modelo {nome}: ocupação {fracao_real:.2%} ultrapassa o alvo {alvo:.2%} "
             f"(+{tolerancia_pp:.0%} de tolerância)")
+
+
+@pytest.mark.parametrize("nome_modelo", [
+    "grade", "linear",
+    pytest.param("radial", marks=pytest.mark.xfail(
+        reason="Q01/Q03 (Registro de execução): num_setores (fora do escopo deste plano) "
+               "produz quadras com largura tangencial de 200-400 m nas bandas externas de "
+               "cidades radiais — bem maior que a profundidade (~95-140 m de G05). Testado "
+               "aumentar PROFUNDIDADE_CORTE_MAXIMA (0/2/5): mais corte PIORA. Decisão "
+               "pendente pro dono do projeto: calibrar num_setores por banda?",
+        strict=False)),
+    pytest.param("organica", marks=pytest.mark.xfail(
+        reason="Mesma causa raiz de radial (organica herda a malha de setores) — ver "
+               "Registro de execução, Q01.", strict=False)),
+])
+def test_lotes_por_quadra_em_faixa(nome_modelo):
+    """V01/Q01/Q03 — mediana de lotes por quadra entre 4 e 30. `radial`/`organica` são
+    xfail (não strict — se algum dia passarem, o teste avisa em vez de quebrar o
+    build): achado já documentado e investigado, não é bug da subdivisão de Q01 (o
+    MESMO código, em grade/linear, fica dentro do alvo)."""
+    geo = _gerar(MODELOS[nome_modelo])
+    por_quarteirao = {}
+    for f in geo["features"]:
+        if f["properties"]["camada"] != "lote":
+            continue
+        qid = f["properties"]["quarteirao_id"]
+        por_quarteirao[qid] = por_quarteirao.get(qid, 0) + 1
+    assert por_quarteirao, f"modelo {nome_modelo} não gerou nenhum lote"
+    mediana = statistics.median(por_quarteirao.values())
+    assert 4 <= mediana <= 30, f"modelo {nome_modelo}: mediana de lotes/quadra = {mediana} (alvo 4-30)"
 
 
 def test_lote_livre_nao_emite_edificio():
