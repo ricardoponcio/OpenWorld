@@ -26,6 +26,7 @@ from .mechanics import NPCBrain, NPCActionManager
 from .mechanics.reproduction import NPCReproductionManager
 from .mechanics.lifecycle import NPCLifecycleManager
 from .mechanics.housing import NPCHousingManager
+from .mechanics.urbanismo import GerenciadorUrbanismo
 from .mechanics.kingdom import KingdomManager
 from .mechanics.social import NPCSocialManager
 from .mechanics.events import GlobalEventManager
@@ -41,6 +42,7 @@ class GameLoop:
         self._reproducao = NPCReproductionManager(mundo, config)
         self._ciclo_de_vida = NPCLifecycleManager(mundo, config)
         self._habitacao = NPCHousingManager(mundo, config)
+        self._urbanismo = GerenciadorUrbanismo(mundo, config)
         self._reino = KingdomManager(mundo, config)
         self._social = NPCSocialManager(mundo, config)
         self._eventos_globais = GlobalEventManager(mundo)
@@ -113,6 +115,7 @@ class GameLoop:
             self._ciclo_de_vida.processar_crescimento()
         if hora == cfg_get(cfg_bio, "habitacao_hora"):
             self._habitacao.processar_habitacao()
+            self._urbanismo.processar_urbanismo()  # O02: comércio por demanda, mesma rotina diária
         if hora == cfg_get(cfg_bio, "pagamento_reino_hora"):
             self._reino.processar_pagamentos_reino()
 

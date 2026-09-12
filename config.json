@@ -206,6 +206,20 @@
         "amigo_afinidade_max": 55,
         "amigo_vinculo_limiar": 30
     },
+    "urbanismo": {
+        "_comentario": "docs/PLANO_CIDADE_VIVA.md, Bloco O (2026-09-12): comércio nasce por DEMANDA durante a simulação, não só na geração da cidade (que já escala pela ocupação inicial, T03). deficit(categoria) = floor(habitantes_da_cidade / habitantes_por_estabelecimento[categoria]) - ativos(categoria); no máximo UM estabelecimento por cidade por dia, sempre o de maior déficit (O02). Quem paga é um empreendedor (o NPC adulto vivo da cidade com mais dinheiro_total_pc, acima de custo_estabelecimento_pc) — sem tesouro no projeto, isso é uma regra econômica real, de graça: sem ninguém rico o bastante, a cidade simplesmente não cresce naquele dia.",
+        "habitantes_por_estabelecimento": {"taverna": 40, "mercado": 35, "forja": 45, "universidade": 150, "quartel": 120},
+        "_comentario_custo": "Custo em PC pra abrir um estabelecimento por demanda — a calibrar (dinheiro_inicial vai de 300 a 1500, geracao_populacao); 600 é o ponto de partida, alto o bastante pra não ser trivial, baixo o bastante pra o NPC mais rico de uma vila pequena conseguir.",
+        "custo_estabelecimento_pc": 600,
+        "nome_padrao_por_categoria": {"taverna": "Taverna", "mercado": "Mercado", "forja": "Ferraria", "universidade": "Escola", "quartel": "Guarnição"},
+        "capacidade_padrao_estabelecimento": 15,
+        "salario_padrao_estabelecimento": 95,
+        "_comentario_expansao": "X01: gatilho de auto-expansão — cidade satura quando os lotes livres caem abaixo do piso absoluto OU fracionário (o `or` importa: o absoluto protege a vila pequena, o fracionário protege a capital).",
+        "lotes_livres_minimo": 8,
+        "fracao_livre_minima": 0.03,
+        "arrabalde_comprimento_m": 180,
+        "arrabalde_comprimento_max_m": 520
+    },
     "cartografia": {
         "_comentario": "Migrado de cartographer/config.py (Frente 1 do docs/ROADMAP.md). Ponto único de verdade para geração de mapas.",
         "frequencia": 200.0,
