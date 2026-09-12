@@ -58,10 +58,27 @@ class RepositorioFalso:
         pass
 
 
+class RepositorioLoteFalso:
+    """T04 (docs/PLANO_CIDADE_VIVA.md): dublê mínimo de RepositorioLote — guarda
+    `estado` por id de lote, pra `InfrastructureManager` (decay.py) poder liberar o
+    terreno quando um Local vira Ruína, e o teste poder afirmar que voltou a 'livre'."""
+
+    def __init__(self):
+        self.estados = {}
+
+    def definir_estado(self, lote_id, estado):
+        self.estados[lote_id] = estado
+
+    def liberar(self, lote_id):
+        if self.estados.get(lote_id) == "ocupado":
+            self.estados[lote_id] = "livre"
+
+
 class BancoFalso:
     def __init__(self):
         self.npcs = RepositorioFalso()
         self.locais = RepositorioFalso()
+        self.lotes = RepositorioLoteFalso()
         self.eventos = RepositorioFalso()
         self.meta = RepositorioFalso()
 

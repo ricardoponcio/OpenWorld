@@ -105,6 +105,31 @@ def test_ruina_e_obra_nao_decaem(config):
     assert mundo.db.locais.salvos == []
 
 
+def test_colapso_para_ruina_libera_o_lote(config):
+    """T04 (docs/PLANO_CIDADE_VIVA.md): quando um Local entra em colapso, o LOTE
+    (mesmo id, armadilha 3) volta a 'livre' — pronto pra receber obra nova."""
+    casa_caindo = casa("loc_1", nome="Casa", integridade=1)
+    mundo = mundo_de(locais=[casa_caindo])
+    mundo.db.lotes.definir_estado("loc_1", "ocupado")
+
+    InfrastructureManager(mundo, config).processar_desgaste()
+
+    assert casa_caindo.tipo == TipoLocal.RUINA.value
+    assert mundo.db.lotes.estados["loc_1"] == "livre"
+
+
+def test_liberar_lote_nao_atropela_reserva_nova(config):
+    """T04: se o lote já não está mais 'ocupado' quando o colapso roda (alguém já
+    reservou de novo, ou já foi liberado por outro caminho), `liberar` não atropela."""
+    casa_caindo = casa("loc_1", nome="Casa", integridade=1)
+    mundo = mundo_de(locais=[casa_caindo])
+    mundo.db.lotes.definir_estado("loc_1", "obra")  # já reservado por outro casal
+
+    InfrastructureManager(mundo, config).processar_desgaste()
+
+    assert mundo.db.lotes.estados["loc_1"] == "obra"
+
+
 # ----------------------------------------------------------------------
 # NPCHousingManager — o exemplo do próprio plano (R-F01)
 # ----------------------------------------------------------------------

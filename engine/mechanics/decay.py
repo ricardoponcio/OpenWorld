@@ -137,6 +137,11 @@ class InfrastructureManager:
         """
         Transforma o local em Ruína: tipo=TipoLocal.RUINA, status=0, integridade=0.
         Ruínas são passíveis de reconstrução futura por NPCs com recursos suficientes.
+
+        T04 (docs/PLANO_CIDADE_VIVA.md): o LOTE volta a 'livre' — o id do Local É o id
+        do lote (armadilha 3), e `db.lotes.liberar` já é condicional a estado='ocupado'
+        (não atropela se alguém já reservou o lote de novo antes desta chamada rodar).
+        O Local em si continua com status=0 pra narrativa ("as ruínas da antiga forja").
         """
         nome_original = local.nome
         local.tipo        = TipoLocal.RUINA.value
@@ -145,6 +150,7 @@ class InfrastructureManager:
         local.capacidade  = 0
         local.nome        = f"Ruínas de {nome_original}"
         self._mundo.db.locais.salvar(local)
+        self._mundo.db.lotes.liberar(local_id)
         WorldLogger.info(
             f"💀 [COLAPSO] {nome_original} entrou em colapso total e se tornou uma "
             f"{EstadoInfraestrutura.RUINA.value}! Requer reconstrução completa.",
