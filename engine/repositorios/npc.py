@@ -144,6 +144,18 @@ class RepositorioNPC:
             cursor.execute('INSERT OR REPLACE INTO relacionamentos (npc_a_id, npc_b_id, afinidade, vinculo) VALUES (?, ?, ?, ?)',
                            (b_id, a_id, afinidade, vinculo))
 
+    def salvar_relacionamentos_muitos(self, pares: list) -> None:
+        """E01 (docs/PLANO_POPULACAO_E_ESCALA.md): uma transação pra TODOS os pares
+        de relacionamento do tick — `pares` é uma lista de `(a_id, b_id, afinidade,
+        vinculo)`; cada par grava as DUAS direções, como `salvar_relacionamento`."""
+        if not pares:
+            return
+        with self.db.connection() as conn:
+            conn.cursor().executemany(
+                'INSERT OR REPLACE INTO relacionamentos (npc_a_id, npc_b_id, afinidade, vinculo) VALUES (?, ?, ?, ?)',
+                [linha for (a_id, b_id, afinidade, vinculo) in pares
+                 for linha in ((a_id, b_id, afinidade, vinculo), (b_id, a_id, afinidade, vinculo))])
+
     def listar_relacionamentos(self, npc_id: str) -> list:
         with self.db.connection() as conn:
             cursor = conn.cursor()

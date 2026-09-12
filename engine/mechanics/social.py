@@ -31,68 +31,88 @@ class NPCSocialManager:
         """
         Varre todos os locais do mapa à procura de NPCs presentes e gera eventos
         de interação social ativa e romance dinâmico entre eles.
-        """
+
+        E01 (docs/PLANO_POPULACAO_E_ESCALA.md): computa todas as interações do tick
+        SEM gravar (`_computar_interacao`), e grava eventos/relacionamentos numa
+        transação só no final — antes cada interação abria a própria conexão duas
+        vezes (evento + relacionamento), ~170 interações/tick com 25.000 NPCs
+        (~340 commits/tick medidos)."""
         # Utiliza o helper para agrupar NPCs por localização
         por_local = NPCUtils.agrupar_npcs_por_localizacao(self._mundo.npcs, ignorar_dormindo=True)
-            
+
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         chance_interacao = cfg_get(cfg_bio, "interacao_chance")
-            
+
+        eventos = []
+        pares_de_relacionamento = []
         for loc_id, lista in por_local.items():
             if len(lista) >= 2:
                 if random.random() < chance_interacao:
                     n1, n2 = random.sample(lista, 2)
                     if n1.id != n2.id:
-                        self.processar_interacao_social(n1, n2, loc_id)
+                        evento, par = self._computar_interacao(n1, n2, loc_id)
+                        eventos.append(evento)
+                        pares_de_relacionamento.append(par)
+
+        self._mundo.db.eventos.salvar_muitos(eventos)
+        self._mundo.db.npcs.salvar_relacionamentos_muitos(pares_de_relacionamento)
 
         # Processar coabitação entre casais de alta afinidade no final do tick social
         self._casamento.processar_coabitacao()
 
     def processar_interacao_social(self, n1: NPC, n2: NPC, loc_id: str):
+        """Uma interação isolada, gravada IMEDIATAMENTE — uso pontual/teste. O laço de
+        `processar_interacoes` usa `_computar_interacao` (mesma regra, sem gravar) e
+        escreve em lote (E01)."""
+        evento, par = self._computar_interacao(n1, n2, loc_id)
+        self._mundo.db.eventos.salvar(evento)
+        self._mundo.db.npcs.salvar_relacionamento(*par)
+        return evento, par
+
+    def _computar_interacao(self, n1: NPC, n2: NPC, loc_id: str):
         """
-        Processa um encontro físico e interação social ativa entre dois NPCs em um local.
-        
-        Calcula os ajustes de afinidade e relacionamentos, determina o vínculo RPG mútua,
-        grava os eventos históricos da simulação e avalia a chance de romance físico surpresa
-        se ambos forem solteiros e compatíveis.
+        Calcula o efeito de um encontro físico entre dois NPCs em um local — ajusta
+        afinidade/relacionamentos EM MEMÓRIA e decide o vínculo RPG, mas NÃO grava
+        nada: devolve `(Evento, par_de_relacionamento)` pro chamador gravar (sozinho,
+        ou em lote com outras interações do mesmo tick). Também avalia a chance de
+        romance físico surpresa — isso continua imediato, é uma decisão de domínio
+        (`realizar_casamento`) e não faz parte da escrita que E01 agrupa.
         """
         local_nome = self._mundo.locais[loc_id].nome if loc_id in self._mundo.locais else loc_id
-        
+
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         ganhos = cfg_get(cfg_bio, "interacao_afinidade_ganhos")
         mod = random.choice(ganhos)
         nova_afinidade = n1.relacionamentos.get(n2.id, 0) + mod
-        
+
         n1.relacionamentos[n2.id] = nova_afinidade
         n2.relacionamentos[n1.id] = nova_afinidade
-        
+
         # Determinar Vínculo
         vinculo = NPCSocialManager._classificar_vinculo(nova_afinidade, cfg_bio).value
-
-        # Salvar na tabela oficial de relacionamentos
-        self._mundo.db.npcs.salvar_relacionamento(n1.id, n2.id, nova_afinidade, vinculo)
 
         tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
         resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
         timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
-        
-        evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}", 
+
+        evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}",
                         timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
-        
-        self._mundo.db.eventos.salvar(evento)
+
         WorldLogger.debug(f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})", npc=n1)
         WorldLogger.queue_db_log(n2, "DEBUG", f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})")
 
         # --- ROMANCE FÍSICO: Decisão de coabitação durante conversa real ---
         # Carrega a chance de romance surpresa físico de forma configurável
         chance_romance = cfg_get(cfg_bio, "casamento_chance_romance_fisico")
-        
+
         if self._casamento.verificar_elegibilidade_casamento(n1, n2, nova_afinidade):
             if random.random() < chance_romance:
                 casa_escolhida = n1.casa_id or n2.casa_id
                 if casa_escolhida:
                     # Realizar casamento completo e atômico no gerenciador de casamentos
                     self._casamento.realizar_casamento(n1, n2, casa_escolhida, surpresa=True)
+
+        return evento, (n1.id, n2.id, nova_afinidade, vinculo)
 
     @staticmethod
     def _classificar_vinculo(afinidade: float, cfg_bio: dict) -> VinculoSocial:

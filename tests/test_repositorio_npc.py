@@ -84,3 +84,23 @@ def test_salvar_muitos_lista_vazia_nao_quebra(tmp_path):
     db = _db(tmp_path)
     db.npcs.salvar_muitos([])  # não deve levantar exceção nem tocar o banco
     assert db.npcs.carregar_todos() == []
+
+
+def test_salvar_relacionamentos_muitos_grava_as_duas_direcoes(tmp_path):
+    """E01 (docs/PLANO_POPULACAO_E_ESCALA.md): uma transação pra todos os pares de
+    relacionamento do tick — cada par grava as DUAS direções, igual a
+    `salvar_relacionamento` chamado par a par."""
+    db = _db(tmp_path)
+    pares = [("npc_1", "npc_2", 10, "conhecido"), ("npc_3", "npc_4", -5, "rival")]
+
+    db.npcs.salvar_relacionamentos_muitos(pares)
+
+    assert [tuple(r) for r in db.npcs.listar_relacionamentos("npc_1")] == [("npc_2", 10, "conhecido")]
+    assert [tuple(r) for r in db.npcs.listar_relacionamentos("npc_2")] == [("npc_1", 10, "conhecido")]
+    assert [tuple(r) for r in db.npcs.listar_relacionamentos("npc_4")] == [("npc_3", -5, "rival")]
+
+
+def test_salvar_relacionamentos_muitos_lista_vazia_nao_quebra(tmp_path):
+    db = _db(tmp_path)
+    db.npcs.salvar_relacionamentos_muitos([])
+    assert db.npcs.listar_relacionamentos("npc_1") == []

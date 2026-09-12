@@ -48,6 +48,13 @@ class RepositorioFalso:
     def salvar_relacionamento(self, a_id, b_id, afinidade, vinculo):
         self.relacionamentos.append((a_id, b_id, afinidade, vinculo))
 
+    def salvar_relacionamentos_muitos(self, pares):
+        """E01: dublê do batch de `RepositorioNPC.salvar_relacionamentos_muitos` —
+        só estende `relacionamentos`, um item por par (não duplica pelas duas
+        direções como o repositório real; nenhum teste daqui depende de contagem de
+        linha, só do conteúdo)."""
+        self.relacionamentos.extend(pares)
+
     def renomear(self, npc_id, nome):
         self.renomeados.append((npc_id, nome))
 
@@ -62,6 +69,11 @@ class RepositorioFalso:
 
     def atualizar_resumo(self, evento_id, resumo):
         pass
+
+    def podar_por_idade(self, dia_de_corte):
+        """E02: dublê de `RepositorioEvento.podar_por_idade` — este dublê não guarda
+        timestamp nenhum de verdade, então não há o que podar."""
+        return 0
 
 
 class RepositorioLoteFalso:
