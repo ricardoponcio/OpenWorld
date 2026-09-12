@@ -21,6 +21,13 @@ from ..config_loader import cfg_get
 
 
 class NPCMoodManager:
+    """Recalcula o humor a cada tick. Recebe só a config (R-F01): o cálculo é função
+    das necessidades do próprio NPC, então este é o único gerenciador que não precisa
+    do estado do mundo."""
+
+    def __init__(self, config: dict):
+        self._config = config
+
     @staticmethod
     def _calcular_humor_alvo(npc: NPC, cfg_bio: dict) -> str:
         peso_energia = cfg_get(cfg_bio, "humor_peso_energia")
@@ -43,11 +50,10 @@ class NPCMoodManager:
             return HumorNPC.TRISTE.value
         return HumorNPC.NEUTRO.value
 
-    @staticmethod
-    def processar_humor(engine, npc: NPC):
+    def processar_humor(self, npc: NPC):
         """Aproxima gradualmente o humor do NPC do humor-alvo calculado a partir
         do seu bem-estar atual. Chamado uma vez por NPC vivo a cada tick."""
-        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         alvo = NPCMoodManager._calcular_humor_alvo(npc, cfg_bio)
 
         if npc.humor == alvo:

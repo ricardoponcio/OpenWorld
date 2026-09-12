@@ -112,6 +112,17 @@ class HumorNPC(Enum):
         """Os humores com posição na escala normal, do pior pro melhor."""
         return sorted((h for h in cls if h.ordem is not None), key=lambda h: h.ordem)
 
+    @classmethod
+    def _missing_(cls, value):
+        """Permite `HumorNPC("Em Pânico")`, que é como o humor chega do banco e da IA.
+
+        Era um bug silencioso: como `__init__` reatribui `_value_` para o rótulo, o mapa
+        interno do Enum continua indexado pelas TUPLAS originais, então a busca por
+        rótulo levantava ValueError para TODOS os humores. O efeito prático era que
+        AFETAR_NPC, no Modo Mestre, caía sempre no fallback Neutro — o Mestre não
+        conseguia assustar ninguém. Protegido por tests/test_mestre.py."""
+        return next((h for h in cls if h.value == value), None)
+
 class TipoEvento(Enum):
     NASCIMENTO = "NASCIMENTO"
     CONCEPCAO = "CONCEPCAO"
@@ -146,6 +157,21 @@ class MetaChave(Enum):
     CIDADE_SIMULADA     = "cidade_simulada"
     CIDADES_ATIVAS      = "cidades_ativas"
     MAPA_TERRENO        = "mapa_terreno"
+
+
+class ComandoMestre(Enum):
+    """Ações de mundo que o Modo Mestre aceita (R-F03). O valor é a string que a IA
+    devolve no campo `comando` e que vai para a coluna `acoes_propostas` — resposta de
+    LLM é entrada não confiável, então `AcaoProposta.de_payload` converte para este
+    enum e descarta o que não existir, em vez de cair num `else` silencioso.
+
+    O prompt do Mestre lista os comandos a partir daqui (`engine/ai/game_master.py`),
+    nunca de uma cópia escrita à mão no .txt."""
+    CRIAR_LOCAL    = "CRIAR_LOCAL"
+    REATRIBUIR_NPC = "REATRIBUIR_NPC"
+    DESTRUIR_LOCAL = "DESTRUIR_LOCAL"
+    AFETAR_NPC     = "AFETAR_NPC"
+
 
 @dataclass
 class Local:

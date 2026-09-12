@@ -6,21 +6,29 @@ from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 
 from ..config_loader import cfg_get
+from ..mundo import EstadoDoMundo
 
 class NPCLegacyManager:
-    @staticmethod
-    def processar_heranca(engine, npc: NPC, timestamp_rpg: str):
+    """Testamento e herança de um NPC falecido. Recebe o mundo e a config, não a
+    engine (R-F01): precisa da lista de NPCs (para achar herdeiros) e dos
+    repositórios de NPC e evento."""
+
+    def __init__(self, mundo: EstadoDoMundo, config: dict):
+        self._mundo = mundo
+        self._config = config
+
+    def processar_heranca(self, npc: NPC, timestamp_rpg: str):
         """Processa o testamento e a herança financeira de um NPC recém-falecido."""
-        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         
         herdeiros = []
-        for n in engine.npcs:
+        for n in self._mundo.npcs:
             if n.esta_vivo() and (n.mae_id == npc.id or n.pai_id == npc.id):
                 herdeiros.append(n)
                 
         if not herdeiros and npc.casa_id:
             parceiros = []
-            moradores = NPCUtils.obter_moradores_da_casa(engine.npcs, npc.casa_id, apenas_vivos=True)
+            moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, npc.casa_id, apenas_vivos=True)
             for n in moradores:
                 if n.id != npc.id:
                     afinidade = npc.relacionamentos.get(n.id, 0)
@@ -38,7 +46,7 @@ class NPCLegacyManager:
                 nomes_herdeiros = ", ".join([h.nome for h in herdeiros])
                 for h in herdeiros:
                     h.dinheiro_total_pc += parte
-                    engine.db.salvar_npc(h) # Persistir o dinheiro herdado no banco
+                    self._mundo.db.npcs.salvar(h) # Persistir o dinheiro herdado no banco
                 
                 resumo_heranca = f"Testamento de {npc.nome}: A herança de {npc.dinheiro_formatado} foi dividida entre os herdeiros vivos ({nomes_herdeiros})."
                 WorldLogger.info(f"💰 [HERANÇA] {resumo_heranca}", npc=npc)
@@ -52,7 +60,7 @@ class NPCLegacyManager:
                     modificador_afinidade=cfg_get(cfg_bio, "heranca_evento_modificador_afinidade"),
                     resumo_estruturado=resumo_heranca
                 )
-                engine.db.salvar_evento(evt_heranca)
+                self._mundo.db.eventos.salvar(evt_heranca)
             else:
                 resumo_heranca = f"O dinheiro de {npc.nome} ({npc.dinheiro_formatado}) foi recolhido pelo reino, pois não há herdeiros vivos."
                 WorldLogger.info(f"👑 [REINO] {resumo_heranca}", npc=npc)
@@ -66,6 +74,6 @@ class NPCLegacyManager:
                     modificador_afinidade=0,
                     resumo_estruturado=resumo_heranca
                 )
-                engine.db.salvar_evento(evt_reino)
+                self._mundo.db.eventos.salvar(evt_reino)
                 
             npc.dinheiro_total_pc = 0

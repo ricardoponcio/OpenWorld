@@ -3,7 +3,7 @@ SCRIPT: storyteller.py
 FUNÇÃO: Arquiteto Narrativo e de Construção (evento global de disparo único).
 DESCRIÇÃO: Utiliza IA para descrever e criar um evento mundial pontual (afeta a Utility
            AI via modificadores), enriquecendo o lore. Reaproveita a coleta de contexto
-           e a aplicação de ações de mundo de engine/mechanics/mestre.py (MestreManager)
+           e a aplicação de ações de mundo de engine/mechanics/mestre/ (MestreManager)
            — a mesma base usada pelo Modo Mestre de IA interativo (Frente 5), em vez de
            duplicar essa lógica aqui.
 """
@@ -14,34 +14,33 @@ from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from engine.ai import AIStorytellerClient
-from engine.database import DatabaseManager
 from engine.mechanics.mestre import MestreManager
+from engine.config_loader import carregar_config_global
+from web.banco import obter_db
 
-DB_PATH = "database/openworld.db"
 TEMA_PADRAO = "Fantasia Medieval"  # mesmo tema usado em builder/populate.py
 
 
 def run_storyteller(tema=TEMA_PADRAO):
     print(f"🎬 Storyteller: Analisando o estado de {tema}...")
 
-    db = DatabaseManager(DB_PATH)
-    contexto = MestreManager.montar_contexto(db)
+    db = obter_db()
+    # Ponto de entrada: constrói as dependências uma vez e passa adiante (R-F01/R-F03).
+    mestre = MestreManager(db, carregar_config_global())
+    contexto = mestre.montar_contexto()
 
     print("🧠 Consultando a Mente do Mundo...")
     try:
         evento = AIStorytellerClient.gerar_evento_global(tema, contexto)
 
-        with db.connection() as conn:
-            cursor = conn.cursor()
-            ev_id = f"glob_{int(datetime.now().timestamp())}"
-            cursor.execute(
-                "INSERT INTO eventos_globais VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-                (ev_id, evento['titulo'], evento['descricao'], evento['tipo'],
-                 evento.get('afeta_local_id'), json.dumps(evento['modificadores']),
-                 evento['duracao_ticks'])
-            )
+        ev_id = f"glob_{int(datetime.now().timestamp())}"
+        db.eventos.salvar_global(
+            ev_id, evento['titulo'], evento['descricao'], evento['tipo'],
+            evento.get('afeta_local_id'), json.dumps(evento['modificadores']),
+            evento['duracao_ticks']
+        )
 
-        resultados = MestreManager.aplicar_acoes(db, evento.get('acoes_mundo', []))
+        resultados = mestre.aplicar_acoes(evento.get('acoes_mundo', []))
         for r in resultados:
             print(f"  {r}")
 

@@ -14,12 +14,22 @@ from ..tempo import RelogioMundo
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
+from ..mundo import EstadoDoMundo
 from .housing import NPCHousingManager
 
 
 class NPCMarriageManager:
-    @staticmethod
-    def verificar_elegibilidade_casamento(engine, n1: NPC, n2: NPC, afinidade: int) -> bool:
+    """Uniões matrimoniais e coabitação. Recebe o mundo e a config, não a engine
+    (R-F01). O gerenciador de habitação é colaborador de domínio e entra pelo
+    construtor para que um teste possa substituí-lo por um dublê e verificar a união
+    sem disparar obra nenhuma."""
+
+    def __init__(self, mundo: EstadoDoMundo, config: dict, habitacao: NPCHousingManager = None):
+        self._mundo = mundo
+        self._config = config
+        self._habitacao = habitacao or NPCHousingManager(mundo, config)
+
+    def verificar_elegibilidade_casamento(self, n1: NPC, n2: NPC, afinidade: int) -> bool:
         """
         Verifica se dois NPCs atendem a todos os critérios biológicos, sociais
         e morais para serem elegíveis ao casamento.
@@ -43,15 +53,14 @@ class NPCMarriageManager:
             return False
 
         # Verificar afinidade mínima requerida
-        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         limiar_uniao = cfg_get(cfg_bio, "concepcao_afinidade_minima")
         if afinidade < limiar_uniao:
             return False
 
         return True
 
-    @staticmethod
-    def realizar_casamento(engine, n1: NPC, n2: NPC, casa_escolhida: str, surpresa: bool = False) -> bool:
+    def realizar_casamento(self, n1: NPC, n2: NPC, casa_escolhida: str, surpresa: bool = False) -> bool:
         """
         Formaliza o casamento entre dois NPCs, gerencia a alocação de sua moradia,
         registra o evento no universo do jogo e ajusta sua afinidade.
@@ -63,13 +72,13 @@ class NPCMarriageManager:
         n2.conjuge_id = n1.id
 
         # Verificar se a casa de destino está cheia
-        casa_obj = engine.locais.get(casa_escolhida)
-        casa_cheia = NPCUtils.is_casa_superlotada(engine.locais, engine.npcs, casa_escolhida)
+        casa_obj = self._mundo.locais.get(casa_escolhida)
+        casa_cheia = NPCUtils.is_casa_superlotada(self._mundo.locais, self._mundo.npcs, casa_escolhida)
 
         teve_nova_casa = False
         if casa_cheia:
             # 1. Procurar uma casa totalmente vazia na cidade
-            casas_vazias = NPCUtils.obter_casas_vazias(engine.locais, engine.npcs, ignorar_id=casa_escolhida)
+            casas_vazias = NPCUtils.obter_casas_vazias(self._mundo.locais, self._mundo.npcs, ignorar_id=casa_escolhida)
 
             if casas_vazias:
                 casa_alvo = random.choice(casas_vazias)
@@ -89,7 +98,7 @@ class NPCMarriageManager:
                 )
             else:
                 # 2. Se não tem casa com espaço, tenta construir uma nova obra
-                if NPCHousingManager.iniciar_obra_para_casal(engine, n1, n2):
+                if self._habitacao.iniciar_obra_para_casal(n1, n2):
                     teve_nova_casa = True
                     prefixo = "SURPRESA" if surpresa else "PLANEJADO"
                     WorldLogger.info(
@@ -106,11 +115,11 @@ class NPCMarriageManager:
             n2.localizacao_atual_id = casa_escolhida
 
         # Salvar NPCs no banco
-        engine.db.salvar_npc(n1)
-        engine.db.salvar_npc(n2)
+        self._mundo.db.npcs.salvar(n1)
+        self._mundo.db.npcs.salvar(n2)
 
         # Registrar Evento de União no RPG
-        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
+        timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
         nome_casa = casa_obj.nome if casa_obj else "uma nova moradia"
 
         if surpresa:
@@ -129,12 +138,12 @@ class NPCMarriageManager:
             modificador_afinidade=bonus_afinidade,
             resumo_estruturado=resumo
         )
-        engine.db.salvar_evento(evento)
+        self._mundo.db.eventos.salvar(evento)
 
         # Aumentar afinidade e salvar o relacionamento no banco
         n1.relacionamentos[n2.id] = min(1000, n1.relacionamentos.get(n2.id, 0) + bonus_afinidade)
         n2.relacionamentos[n1.id] = min(1000, n2.relacionamentos.get(n1.id, 0) + bonus_afinidade)
-        engine.db.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], VinculoSocial.ALIADO.value)
+        self._mundo.db.npcs.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], VinculoSocial.ALIADO.value)
 
         # Emitir logs oficiais do simulador
         WorldLogger.info(f"❤️ [UNIÃO] {resumo}", npc=n1)
@@ -142,8 +151,7 @@ class NPCMarriageManager:
 
         return teve_nova_casa
 
-    @staticmethod
-    def processar_coabitacao(engine):
+    def processar_coabitacao(self):
         """
         Executa a rotina periódica (offline/background) de casamentos planejados e coabitação.
         
@@ -153,12 +161,12 @@ class NPCMarriageManager:
         se mudarem para o mesmo lar e, caso a moradia de destino esteja cheia, iniciarem a 
         construção de uma residência independente para aliviar a superlotação.
         """
-        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         # Carrega a chance de casamento passivo de forma configurável
         chance_uniao = cfg_get(cfg_bio, "casamento_chance_coabitacao")
         
         # Filtra apenas NPCs solteiros ativos (vivos)
-        solteiros = [n for n in engine.npcs if n.esta_vivo() and not NPCUtils.tem_conjuge(n)]
+        solteiros = [n for n in self._mundo.npcs if n.esta_vivo() and not NPCUtils.tem_conjuge(n)]
         
         for n1 in solteiros:
             for n2 in solteiros:
@@ -167,12 +175,12 @@ class NPCMarriageManager:
                 
                 # A validação biológica completa e de consanguinidade é delegada à função central
                 afinidade = n1.relacionamentos.get(n2.id, 0)
-                if NPCMarriageManager.verificar_elegibilidade_casamento(engine, n1, n2, afinidade):
+                if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
                     if random.random() < chance_uniao:
                         casa_escolhida = n1.casa_id or n2.casa_id
                         if casa_escolhida:
                             # Realizar casamento completo e atômico
-                            NPCMarriageManager.realizar_casamento(engine, n1, n2, casa_escolhida, surpresa=False)
+                            self.realizar_casamento(n1, n2, casa_escolhida, surpresa=False)
                             
                             # Retorna para evitar processar mais de uma união no mesmo tick
                             return

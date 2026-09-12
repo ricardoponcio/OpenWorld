@@ -16,10 +16,10 @@ class CartographyImporter:
         cidades_salvas = []
 
         for cont in manifest.get("continentes", []):
-            db.salvar_continente(cont["uuid"], cont["nome"], cont.get("area_real_km2", 0))
+            db.mundo.salvar_continente(cont["uuid"], cont["nome"], cont.get("area_real_km2", 0))
 
             for cid in cont.get("cidades", []):
-                cid_id = db.salvar_cidade(
+                cid_id = db.mundo.salvar_cidade(
                     continente_uuid=cont["uuid"],
                     nome=cid["nome"],
                     tamanho=cid.get("tamanho", "Pequeno"),

@@ -11,6 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Importações de módulos do projeto
 from web.rotas import registrar_blueprints
 from web.mestre_routes import mestre_bp
+from web.banco import obter_db
 from config import get_config, cfg_get
 from engine.models import MetaChave
 from engine.tempo import RelogioMundo
@@ -19,12 +20,25 @@ from engine.tempo import RelogioMundo
 config = get_config()
 
 app = Flask(__name__, template_folder='templates')
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'openworld.db'))
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=20)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Instância única de processo (R-E01/R-E02) — antes cada rota abria sua própria
+# `sqlite3.connect(DB_PATH)` crua por requisição; agora todo SQL mora nos
+# repositórios de `db` (`db.npcs`, `db.locais`, `db.meta`, `db.eventos`, ...), e a
+# instância é compartilhada com `mestre_routes.py` via `web/banco.py`.
+db = obter_db()
+
+
+def _tabela_ou_vazio(fn, default):
+    """Executa `fn()` e cai no `default` se a tabela consultada ainda não existir —
+    mesma proteção que `safe_query` dava linha a linha, agora em torno de uma chamada
+    de repositório (o SQL em si não vive mais aqui, ver R-E01)."""
+    try:
+        return fn()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            print(f"⚠️ Aviso: tabela ausente: {e}")
+            return default
+        raise
 
 
 def formatar_moeda(total_pc):
@@ -44,32 +58,15 @@ def formatar_moeda(total_pc):
 def index():
     return render_template('index.html')
 
-def safe_query(conn, query, params=(), default=[]):
-    """Executa uma query e retorna o padrão se a tabela não existir."""
-    try:
-        return conn.execute(query, params).fetchall()
-    except sqlite3.OperationalError as e:
-        if "no such table" in str(e):
-            print(f"⚠️ Aviso: Tabela não encontrada na query: {query}")
-            return default
-        raise e
-
 @app.route('/api/init')
 def get_init():
     try:
-        conn = get_db_connection()
-        locais_rows = safe_query(conn, 'SELECT id, nome, tipo, coordenadas FROM locais')
-        locais = []
-        for r in locais_rows:
-            locais.append({
-                "id": r['id'], "nome": r['nome'], "tipo": r['tipo'],
-                "coords": json.loads(r['coordenadas']) if r['coordenadas'] else [0,0]
-            })
+        locais_por_id = _tabela_ou_vazio(lambda: db.locais.carregar_por_id(), default={})
+        locais = [{"id": l.id, "nome": l.nome, "tipo": l.tipo, "coords": l.coordenadas} for l in locais_por_id.values()]
 
-        meta_mapa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.MAPA_TERRENO.value,)).fetchone()
-        mapa_terreno = json.loads(meta_mapa['valor']) if meta_mapa else []
-        
-        conn.close()
+        meta_mapa = db.meta.carregar(MetaChave.MAPA_TERRENO)
+        mapa_terreno = json.loads(meta_mapa) if meta_mapa else []
+
         return jsonify({"mapa": mapa_terreno, "locais": locais})
     except Exception as e:
         return jsonify({"error": f"Erro de Inicialização: {str(e)}"}), 500
@@ -77,24 +74,21 @@ def get_init():
 @app.route('/api/update')
 def get_update():
     try:
-        conn = get_db_connection()
         warnings = []
 
         # Obter data simulada atual
-        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.HORA_ISO.value,)).fetchone()
-        data_simulada_iso = meta_hora['valor'] if meta_hora else RelogioMundo.HORA_INICIAL_PADRAO_ISO
+        data_simulada_iso = db.meta.carregar(MetaChave.HORA_ISO) or RelogioMundo.HORA_INICIAL_PADRAO_ISO
         data_simulada = datetime.fromisoformat(data_simulada_iso)
 
         # Locais Dinâmicos
-        loc_rows = safe_query(conn, 'SELECT id, nome, tipo, status, integridade, coordenadas FROM locais')
+        locais_por_id = _tabela_ou_vazio(lambda: db.locais.carregar_por_id(), default={})
         mapa_coords = {}
         locs = {}
-        for r in loc_rows:
-            coords = json.loads(r['coordenadas']) if r['coordenadas'] else [0,0]
-            mapa_coords[r['id']] = coords
-            locs[r['id']] = {
-                "n": r['nome'], "t": r['tipo'], "c": coords,
-                "s": r['status'], "i": r['integridade']
+        for l in locais_por_id.values():
+            mapa_coords[l.id] = l.coordenadas
+            locs[l.id] = {
+                "n": l.nome, "t": l.tipo, "c": l.coordenadas,
+                "s": l.status, "i": l.integridade
             }
 
         # Carregar limiar de morte da config (mesma chave/resolver que a engine usa —
@@ -103,7 +97,7 @@ def get_update():
         limiar_morte = cfg_get(config, "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
 
         # NPCs
-        npcs_rows = safe_query(conn, 'SELECT id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks FROM npcs')
+        npcs_rows = _tabela_ou_vazio(lambda: db.npcs.listar_projecao_dashboard(), default=[])
         if not npcs_rows: warnings.append("Tabela 'npcs' ausente.")
         npcs = []
         for r in npcs_rows:
@@ -117,7 +111,7 @@ def get_update():
                 "acao": r['acao_atual'], "coords": mapa_coords.get(r['localizacao_atual_id'], [0,0]),
                 "loc_id": r['localizacao_atual_id'],
                 "status": {
-                    "e": r['energia'], "f": r['fome'], "s": r['social'], 
+                    "e": r['energia'], "f": r['fome'], "s": r['social'],
                     "d": formatar_moeda(r['dinheiro_total_pc']),
                     "h": r['saude'], "m": r['humor']
                 },
@@ -131,29 +125,28 @@ def get_update():
             })
 
         # Evento Global Ativo
-        evg_row = safe_query(conn, 'SELECT titulo, descricao, tipo FROM eventos_globais WHERE ticks_restantes > 0 LIMIT 1')
-        evg = {"t": evg_row[0]['titulo'], "d": evg_row[0]['descricao'], "tp": evg_row[0]['tipo']} if evg_row else None
+        evg_dict = _tabela_ou_vazio(lambda: db.eventos.buscar_global_ativo(), default=None)
+        evg = {"t": evg_dict['titulo'], "d": evg_dict['descricao'], "tp": evg_dict['tipo']} if evg_dict else None
 
         # Meta e Velocidade
-        meta_hora = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.HORA_FORMATADA.value,)).fetchone()
-        meta_pausa = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.SIMULACAO_PAUSADA.value,)).fetchone()
-        meta_vel = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.VELOCIDADE.value,)).fetchone()
-        
+        hora_formatada = db.meta.carregar(MetaChave.HORA_FORMATADA)
+        pausado_raw = db.meta.carregar(MetaChave.SIMULACAO_PAUSADA)
+        velocidade_raw = db.meta.carregar(MetaChave.VELOCIDADE)
+
         # Eventos Unificados
-        ev_rows = safe_query(conn, 'SELECT timestamp, resumo_estruturado FROM eventos ORDER BY timestamp DESC LIMIT 15')
-        evg_rows = safe_query(conn, 'SELECT timestamp_criacao, titulo FROM eventos_globais ORDER BY timestamp_criacao DESC LIMIT 5')
-        
+        ev_rows = _tabela_ou_vazio(lambda: db.eventos.listar_recentes(15), default=[])
+        evg_rows = _tabela_ou_vazio(lambda: db.eventos.listar_globais_recentes(5), default=[])
+
         cronicas = [{"t": r['timestamp'], "r": r['resumo_estruturado'], "type": "npc"} for r in ev_rows]
         for eg in evg_rows:
             cronicas.append({"t": eg['timestamp_criacao'], "r": f"📢 EVENTO: {eg['titulo']}", "type": "global"})
-        
+
         cronicas = sorted(cronicas, key=lambda x: x['t'], reverse=True)[:20]
 
-        conn.close()
         return jsonify({
-            "h": meta_hora['valor'] if meta_hora else "Sincronizando...",
-            "p": meta_pausa['valor'] == "1" if meta_pausa else False,
-            "v": float(meta_vel['valor']) if meta_vel else 1.0,
+            "h": hora_formatada if hora_formatada else "Sincronizando...",
+            "p": pausado_raw == "1" if pausado_raw is not None else False,
+            "v": float(velocidade_raw) if velocidade_raw else 1.0,
             "npcs": npcs,
             "evs": cronicas,
             "locs": locs,
@@ -169,14 +162,9 @@ def get_update():
 @app.route('/api/toggle_pause', methods=['POST'])
 def toggle_pause():
     try:
-        conn = get_db_connection()
-        # Buscar estado atual
-        row = conn.execute("SELECT valor FROM mundo_meta WHERE chave = ?", (MetaChave.SIMULACAO_PAUSADA.value,)).fetchone()
-        novo_estado = "1" if not row or row['valor'] == "0" else "0"
-        
-        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES (?, ?)", (MetaChave.SIMULACAO_PAUSADA.value, novo_estado))
-        conn.commit()
-        conn.close()
+        atual = db.meta.carregar(MetaChave.SIMULACAO_PAUSADA)
+        novo_estado = "1" if not atual or atual == "0" else "0"
+        db.meta.salvar(MetaChave.SIMULACAO_PAUSADA, novo_estado)
         return jsonify({"pausado": novo_estado == "1"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -184,10 +172,7 @@ def toggle_pause():
 @app.route('/api/set_speed/<speed>')
 def set_speed(speed):
     try:
-        conn = get_db_connection()
-        conn.execute("INSERT OR REPLACE INTO mundo_meta (chave, valor) VALUES (?, ?)", (MetaChave.VELOCIDADE.value, speed))
-        conn.commit()
-        conn.close()
+        db.meta.salvar(MetaChave.VELOCIDADE, speed)
         return jsonify({"velocidade": speed})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -195,10 +180,8 @@ def set_speed(speed):
 @app.route('/api/npc_logs/<npc_id>')
 def get_npc_logs(npc_id):
     try:
-        conn = get_db_connection()
-        logs_rows = safe_query(conn, 'SELECT timestamp, level, message FROM npc_logs WHERE npc_id = ? ORDER BY id DESC LIMIT 100', (npc_id,))
+        logs_rows = _tabela_ou_vazio(lambda: db.npcs.listar_logs(npc_id, 100), default=[])
         logs = [{"t": r['timestamp'], "l": r['level'], "m": r['message']} for r in logs_rows]
-        conn.close()
         return jsonify({"logs": logs})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -206,10 +189,8 @@ def get_npc_logs(npc_id):
 @app.route('/api/npc_rels/<npc_id>')
 def get_npc_rels(npc_id):
     try:
-        conn = get_db_connection()
-        rel_rows = safe_query(conn, 'SELECT npc_b_id, afinidade, vinculo FROM relacionamentos WHERE npc_a_id = ? AND afinidade != 0', (npc_id,))
+        rel_rows = _tabela_ou_vazio(lambda: db.npcs.listar_relacionamentos(npc_id), default=[])
         rels = [{"b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo']} for r in rel_rows]
-        conn.close()
         return jsonify({"rels": rels})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

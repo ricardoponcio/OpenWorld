@@ -1,17 +1,64 @@
 import sqlite3
-import json
 import os
 import queue
 from contextlib import contextmanager
-from typing import Dict
-from .models import NPC, Local, Evento, Acao, EstadoCivil, CategoriaSistema, MetaChave, Cidade
-from .logger import WorldLogger
+from .repositorios import (
+    RepositorioNPC, RepositorioLocal, RepositorioEvento,
+    RepositorioMeta, RepositorioMestre, RepositorioMundo,
+)
+
 
 class DatabaseManager:
+    """Pool de conexões + ciclo de vida do schema (R-E01). Todo SQL de domínio mora nos
+    repositórios (`self.npcs`, `self.locais`, `self.eventos`, `self.meta`, `self.mestre`,
+    `self.mundo`) — este arquivo já foi um único lugar com ~20 métodos de SQL misturado
+    (NPCs, locais, eventos, meta, mundo, mestre), o que o tornava o ponto de maior
+    acoplamento do projeto."""
+
+    # R-E03: colunas que `schema.sql` já declara hoje, mas que uma vez foram
+    # adicionadas depois da criação original das tabelas — `CREATE TABLE IF NOT
+    # EXISTS` não recria uma tabela já existente, então um banco criado antes dessas
+    # colunas existirem no schema fica sem elas para sempre, a menos que alguém rode
+    # o ALTER TABLE. Os carregadores (`RepositorioNPC`/`RepositorioLocal`) confiavam
+    # cegamente que a coluna podia não estar lá (`if 'x' in row.keys()`) em vez de
+    # corrigir o banco uma vez — eram 26 desses fallbacks.
+    COLUNAS_ESPERADAS = {
+        "npcs": [
+            ("profissao_id", "TEXT"),
+            ("cidade_id", "INTEGER"),
+            ("saude", "INTEGER DEFAULT 100"),
+            ("humor", "TEXT DEFAULT 'Neutro'"),
+            ("genero", "TEXT DEFAULT 'M'"),
+            ("estagio_vida", "TEXT DEFAULT 'adulto'"),
+            ("raca", "TEXT DEFAULT ''"),
+            ("personalidade", "TEXT DEFAULT ''"),
+            ("background", "TEXT DEFAULT ''"),
+            ("estado_civil", "TEXT DEFAULT 'solteiro'"),
+            ("gravidez_ticks", "INTEGER DEFAULT 0"),
+        ],
+        "locais": [
+            ("cidade_id", "INTEGER"),
+            ("categoria", "TEXT"),
+            ("status", "INTEGER DEFAULT 1"),
+            ("integridade", "INTEGER DEFAULT 100"),
+            ("capacidade", "INTEGER DEFAULT 5"),
+            ("salario_base", "INTEGER DEFAULT 100"),
+            ("tipo_local", "TEXT DEFAULT ''"),
+            ("bairro", "TEXT DEFAULT ''"),
+            ("dono_npc_id", "TEXT DEFAULT ''"),
+        ],
+    }
+
     def __init__(self, db_path="database/openworld.db", pool_size=5):
         self.db_path = db_path
         self._pool = queue.Queue(maxsize=pool_size)
         self._init_db()
+        self.npcs = RepositorioNPC(self)
+        self.locais = RepositorioLocal(self)
+        self.eventos = RepositorioEvento(self)
+        self.meta = RepositorioMeta(self)
+        self.mestre = RepositorioMestre(self)
+        self.mundo = RepositorioMundo(self)
 
     @contextmanager
     def connection(self):
@@ -28,7 +75,7 @@ class DatabaseManager:
 
     def _init_db(self):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
+
         # Inicializa o Pool de conexões
         for _ in range(self._pool.maxsize):
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -37,237 +84,26 @@ class DatabaseManager:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
             self._pool.put(conn)
-        
+
         # Cria as tabelas se não existirem
         with self.connection() as conn:
             cursor = conn.cursor()
             schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
             with open(schema_path, "r", encoding="utf-8") as f:
                 schema_sql = f.read()
-                
+
             cursor.executescript(schema_sql)
 
-            # Inserir Mapeamentos Padrão (IA -> Sistema Técnico)
-            mapeamentos = [
-                ('padaria', CategoriaSistema.COMERCIO.value), ('loja', CategoriaSistema.COMERCIO.value), ('mercado', CategoriaSistema.COMERCIO.value),
-                ('taberna', CategoriaSistema.SOCIAL.value), ('taverna', CategoriaSistema.SOCIAL.value), ('estalagem', CategoriaSistema.SOCIAL.value), ('prédio social', CategoriaSistema.SOCIAL.value), ('publico', CategoriaSistema.SOCIAL.value),
-                ('hospital', CategoriaSistema.SAUDE.value), ('clínica', CategoriaSistema.SAUDE.value),
-                ('escola', CategoriaSistema.EDUCACAO.value), ('biblioteca', CategoriaSistema.EDUCACAO.value), ('universidade', CategoriaSistema.EDUCACAO.value),
-                ('quartel', CategoriaSistema.MILITAR.value), ('guarda', CategoriaSistema.MILITAR.value), ('torre', CategoriaSistema.MILITAR.value),
-                ('fazenda', CategoriaSistema.AGRICULTURA.value), ('campo', CategoriaSistema.AGRICULTURA.value), ('pomar', CategoriaSistema.AGRICULTURA.value),
-                ('mina', CategoriaSistema.INDUSTRIA.value), ('forja', CategoriaSistema.INDUSTRIA.value), ('oficina', CategoriaSistema.INDUSTRIA.value), ('fabrica', CategoriaSistema.INDUSTRIA.value)
-            ]
-            cursor.executemany("INSERT OR IGNORE INTO mapeamento_categorias_trabalho VALUES (?, ?)", mapeamentos)
+            self._migrar_colunas_ausentes(conn)
 
-    def carregar_mapeamento_categorias_trabalho(self) -> dict:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT termo, categoria_sistema FROM mapeamento_categorias_trabalho')
-            rows = cursor.fetchall()
-            return {row[0]: row[1] for row in rows}
-
-    def salvar_evento_global(self, ev_id, titulo, desc, tipo, loc_id, mods_json, duracao):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''INSERT OR REPLACE INTO eventos_globais 
-                              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))''',
-                           (ev_id, titulo, desc, tipo, loc_id, mods_json, duracao))
-
-    def carregar_eventos_globais_ativos(self):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM eventos_globais WHERE ticks_restantes > 0')
-            rows = cursor.fetchall()
-            return [dict(r) for r in rows]
-
-    def salvar_meta(self, chave, valor: str):
-        """`chave` aceita `MetaChave` ou `str` — `str` continua funcionando pra não
-        quebrar `builder/fix/` e SQL ad-hoc de diagnóstico (R-B05)."""
-        chave_str = chave.value if isinstance(chave, MetaChave) else chave
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR REPLACE INTO mundo_meta VALUES (?, ?)', (chave_str, valor))
-
-    def carregar_meta(self, chave) -> str:
-        chave_str = chave.value if isinstance(chave, MetaChave) else chave
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT valor FROM mundo_meta WHERE chave = ?', (chave_str,))
-            row = cursor.fetchone()
-            return row[0] if row else None
-
-    def salvar_continente(self, uuid: str, nome: str, area_real_km2: float):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR REPLACE INTO continentes (uuid, nome, area_real_km2) VALUES (?, ?, ?)', 
-                           (uuid, nome, area_real_km2))
-
-    def salvar_cidade(self, continente_uuid: str, nome: str, tamanho: str, tipo: str, x_global: int, y_global: int) -> int:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO cidades (continente_uuid, nome, tamanho, tipo, x_global, y_global) VALUES (?, ?, ?, ?, ?, ?)', 
-                           (continente_uuid, nome, tamanho, tipo, x_global, y_global))
-            return cursor.lastrowid
-
-    def carregar_cidades_por_id(self) -> Dict[int, Cidade]:
-        """R-C06: antes devolvia `list[dict]` cru — única forma de retorno crua entre os
-        três carregadores (`carregar_npcs`/`carregar_locais_por_id` já devolviam
-        dataclass). Os chamadores reindexavam por `id` na mão (`engine/core.py`)."""
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM cidades')
-            rows = cursor.fetchall()
-            return {
-                row['id']: Cidade(
-                    id=row['id'], continente_uuid=row['continente_uuid'], nome=row['nome'],
-                    tamanho=row['tamanho'], tipo=row['tipo'],
-                    x_global=row['x_global'], y_global=row['y_global'],
-                )
-                for row in rows
-            }
-
-    def salvar_local(self, local: Local):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''INSERT OR REPLACE INTO locais
-                              (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base, tipo_local, bairro, dono_npc_id)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-                local.id, local.nome, local.tipo, local.cidade_id, local.categoria, local.descricao,
-                json.dumps(local.coordenadas), local.status, local.integridade,
-                local.capacidade, local.salario_base, local.tipo_local, local.bairro, local.dono_npc_id
-            ))
-
-    def carregar_locais_por_id(self) -> dict:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM locais')
-            rows = cursor.fetchall()
-            locais = {}
-            for row in rows:
-                locais[row['id']] = Local(
-                    id=row['id'], nome=row['nome'], tipo=row['tipo'], 
-                    cidade_id=row['cidade_id'] if 'cidade_id' in row.keys() else None,
-                    categoria=row['categoria'] if 'categoria' in row.keys() else 'generic',
-                    descricao=row['descricao'], coordenadas=json.loads(row['coordenadas']),
-                    status=row['status'] if 'status' in row.keys() else 1,
-                    integridade=row['integridade'] if 'integridade' in row.keys() else 100,
-                    capacidade=row['capacidade'] if 'capacidade' in row.keys() else 5,
-                    salario_base=row['salario_base'] if 'salario_base' in row.keys() else 100,
-                    tipo_local=row['tipo_local'] if 'tipo_local' in row.keys() and row['tipo_local'] is not None else '',
-                    bairro=row['bairro'] if 'bairro' in row.keys() and row['bairro'] is not None else '',
-                    dono_npc_id=row['dono_npc_id'] if 'dono_npc_id' in row.keys() and row['dono_npc_id'] is not None else ''
-                )
-            return locais
-
-    def salvar_npc(self, npc: NPC):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''INSERT OR REPLACE INTO npcs                           (id, nome, profissao, profissao_id, cidade_id, casa_id, local_trabalho_id, localizacao_atual_id,
-                               acao_atual, energia, dinheiro_total_pc, social, fome, saude, humor,
-                               genero, estagio_vida, raca, personalidade, background, data_nascimento, estado_civil, conjuge_id, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
-                npc.id, npc.nome, npc.profissao, npc.profissao_id, npc.cidade_id, npc.casa_id, npc.local_trabalho_id,
-                npc.localizacao_atual_id, npc.acao_atual.value, npc.energia, npc.dinheiro_total_pc,
-                npc.social, npc.fome, npc.saude, npc.humor,
-                npc.genero, npc.estagio_vida, npc.raca, npc.personalidade, npc.background,
-                npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
-                json.dumps(npc.genealogia), json.dumps(npc.relacionamentos), json.dumps(npc.memoria_eventos),
-                npc.gravidez_ticks
-            ))
-
-    def _safe_json_load(self, data, default):
-        try:
-            return json.loads(data) if data else default
-        except:
-            return default
-
-    def carregar_npcs(self) -> list:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute('SELECT * FROM npcs')
-                rows = cursor.fetchall()
-                npcs = []
-                for r in rows:
-                    npc = NPC(
-                        id=r['id'], nome=r['nome'], profissao=r['profissao'], 
-                        profissao_id=r['profissao_id'] if 'profissao_id' in r.keys() else 'ocioso',
-                        cidade_id=r['cidade_id'] if 'cidade_id' in r.keys() else None,
-                        casa_id=r['casa_id'], 
-                        local_trabalho_id=r['local_trabalho_id'], localizacao_atual_id=r['localizacao_atual_id'], 
-                        acao_atual=Acao(r['acao_atual']) if 'acao_atual' in r.keys() else Acao.OCIOSO, 
-                        energia=float(r['energia']) if r['energia'] is not None else 100.0,
-                        dinheiro_total_pc=float(r['dinheiro_total_pc']) if r['dinheiro_total_pc'] is not None else 500.0,
-                        social=float(r['social']) if r['social'] is not None else 100.0,
-                        fome=float(r['fome']) if r['fome'] is not None else 0.0,
-                        saude=int(r['saude']) if 'saude' in r.keys() and r['saude'] is not None else 100,
-                        humor=r['humor'] if 'humor' in r.keys() else 'Neutro',
-                        genero=r['genero'] if 'genero' in r.keys() else 'M',
-                        estagio_vida=r['estagio_vida'] if 'estagio_vida' in r.keys() else 'adulto',
-                        raca=r['raca'] if 'raca' in r.keys() and r['raca'] is not None else '',
-                        personalidade=r['personalidade'] if 'personalidade' in r.keys() and r['personalidade'] is not None else '',
-                        background=r['background'] if 'background' in r.keys() and r['background'] is not None else '',
-                        data_nascimento=r['data_nascimento'] if 'data_nascimento' in r.keys() else '',
-                        estado_civil=r['estado_civil'] if 'estado_civil' in r.keys() else EstadoCivil.SOLTEIRO.value,
-                        conjuge_id=r['conjuge_id'] if 'conjuge_id' in r.keys() else '',
-                        pai_id=r['pai_id'] if 'pai_id' in r.keys() else '',
-                        mae_id=r['mae_id'] if 'mae_id' in r.keys() else '',
-                        genealogia=self._safe_json_load(r['genealogia'], []), 
-                        relacionamentos=self._safe_json_load(r['relacionamentos'], {}),
-                        memoria_eventos=self._safe_json_load(r['memoria_eventos'], []),
-                        gravidez_ticks=r['gravidez_ticks'] if 'gravidez_ticks' in r.keys() and r['gravidez_ticks'] is not None else 0)
-
-                    npcs.append(npc)
-                return npcs
-            except Exception as e:
-                WorldLogger.error(f"Erro ao carregar NPCs: {e}")
-                return []
-
-    def salvar_evento(self, evento: Evento):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR REPLACE INTO eventos VALUES (?, ?, ?, ?, ?, ?, ?)', (
-                evento.id, evento.timestamp, evento.local_id, json.dumps(evento.envolvidos), 
-                evento.tipo_evento, evento.modificador_afinidade, evento.resumo_estruturado
-            ))
-
-    def salvar_relacionamento(self, a_id: str, b_id: str, afinidade: int, vinculo: str):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR REPLACE INTO relacionamentos (npc_a_id, npc_b_id, afinidade, vinculo) VALUES (?, ?, ?, ?)',
-                           (a_id, b_id, afinidade, vinculo))
-            cursor.execute('INSERT OR REPLACE INTO relacionamentos (npc_a_id, npc_b_id, afinidade, vinculo) VALUES (?, ?, ?, ?)',
-                           (b_id, a_id, afinidade, vinculo))
-
-    # ------------------------------------------------------------------
-    # Modo Mestre de IA (Frente 5)
-    # ------------------------------------------------------------------
-
-    def salvar_mensagem_mestre(self, autor: str, mensagem: str, acoes_propostas: list = None) -> int:
-        """Persiste um turno de conversa (jogador ou mestre) e retorna o id gerado."""
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                'INSERT INTO mestre_conversas (autor, mensagem, acoes_propostas, aplicada) VALUES (?, ?, ?, 0)',
-                (autor, mensagem, json.dumps(acoes_propostas) if acoes_propostas else None)
-            )
-            return cursor.lastrowid
-
-    def carregar_historico_mestre(self, limite: int = 50) -> list:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM mestre_conversas ORDER BY id DESC LIMIT ?', (limite,))
-            rows = [dict(r) for r in cursor.fetchall()]
-            return list(reversed(rows))
-
-    def carregar_mensagem_mestre(self, conversa_id: int) -> dict:
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM mestre_conversas WHERE id = ?', (conversa_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-
-    def marcar_mestre_aplicada(self, conversa_id: int):
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('UPDATE mestre_conversas SET aplicada = 1 WHERE id = ?', (conversa_id,))
+    def _migrar_colunas_ausentes(self, conn) -> None:
+        """Adiciona com ALTER TABLE as colunas que `COLUNAS_ESPERADAS` declara e a
+        tabela não tem. Substitui os 26 fallbacks `if 'x' in row.keys()` espalhados
+        pelos carregadores (R-E03): o banco passa a ficar correto uma vez, em vez de
+        ser remendado a cada leitura."""
+        cursor = conn.cursor()
+        for tabela, colunas in self.COLUNAS_ESPERADAS.items():
+            existentes = {row[1] for row in cursor.execute(f"PRAGMA table_info({tabela})").fetchall()}
+            for nome, tipo_sql in colunas:
+                if nome not in existentes:
+                    cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo_sql}")

@@ -6,12 +6,10 @@ from PIL import Image
 from web.helpers import render_npz_array, obter_manifesto
 from web.janelas import janela_regiao, gerar_janela_com_cache
 from web.rotas._erros import registrar_erro_handler
-from engine.database import DatabaseManager
+from web.banco import obter_db, CAMINHO_BANCO
 
 regiao_bp = Blueprint('regiao', __name__)
 registrar_erro_handler(regiao_bp)
-
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'database', 'openworld.db'))
 
 
 def _encontrar_cidade(manifest, nome):
@@ -81,27 +79,21 @@ def api_regiao_entities(nome):
         return jsonify({"locais": [], "npcs": [], "bbox": None})
     cidade_manifesto = _encontrar_cidade(manifest, nome)
 
-    if not os.path.exists(DB_PATH):
+    if not os.path.exists(CAMINHO_BANCO):
         return jsonify({"locais": [], "npcs": [], "bbox": None})
 
-    db = DatabaseManager(DB_PATH)
-    with db.connection() as conn:
-        cursor = conn.cursor()
-        cidade_row = cursor.execute('SELECT id FROM cidades WHERE nome = ?', (nome,)).fetchone()
-        if not cidade_row:
-            return jsonify({"locais": [], "npcs": [], "bbox": None})
+    db = obter_db()
+    cidade_id = db.mundo.buscar_id_por_nome(nome)
+    if not cidade_id:
+        return jsonify({"locais": [], "npcs": [], "bbox": None})
 
-        cidade_id = cidade_row['id']
+    locais = []
+    for r in db.locais.buscar_por_cidade(cidade_id):
+        d = dict(r)
+        d['coordenadas'] = json.loads(d['coordenadas']) if d['coordenadas'] else [0, 0]
+        locais.append(d)
 
-        locais = []
-        for r in cursor.execute('SELECT id, nome, tipo, categoria, coordenadas FROM locais WHERE cidade_id = ?', (cidade_id,)).fetchall():
-            d = dict(r)
-            d['coordenadas'] = json.loads(d['coordenadas']) if d['coordenadas'] else [0, 0]
-            locais.append(d)
-
-        npcs = []
-        for r in cursor.execute('SELECT id, nome, profissao, genero, localizacao_atual_id, acao_atual FROM npcs WHERE cidade_id = ?', (cidade_id,)).fetchall():
-            npcs.append(dict(r))
+    npcs = [dict(r) for r in db.npcs.buscar_por_cidade(cidade_id)]
 
     bbox = None
     if cidade_manifesto:

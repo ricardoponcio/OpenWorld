@@ -5,22 +5,33 @@ from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
 from ..tempo import RelogioMundo
+from ..mundo import EstadoDoMundo
+from .finance import NPCLegacyManager
 
 class NPCLifecycleManager:
-    @staticmethod
-    def processar_crescimento(engine):
-        """Varredura diária para processar o crescimento e transição de estágios de vida dos NPCs."""
-        cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
-        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
+    """Transições de estágio de vida e morte. Recebe o mundo e a config, não a engine
+    (R-F01). O gerenciador de herança entra pelo construtor — antes era importado
+    dentro de `processar_morte` para quebrar um ciclo que não existe mais, e import
+    dentro de função é padrão proibido (ARQUITETURA.md Seção 15, item 7)."""
 
-        for npc in engine.npcs:
+    def __init__(self, mundo: EstadoDoMundo, config: dict, heranca: NPCLegacyManager = None):
+        self._mundo = mundo
+        self._config = config
+        self._heranca = heranca or NPCLegacyManager(mundo, config)
+
+    def processar_crescimento(self):
+        """Varredura diária para processar o crescimento e transição de estágios de vida dos NPCs."""
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
+        timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
+
+        for npc in self._mundo.npcs:
             if not npc.esta_vivo() or not npc.data_nascimento:
                 continue
             
             try:
                 dt_str = npc.data_nascimento.replace(' ', 'T')
                 birth = datetime.fromisoformat(dt_str)
-                idade_dias = (engine.data_simulada - birth).days
+                idade_dias = (self._mundo.data_simulada - birth).days
             except Exception as e:
                 continue
 
@@ -41,8 +52,8 @@ class NPCLifecycleManager:
                     modificador_afinidade=15,
                     resumo_estruturado=resumo
                 )
-                engine.db.salvar_evento(evento)
-                engine.db.salvar_npc(npc)
+                self._mundo.db.eventos.salvar(evento)
+                self._mundo.db.npcs.salvar(npc)
 
             # Criança -> Adulto
             elif npc.estagio_vida == EstagioVida.CRIANCA.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_crianca_para_adulto"):
@@ -63,8 +74,8 @@ class NPCLifecycleManager:
                     modificador_afinidade=20,
                     resumo_estruturado=resumo
                 )
-                engine.db.salvar_evento(evento)
-                engine.db.salvar_npc(npc)
+                self._mundo.db.eventos.salvar(evento)
+                self._mundo.db.npcs.salvar(npc)
 
             # Adulto -> Idoso
             elif npc.estagio_vida == EstagioVida.ADULTO.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_adulto_para_idoso"):
@@ -86,25 +97,24 @@ class NPCLifecycleManager:
                     modificador_afinidade=10,
                     resumo_estruturado=resumo
                 )
-                engine.db.salvar_evento(evento)
-                engine.db.salvar_npc(npc)
+                self._mundo.db.eventos.salvar(evento)
+                self._mundo.db.npcs.salvar(npc)
 
             # Idoso -> Morto por Velhice
             elif npc.estagio_vida == EstagioVida.IDOSO.value and idade_dias >= cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte"):
                 npc.saude = 0
-                NPCLifecycleManager.processar_morte(engine, npc)
+                self.processar_morte(npc)
 
-    @staticmethod
-    def processar_morte(engine, npc: NPC):
+    def processar_morte(self, npc: NPC):
         """Processa o falecimento biológico de um NPC, liberando seus recursos e acionando o testamento financeiro."""
         # 1. Registrar o óbito no banco para consistência histórica
-        timestamp_rpg = RelogioMundo.timestamp_rpg(engine.data_simulada)
+        timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
 
         idade_anos = 0
         if npc.data_nascimento:
-            cfg_bio = cfg_get(engine.config, "biologia_e_sociedade")
+            cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
             limiar_morte = cfg_get(cfg_bio, "crescimento_dias_idoso_para_morte")
-            idade_anos = RelogioMundo.idade_em_anos(npc.data_nascimento, engine.data_simulada, limiar_morte)
+            idade_anos = RelogioMundo.idade_em_anos(npc.data_nascimento, self._mundo.data_simulada, limiar_morte)
                 
         idade_str = f" aos {idade_anos} anos" if idade_anos > 0 else ""
         if npc.estagio_vida == EstagioVida.IDOSO.value:
@@ -121,12 +131,11 @@ class NPCLifecycleManager:
             modificador_afinidade=0,
             resumo_estruturado=resumo
         )
-        engine.db.salvar_evento(evento)
+        self._mundo.db.eventos.salvar(evento)
         WorldLogger.info(f"💀 [ÓBITO] {resumo}", npc=npc)
         
         # --- FASE GERACIONAL FINANCEIRA: Testamento/Herança ---
-        from .finance import NPCLegacyManager
-        NPCLegacyManager.processar_heranca(engine, npc, timestamp_rpg)
+        self._heranca.processar_heranca(npc, timestamp_rpg)
         
         # --- FASE BIOLÓGICA/SOCIAL: Desvinculação ---
         npc.casa_id = ""
@@ -137,4 +146,4 @@ class NPCLifecycleManager:
         npc.saude = 0
         
         # Salvar as alterações finais do NPC falecido
-        engine.db.salvar_npc(npc)
+        self._mundo.db.npcs.salvar(npc)

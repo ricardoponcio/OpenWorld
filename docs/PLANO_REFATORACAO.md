@@ -1980,8 +1980,26 @@ Estes **não são** questões de estilo. Estão referenciados nas tarefas indica
 
 > Preencha esta tabela conforme executar. Se uma tarefa for pulada, escreva o motivo.
 
+> As linhas abaixo registram só o que foi **verificado na árvore de trabalho**. Uma
+> tarefa sem linha não é uma tarefa pulada — é uma tarefa cujo estado ainda não foi
+> auditado.
+
 | Tarefa | Status | Commit | Observações |
 |---|---|---|---|
-| R-A01 | ⬜ | | |
-| R-A02 | ⬜ | | |
+| R-E01 | ✅ | (não comitado) | Pacote `engine/repositorios/` com seis repositórios; `engine/database.py` ficou só com pool e schema. |
+| R-E02 | ✅ | (não comitado) | `web/banco.py` com instância única do processo; `mestre_routes` e `dashboard` consomem ela. |
+| R-E03 | ✅ | (não comitado) | Leitura defensiva de schema removida do `DatabaseManager`. |
+| R-E04 | ✅ | (não comitado) | Seed de domínio saiu do `_init_db`. |
+| R-F01 | ✅ | (não comitado) | Os 9 gerenciadores + `GameLoop` + `MestreManager` são classes de instância recebendo `EstadoDoMundo`/config. `mood` recebe só a config (é o único que não usa o mundo) e `events` só o mundo. Validado por `tests/test_mecanicas.py` (19 testes, sem banco) e por 120 ticks + as 4 rotinas agendadas numa cópia do banco real. |
+| R-F02 | ✅ | (não comitado) | `JobMarket` recebe o banco; um pool por processo. |
+| R-F03 | ✅ | (não comitado) | `engine/mechanics/mestre.py` virou pacote; os 4 ramos do if/elif são classes `AcaoDeMundo` com registro explícito. Enum `ComandoMestre` criado e **servido ao prompt** em vez de copiado no .txt. Validado por `tests/test_mestre.py` (11 testes). |
 | … | | | |
+
+### Bug encontrado durante o R-F03 (fora do Anexo 3)
+
+`HumorNPC` tem valor composto (`rótulo`, `ordem`) e reatribui `_value_` no `__init__`, mas
+o mapa interno do `Enum` continua indexado pelas **tuplas** originais. Resultado:
+`HumorNPC("Em Pânico")` levantava `ValueError` para **todos** os humores, então
+`AFETAR_NPC` no Modo Mestre caía sempre no fallback `Neutro` — o Mestre não conseguia
+assustar ninguém. Corrigido com `_missing_` em `engine/models.py`; protegido por
+`test_humor_valido_da_ia_e_preservado`, que falha antes da correção.

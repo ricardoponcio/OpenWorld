@@ -92,7 +92,7 @@ def _importar_locais_da_geometria(db, cidade):
             bairro=props.get("bairro", ""),
             dono_npc_id=props.get("dono_npc_id", ""),
         )
-        db.salvar_local(loc)
+        db.locais.salvar(loc)
         total += 1
         if props.get("categoria") == CategoriaLocal.RESIDENCIA.value:
             casas_ids.append(props["id"])
@@ -113,7 +113,7 @@ def _importar_locais_paliativo(db, cidade, raio_locais, nivel_mar, cfg_urbano):
     ]
     for i, l_data in enumerate(locais_base):
         x_local, y_local = GeoUtils.sortear_ponto_em_terra(cx, cy, raio_locais, nivel_mar)
-        db.salvar_local(Local(
+        db.locais.salvar(Local(
             id=f"loc_{cidade['db_id']}_pal_{i:02d}", nome=l_data['nome'], tipo="Social",
             cidade_id=cidade['db_id'], categoria=l_data['categoria'],
             descricao=f"Estabelecimento provisório de {cidade['nome']} (sem geometria gerada).",
@@ -126,7 +126,7 @@ def _importar_locais_paliativo(db, cidade, raio_locais, nivel_mar, cfg_urbano):
         c_id = f"casa_{cidade['db_id']}_pal_{i:02d}"
         casas_ids.append(c_id)
         x_local, y_local = GeoUtils.sortear_ponto_em_terra(cx, cy, raio_locais, nivel_mar)
-        db.salvar_local(Local(
+        db.locais.salvar(Local(
             id=c_id, nome=f"Residência {i:02d}", tipo="Casa", cidade_id=cidade['db_id'],
             categoria=CategoriaLocal.RESIDENCIA.value, descricao="Moradia provisória.",
             coordenadas=[x_local, y_local]
@@ -187,10 +187,10 @@ class PopuladorDeMundo:
         continua single-city até a Fase 9)."""
         self.cidade_spawn = self.cidades_salvas[0]
         print(f"🏰 Cidade Principal Selecionada: {self.cidade_spawn['nome']} (ID: {self.cidade_spawn['db_id']})")
-        self.db.salvar_meta(MetaChave.CIDADE_SIMULADA, str(self.cidade_spawn['db_id']))
+        self.db.meta.salvar(MetaChave.CIDADE_SIMULADA, str(self.cidade_spawn['db_id']))
         # Fase 2.2 (P1.5): registra quais cidades têm simulação ativa — hoje só a spawn,
         # mas a Fase 9 pode ativar mais de uma sem precisar inventar essa chave do zero.
-        self.db.salvar_meta(MetaChave.CIDADES_ATIVAS, json.dumps([self.cidade_spawn['db_id']]))
+        self.db.meta.salvar(MetaChave.CIDADES_ATIVAS, json.dumps([self.cidade_spawn['db_id']]))
 
     def _importar_geometria_das_cidades(self) -> None:
         """Fase 4.5 (P2.2): importa os edifícios da geometria REAL de cada cidade como
@@ -215,7 +215,7 @@ class PopuladorDeMundo:
         """Candidatos a "local de trabalho" pra dar contexto de flavor à IA de DNA do
         NPC. Exclui categorias sociais (o NPC não "trabalha" na praça)."""
         self.todos_locais_spawn = [
-            l for l in self.db.carregar_locais_por_id().values()
+            l for l in self.db.locais.carregar_por_id().values()
             if l.cidade_id == self.cidade_spawn['db_id']
             and l.categoria not in (CategoriaLocal.TAVERNA.value, CategoriaLocal.PUBLICO.value, CategoriaLocal.RESIDENCIA.value)
         ]
@@ -301,7 +301,7 @@ class PopuladorDeMundo:
                 personalidade=personalidade,
                 background=background
             )
-            self.db.salvar_npc(npc)
+            self.db.npcs.salvar(npc)
             self.npcs_gerados.append(npc)
             print(f"  ✅ Gerado: {nome} ({genero}) | Idade: {idade_inicial_anos} anos | Cargo IA: {profissao}")
 
@@ -329,9 +329,9 @@ class PopuladorDeMundo:
             m.relacionamentos[f.id] = af
             f.relacionamentos[m.id] = af
 
-            self.db.salvar_npc(m)
-            self.db.salvar_npc(f)
-            self.db.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
+            self.db.npcs.salvar(m)
+            self.db.npcs.salvar(f)
+            self.db.npcs.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
             print(f"  ❤️  CASAL FORMADO: {m.nome} e {f.nome} morando na {casa_comum} (Afinidade: {af})!")
 
     def _estabelecer_lacos_sociais(self) -> None:
@@ -352,11 +352,11 @@ class PopuladorDeMundo:
                 npc_a.relacionamentos[npc_b.id] = af
                 npc_b.relacionamentos[npc_a.id] = af
 
-                self.db.salvar_npc(npc_a)
-                self.db.salvar_npc(npc_b)
+                self.db.npcs.salvar(npc_a)
+                self.db.npcs.salvar(npc_b)
 
                 vinculo = (VinculoSocial.AMIGO if af >= amigo_vinculo_limiar else VinculoSocial.CONHECIDO).value
-                self.db.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
+                self.db.npcs.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
 
     def _inicializar_mercado_de_trabalho(self) -> None:
         print("\n💼 Inicializando mercado de trabalho e preenchendo vagas...")

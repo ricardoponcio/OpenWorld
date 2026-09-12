@@ -21,23 +21,33 @@ from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 from ..geo import GeoUtils
 from ..config_loader import cfg_get
+from ..mundo import EstadoDoMundo
 
 class NPCHousingManager:
-    @staticmethod
-    def iniciar_obra_para_casal(engine, n1: NPC, n2: NPC = None) -> bool:
+    """Expansão urbana: detecta casas superlotadas e inicia obras.
+
+    Recebe o mundo (não a engine inteira) — precisa de locais, npcs, cidades e do
+    repositório de locais, e de nada mais. Isso é o que permite testá-lo com um
+    mundo sintético em memória (R-F01)."""
+
+    def __init__(self, mundo: EstadoDoMundo, config: dict):
+        self._mundo = mundo
+        self._config = config
+
+    def iniciar_obra_para_casal(self, n1: NPC, n2: NPC = None) -> bool:
         """
         Cria uma nova obra de residência alocada no mapa para o casal especificado.
         Reutilizável para expansão urbana e novos casamentos.
         """
         # Evita duplicar se já possui obra ativa em andamento
-        if NPCUtils.obter_obra_do_npc(engine.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(engine.locais, n2)):
+        if NPCUtils.obter_obra_do_npc(self._mundo.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(self._mundo.locais, n2)):
             return False
 
-        cfg_urbano = cfg_get(engine.config, "geracao_urbana")
+        cfg_urbano = cfg_get(self._config, "geracao_urbana")
         raio = cfg_get(cfg_urbano, "locais_raio_px")
-        nivel_mar = cfg_get(engine.config, "cartografia", "nivel_mar")
+        nivel_mar = cfg_get(self._config, "cartografia", "nivel_mar")
 
-        cidade = engine.cidades.get(n1.cidade_id)
+        cidade = self._mundo.cidades.get(n1.cidade_id)
         cx, cy = (cidade.x_global, cidade.y_global) if cidade else (0, 0)
 
         nova_obra_id = f"casa_obra_{int(time.time())}_{random.randint(0, 999)}"
@@ -60,12 +70,11 @@ class NPCHousingManager:
             integridade=0,
             capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"),
         )
-        engine.locais[nova_obra_id] = obra
-        engine.db.salvar_local(obra)
+        self._mundo.locais[nova_obra_id] = obra
+        self._mundo.db.locais.salvar(obra)
         return True
 
-    @staticmethod
-    def processar_habitacao(engine):
+    def processar_habitacao(self):
         """
         Verifica diariamente casas superlotadas e inicia a construção de novos
         lotes para aliviar o espaço.
@@ -75,13 +84,13 @@ class NPCHousingManager:
         - Deve existir ao menos um casal de ADULTOS com cônjuge.
         - NENHUM morador da casa deve já ter uma obra em andamento.
         """
-        por_casa = NPCUtils.agrupar_por_casa(engine.npcs)
+        por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
 
         for casa_id, moradores in por_casa.items():
-            if casa_id not in engine.locais:
+            if casa_id not in self._mundo.locais:
                 continue
 
-            casa = engine.locais[casa_id]
+            casa = self._mundo.locais[casa_id]
             if len(moradores) <= casa.capacidade:
                 continue  # Casa não superlotada, nada a fazer
 
@@ -109,14 +118,14 @@ class NPCHousingManager:
 
             # Bug B: se QUALQUER morador já tem obra em andamento, não disparar nova obra
             ja_ha_obra = any(
-                NPCUtils.obter_obra_do_npc(engine.locais, m) is not None
+                NPCUtils.obter_obra_do_npc(self._mundo.locais, m) is not None
                 for m in moradores
             )
             if ja_ha_obra:
                 continue
 
             # Iniciar a construção da obra usando a função utilitária
-            sucesso = NPCHousingManager.iniciar_obra_para_casal(engine, n1, n2)
+            sucesso = self.iniciar_obra_para_casal(n1, n2)
             if sucesso:
                 WorldLogger.info(
                     f"🏗️ [EXPANSÃO URBANA] A família de {n1.nome} iniciou a construção de "

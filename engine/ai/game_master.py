@@ -3,6 +3,7 @@ from typing import Dict, List
 from .client import AIClient
 from .utils import AIUtils
 from ..logger import WorldLogger
+from ..models import ComandoMestre, HumorNPC
 
 
 class AIGameMasterClient:
@@ -10,7 +11,11 @@ class AIGameMasterClient:
     Cliente de IA do Modo Mestre (Frente 5) — irmão de AIStorytellerClient, mas para
     diálogo contínuo em vez de disparo único: recebe o histórico da conversa e a
     mensagem do jogador, devolve uma narração livre e (opcionalmente) ações de mundo
-    propostas. Nenhuma ação é aplicada aqui — só sugerida; ver engine/mechanics/mestre.py.
+    propostas. Nenhuma ação é aplicada aqui — só sugerida; ver engine/mechanics/mestre/.
+
+    Os comandos e humores aceitos são injetados no prompt a partir dos enums
+    (`ComandoMestre`, `HumorNPC`), não copiados no .txt: o vocabulário que a IA pode usar
+    e o que o código aceita de volta são a mesma lista, por construção (R-F03).
     """
 
     @staticmethod
@@ -27,6 +32,8 @@ class AIGameMasterClient:
                 contexto_json=json.dumps(contexto, indent=2, ensure_ascii=False),
                 historico=historico_texto,
                 mensagem_jogador=mensagem_jogador,
+                comandos=", ".join(c.value for c in ComandoMestre),
+                humores=", ".join(f'"{h.value}"' for h in HumorNPC),
             )
             res = AIClient.query(prompt, json_format=True, timeout=60.0)
             data = AIUtils.parse_json_safely(res)

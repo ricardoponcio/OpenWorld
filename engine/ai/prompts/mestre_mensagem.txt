@@ -18,9 +18,12 @@ Responda SEMPRE em JSON puro, sem markdown, no formato exato abaixo:
         {{ "comando": "CRIAR_LOCAL", "dados": {{ "nome": "...", "tipo": "Trabalho|Social|Casa", "categoria": "fazenda|quartel|taverna|escola|hospital|loja|fabrica", "descricao": "..." }} }},
         {{ "comando": "DESTRUIR_LOCAL", "id": "..." }},
         {{ "comando": "REATRIBUIR_NPC", "id": "...", "dados": {{ "local_trabalho_id": "ID_OU_NOVO_LOCAL", "casa_id": "ID_OU_NOVO_LOCAL" }} }},
-        {{ "comando": "AFETAR_NPC", "id": "...", "dados": {{ "saude": -10, "humor": "..." }} }}
+        {{ "comando": "AFETAR_NPC", "id": "...", "dados": {{ "saude": -10, "humor": "UM_DOS_HUMORES" }} }}
     ]
 }}
+
+COMANDOS ACEITOS (qualquer outro valor de "comando" é descartado): {comandos}
+HUMORES VÁLIDOS para AFETAR_NPC (qualquer outro vira Neutro): {humores}
 
 REGRAS:
 1. "acoes_propostas" é OPCIONAL — na maioria das respostas fica vazia ([]). Só proponha uma ação de
@@ -28,5 +31,7 @@ REGRAS:
 2. NENHUMA ação proposta é aplicada automaticamente — o jogador vai revisar e confirmar manualmente
    antes de qualquer mudança chegar ao mundo. Pode propor livremente, sem medo de "quebrar" o mundo.
 3. Use APENAS os IDs de NPCs e locais listados no estado atual. NUNCA invente IDs.
+   Exceção: para apontar um NPC ao local que você está criando NESTA MESMA resposta, use
+   o literal "NOVO_LOCAL" e ponha o CRIAR_LOCAL antes do REATRIBUIR_NPC na lista.
 4. A "narracao" deve estar sempre preenchida, mesmo quando não há nenhuma ação proposta.
 5. NÃO use markdown (```json). Retorne APENAS o JSON puro, sem texto antes ou depois.

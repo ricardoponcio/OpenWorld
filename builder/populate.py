@@ -14,6 +14,7 @@ import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from engine.database import DatabaseManager
+from engine.repositorios.seed import SemeadorDeDominio
 from builder.populador import PopuladorDeMundo
 
 DB_PATH = "database/openworld.db"
@@ -21,6 +22,7 @@ DB_PATH = "database/openworld.db"
 
 def populate_world(num_npcs=20, tema="Fantasia Medieval", usar_ia=True, ia_max_thread=4):
     db = DatabaseManager(DB_PATH)
+    SemeadorDeDominio.aplicar(db)
     populador = PopuladorDeMundo(db, tema, usar_ia, ia_max_thread)
     populador.executar(num_npcs)
 

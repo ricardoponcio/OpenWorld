@@ -8,31 +8,33 @@ DESCRIÇÃO:
     diretamente, só sinaliza via mundo_meta (mesmo padrão já usado por pausa e
     velocidade) e espera o run_simulation.py consumir. Ver docs/ROADMAP.md, Frente 5.
 """
-import os
 import json
 import time
 from flask import Blueprint, request, jsonify
 
-from engine.database import DatabaseManager
+from web.banco import obter_db
 from engine.mechanics.mestre import MestreManager
+from engine.config_loader import carregar_config_global
 from engine.ai import AIGameMasterClient
 from engine.models import MetaChave
 
 mestre_bp = Blueprint('mestre', __name__)
 
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'database', 'openworld.db'))
+
+def obter_mestre() -> MestreManager:
+    """MestreManager recebe banco e config (R-F03). O banco é a instância única do
+    processo (web/banco.py) e a config já vem do cache do resolvedor — nenhum dos dois
+    é construído de novo por requisição."""
+    return MestreManager(obter_db(), carregar_config_global())
+
 TEMA_PADRAO = "Fantasia Medieval"
-
-
-def _get_db():
-    return DatabaseManager(DB_PATH)
 
 
 @mestre_bp.route('/api/mestre/historico')
 def get_historico():
     try:
-        db = _get_db()
-        historico = db.carregar_historico_mestre(50)
+        db = obter_db()
+        historico = db.mestre.carregar_historico(50)
         for h in historico:
             h['acoes_propostas'] = json.loads(h['acoes_propostas']) if h['acoes_propostas'] else []
         return jsonify({"historico": historico})
@@ -43,9 +45,9 @@ def get_historico():
 @mestre_bp.route('/api/mestre/estado')
 def get_estado():
     try:
-        db = _get_db()
-        restante = int(db.carregar_meta(MetaChave.AVANCAR_MINUTOS) or 0)
-        pausado = db.carregar_meta(MetaChave.SIMULACAO_PAUSADA) == "1"
+        db = obter_db()
+        restante = int(db.meta.carregar(MetaChave.AVANCAR_MINUTOS) or 0)
+        pausado = db.meta.carregar(MetaChave.SIMULACAO_PAUSADA) == "1"
         return jsonify({"pausado": pausado, "avancando": restante > 0, "minutos_restantes": restante})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -60,13 +62,13 @@ def post_mensagem():
         if not mensagem:
             return jsonify({"error": "Mensagem vazia."}), 400
 
-        db = _get_db()
-        contexto = MestreManager.montar_contexto(db)
-        historico = db.carregar_historico_mestre(20)
+        db = obter_db()
+        contexto = obter_mestre().montar_contexto()
+        historico = db.mestre.carregar_historico(20)
 
-        db.salvar_mensagem_mestre('jogador', mensagem)
+        db.mestre.salvar_mensagem('jogador', mensagem)
         resposta = AIGameMasterClient.gerar_resposta_mestre(tema, contexto, historico, mensagem)
-        conversa_id = db.salvar_mensagem_mestre('mestre', resposta['narracao'], resposta.get('acoes_propostas') or [])
+        conversa_id = db.mestre.salvar_mensagem('mestre', resposta['narracao'], resposta.get('acoes_propostas') or [])
 
         return jsonify({
             "conversa_id": conversa_id,
@@ -87,16 +89,16 @@ def post_confirmar_acoes():
         if not conversa_id:
             return jsonify({"error": "conversa_id é obrigatório."}), 400
 
-        db = _get_db()
-        msg = db.carregar_mensagem_mestre(conversa_id)
+        db = obter_db()
+        msg = db.mestre.carregar_mensagem(conversa_id)
         if not msg or msg['autor'] != 'mestre':
             return jsonify({"error": "Conversa não encontrada ou não é uma resposta do Mestre."}), 404
         if msg['aplicada']:
             return jsonify({"error": "Estas ações já foram aplicadas."}), 400
 
         acoes = json.loads(msg['acoes_propostas']) if msg['acoes_propostas'] else []
-        resultados = MestreManager.aplicar_acoes(db, acoes)
-        db.marcar_mestre_aplicada(conversa_id)
+        resultados = obter_mestre().aplicar_acoes(acoes)
+        db.mestre.marcar_aplicada(conversa_id)
 
         return jsonify({"aplicado": True, "resultados": resultados})
     except Exception as e:
@@ -114,38 +116,38 @@ def post_avancar_tempo():
         if minutos <= 0:
             return jsonify({"error": "minutos deve ser positivo."}), 400
 
-        db = _get_db()
-        ultimo_rowid = MestreManager.ultimo_rowid_eventos(db)
+        db = obter_db()
+        ultimo_rowid = obter_mestre().ultimo_rowid_eventos()
 
         # Garante que a simulação está pausada — sem isso, o run_simulation.py nunca
         # olha para mestre_avancar_minutos_restantes (esse contador só é consumido
         # dentro do ramo de pausa do loop).
-        db.salvar_meta(MetaChave.SIMULACAO_PAUSADA, "1")
-        db.salvar_meta(MetaChave.AVANCAR_MINUTOS, str(minutos))
+        db.meta.salvar(MetaChave.SIMULACAO_PAUSADA, "1")
+        db.meta.salvar(MetaChave.AVANCAR_MINUTOS, str(minutos))
 
         # Espera o run_simulation.py consumir o avanço (poll curto). Timeout generoso
         # o bastante mesmo para saltos grandes (medido ~1.2ms/tick na Frente 4).
         timeout = max(5.0, minutos * 0.02)
         inicio = time.time()
         while time.time() - inicio < timeout:
-            restante = int(db.carregar_meta(MetaChave.AVANCAR_MINUTOS) or 0)
+            restante = int(db.meta.carregar(MetaChave.AVANCAR_MINUTOS) or 0)
             if restante <= 0:
                 break
             time.sleep(0.1)
         else:
             return jsonify({"error": "Tempo esgotado esperando o run_simulation.py avançar. Ele está rodando?"}), 504
 
-        eventos = MestreManager.coletar_eventos_apos(db, ultimo_rowid)
+        eventos = obter_mestre().coletar_eventos_apos(ultimo_rowid)
 
-        contexto = MestreManager.montar_contexto(db)
+        contexto = obter_mestre().montar_contexto()
         contexto["eventos_do_periodo"] = [f"{e['timestamp']}: {e['resumo_estruturado']}" for e in eventos]
 
-        historico = db.carregar_historico_mestre(20)
+        historico = db.mestre.carregar_historico(20)
         mensagem_sintetica = f"(O tempo avançou {minutos} minutos de jogo.) Narre o que aconteceu nesse período."
 
-        db.salvar_mensagem_mestre('jogador', mensagem_sintetica)
+        db.mestre.salvar_mensagem('jogador', mensagem_sintetica)
         resposta = AIGameMasterClient.gerar_resposta_mestre(tema, contexto, historico, mensagem_sintetica)
-        conversa_id = db.salvar_mensagem_mestre('mestre', resposta['narracao'], resposta.get('acoes_propostas') or [])
+        conversa_id = db.mestre.salvar_mensagem('mestre', resposta['narracao'], resposta.get('acoes_propostas') or [])
 
         return jsonify({
             "conversa_id": conversa_id,

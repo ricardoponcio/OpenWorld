@@ -181,7 +181,7 @@ class NPCUtils:
         """
         Carrega a data simulada do banco de dados (meta) ou retorna o valor inicial padrão (Dia 1, 06:00).
         """
-        hora_salva = db.carregar_meta(MetaChave.HORA_ISO)
+        hora_salva = db.meta.carregar(MetaChave.HORA_ISO)
         if hora_salva:
             try:
                 return datetime.fromisoformat(hora_salva)
