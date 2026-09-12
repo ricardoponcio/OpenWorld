@@ -20,8 +20,12 @@ class NPCActionManager:
         self._movimento = movimento or NPCMovementManager(mundo, config)
         self._reino = reino or KingdomManager(mundo, config)
 
-    def executar_acao(self, npc: NPC):
-        """Orquestra e delega a execução da ação atual do NPC."""
+    def executar_acao(self, npc: NPC, npcs_por_casa: dict = None):
+        """Orquestra e delega a execução da ação atual do NPC.
+
+        `npcs_por_casa` (P03, docs/PLANO_CIDADE_VIVA.md): agrupamento de moradores por
+        casa, pré-calculado UMA VEZ por tick por `GameLoop.executar_tick` — evita que
+        `_executar_comer` (chamado por NPC, por tick) refaça a varredura O(NPCs)."""
         cfg_acoes = cfg_get(self._config, "acoes")
         cfg_bio   = cfg_get(self._config, "biologia_e_sociedade")
 
@@ -30,7 +34,7 @@ class NPCActionManager:
         if acao == Acao.DORMIR:
             self._executar_dormir(npc, cfg_acoes)
         elif acao == Acao.COMER:
-            self._executar_comer(npc, cfg_acoes, cfg_bio)
+            self._executar_comer(npc, cfg_acoes, cfg_bio, npcs_por_casa)
         elif acao == Acao.TRABALHAR:
             self._executar_trabalhar(npc, cfg_acoes)
         elif acao == Acao.SOCIALIZAR:
@@ -60,7 +64,7 @@ class NPCActionManager:
             npc.acao_atual = Acao.OCIOSO
             WorldLogger.debug(f"🥱 {npc.nome} acordou e mudou para Ocioso (Energia: {npc.energia:.1f})", npc=npc)
 
-    def _executar_comer(self, npc: NPC, cfg_acoes: dict, cfg_bio: dict):
+    def _executar_comer(self, npc: NPC, cfg_acoes: dict, cfg_bio: dict, npcs_por_casa: dict = None):
         self._movimento.mover_para_restaurante(npc)
 
         cfg = cfg_get(cfg_acoes, "comer")
@@ -83,6 +87,8 @@ class NPCActionManager:
             if pais_elegiveis:
                 pais_elegiveis.sort(key=lambda p: p.dinheiro_total_pc, reverse=True)
                 pagador = pais_elegiveis[0]
+        elif npcs_por_casa is not None:
+            num_dependentes = NPCUtils.contar_dependentes_na_casa_agrupado(npc, npcs_por_casa)
         else:
             num_dependentes = NPCUtils.contar_dependentes_na_casa(self._mundo.npcs, npc)
 

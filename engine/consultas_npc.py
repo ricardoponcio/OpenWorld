@@ -58,8 +58,25 @@ class NPCUtils:
         """Quantos filhos dependentes (bebê/criança/marcado dependente) de `npc` moram
         na mesma casa (R-D02) — a mesma contagem estava copiada quase idêntica em
         `loop.py` (recálculo de `num_dependentes` a cada tick) e `actions.py`
-        (multiplicador de custo da refeição)."""
+        (multiplicador de custo da refeição).
+
+        ⚠️ O(NPCs) por chamada (`obter_moradores_da_casa` varre todo mundo.npcs) — P03
+        (docs/PLANO_CIDADE_VIVA.md): com 750 NPCs chamados por NPC por tick isso é
+        O(NPCs²). Só pra teste/uso pontual; no laço de tick use
+        `contar_dependentes_na_casa_agrupado` com `agrupar_por_casa` pré-calculado."""
         moradores = NPCUtils.obter_moradores_da_casa(npcs, npc.casa_id, apenas_vivos=True)
+        return sum(
+            1 for n in moradores
+            if n.id != npc.id and (n.mae_id == npc.id or n.pai_id == npc.id) and n.eh_dependente()
+        )
+
+    @staticmethod
+    def contar_dependentes_na_casa_agrupado(npc: NPC, npcs_por_casa: Dict[str, List[NPC]]) -> int:
+        """Mesma conta de `contar_dependentes_na_casa` (P03), recebendo os moradores JÁ
+        agrupados por casa (`agrupar_por_casa`, calculado uma vez por tick) em vez de
+        varrer `mundo.npcs` de novo pra cada NPC — é o que tira o laço principal do
+        tick de O(NPCs²) pra O(NPCs)."""
+        moradores = npcs_por_casa.get(npc.casa_id, [])
         return sum(
             1 for n in moradores
             if n.id != npc.id and (n.mae_id == npc.id or n.pai_id == npc.id) and n.eh_dependente()
@@ -80,21 +97,30 @@ class NPCUtils:
         return len(moradores_vivos) >= casa.capacidade
 
     @staticmethod
-    def obter_casas_vazias(locais: Dict[str, 'Local'], npcs: List['NPC'], ignorar_id: str = "") -> List['Local']:
+    def obter_casas_vazias(mundo, cidade_id, ignorar_id: str = "", npcs_por_casa: Dict[str, List['NPC']] = None) -> List['Local']:
         """
-        Retorna uma lista de residências ativas (status=1) que estão completamente vazias (zero moradores vivos).
+        Residências ativas (status=1) da CIDADE `cidade_id` que estão completamente
+        vazias (zero moradores vivos).
+
+        P03 (docs/PLANO_CIDADE_VIVA.md): consulta `mundo.indice.residencias_ativas`
+        (por cidade) em vez de varrer TODOS os locais do mundo — O(locais x NPCs) virou
+        O(residências da cidade). De quebra fecha o mesmo bug de "cidade errada" que P04
+        corrige em movement.py: antes buscava em `locais.items()` sem filtrar cidade,
+        então um casal podia ser realocado pra uma casa vazia do outro lado do mundo.
+
+        `npcs_por_casa` pode vir pré-agrupado (o laço de tick já monta um, P03); se não
+        vier, agrupa aqui — esta chamada é rara (só em casamento), o custo não importa.
         """
-        if not locais:
-            return []
+        if npcs_por_casa is None:
+            npcs_por_casa = NPCUtils.agrupar_por_casa(mundo.npcs)
 
         casas_vazias = []
-        for local_id, local in locais.items():
-            if local.categoria.lower() == "residencia" and local.status == 1:
-                if local_id == ignorar_id:
-                    continue
-                moradores = NPCUtils.obter_moradores_da_casa(npcs, local_id, apenas_vivos=True)
-                if len(moradores) == 0:
-                    casas_vazias.append(local)
+        for local_id in mundo.indice.residencias_ativas(cidade_id):
+            if local_id == ignorar_id or npcs_por_casa.get(local_id):
+                continue
+            local = mundo.locais.get(local_id)
+            if local:
+                casas_vazias.append(local)
         return casas_vazias
 
     @staticmethod

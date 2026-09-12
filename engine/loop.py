@@ -52,13 +52,20 @@ class GameLoop:
         eventos_globais = self._atualizar_eventos_globais()
         self._executar_rotinas_agendadas()
 
+        # P03 (docs/PLANO_CIDADE_VIVA.md): agrupamento calculado UMA VEZ por tick, não
+        # por NPC — `contar_dependentes_na_casa` original era O(NPCs) por chamada,
+        # chamada pra todo NPC vivo, todo tick (O(NPCs²), 562 mil comparações com 750
+        # NPCs). Não vira atributo do GameLoop entre ticks (ficaria velho); é
+        # parâmetro, recalculado aqui.
+        npcs_por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+
         maes_em_parto = []
         for npc in self._mundo.npcs:
             if not npc.esta_vivo():
                 continue
 
-            self._aplicar_metabolismo(npc, maes_em_parto)
-            self._decidir_e_executar(npc, eventos_globais)
+            self._aplicar_metabolismo(npc, maes_em_parto, npcs_por_casa)
+            self._decidir_e_executar(npc, eventos_globais, npcs_por_casa)
             self._aplicar_consequencias_de_saude(npc)
             npc.normalizar_necessidades()
             self._humor.processar_humor(npc)
@@ -101,7 +108,7 @@ class GameLoop:
         if hora == cfg_get(cfg_bio, "pagamento_reino_hora"):
             self._reino.processar_pagamentos_reino()
 
-    def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list):
+    def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list, npcs_por_casa: dict):
         """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação.
         Também recalcula `num_dependentes` (campo derivado, ver `models.NPC`)."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
@@ -124,9 +131,9 @@ class GameLoop:
         npc.fome += fome_ganho
         npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max"))
 
-        npc.num_dependentes = NPCUtils.contar_dependentes_na_casa(self._mundo.npcs, npc)
+        npc.num_dependentes = NPCUtils.contar_dependentes_na_casa_agrupado(npc, npcs_por_casa)
 
-    def _decidir_e_executar(self, npc: NPC, eventos_globais: list):
+    def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual
         NPCBrain.decidir_acao(npc, self._mundo.data_simulada.hour, self._config,
                               self._mundo.locais, eventos_globais, self._mundo.indice)
@@ -134,7 +141,7 @@ class GameLoop:
         if npc.acao_atual != acao_anterior:
             WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}", npc=npc)
 
-        self._acoes.executar_acao(npc)
+        self._acoes.executar_acao(npc, npcs_por_casa)
 
     def _aplicar_consequencias_de_saude(self, npc: NPC):
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")

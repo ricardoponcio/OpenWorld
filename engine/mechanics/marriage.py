@@ -78,7 +78,7 @@ class NPCMarriageManager:
         teve_nova_casa = False
         if casa_cheia:
             # 1. Procurar uma casa totalmente vazia na cidade
-            casas_vazias = NPCUtils.obter_casas_vazias(self._mundo.locais, self._mundo.npcs, ignorar_id=casa_escolhida)
+            casas_vazias = NPCUtils.obter_casas_vazias(self._mundo, n1.cidade_id, ignorar_id=casa_escolhida)
 
             if casas_vazias:
                 casa_alvo = random.choice(casas_vazias)
@@ -164,23 +164,32 @@ class NPCMarriageManager:
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         # Carrega a chance de casamento passivo de forma configurável
         chance_uniao = cfg_get(cfg_bio, "casamento_chance_coabitacao")
-        
-        # Filtra apenas NPCs solteiros ativos (vivos)
-        solteiros = [n for n in self._mundo.npcs if n.esta_vivo() and not NPCUtils.tem_conjuge(n)]
-        
-        for n1 in solteiros:
-            for n2 in solteiros:
-                if n1.id == n2.id:
-                    continue
-                
-                # A validação biológica completa e de consanguinidade é delegada à função central
-                afinidade = n1.relacionamentos.get(n2.id, 0)
-                if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
-                    if random.random() < chance_uniao:
-                        casa_escolhida = n1.casa_id or n2.casa_id
-                        if casa_escolhida:
-                            # Realizar casamento completo e atômico
-                            self.realizar_casamento(n1, n2, casa_escolhida, surpresa=False)
-                            
-                            # Retorna para evitar processar mais de uma união no mesmo tick
-                            return
+
+        # Filtra apenas NPCs solteiros ativos (vivos), agrupados por CIDADE — casar
+        # gente de cidades diferentes nunca fez sentido (P03/P04, docs/
+        # PLANO_CIDADE_VIVA.md: mesmo raciocínio de "NPC não atravessa o mundo pra ir
+        # à taverna"), e de quebra reduz o par a par de todos-contra-todos pro par a
+        # par DENTRO de cada cidade — no mundo de 15 cidades isso já é boa parte do
+        # ganho, embora o double loop em si continue O(N²) por cidade.
+        solteiros_por_cidade = {}
+        for n in self._mundo.npcs:
+            if n.esta_vivo() and not NPCUtils.tem_conjuge(n):
+                solteiros_por_cidade.setdefault(n.cidade_id, []).append(n)
+
+        for solteiros in solteiros_por_cidade.values():
+            for n1 in solteiros:
+                for n2 in solteiros:
+                    if n1.id == n2.id:
+                        continue
+
+                    # A validação biológica completa e de consanguinidade é delegada à função central
+                    afinidade = n1.relacionamentos.get(n2.id, 0)
+                    if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
+                        if random.random() < chance_uniao:
+                            casa_escolhida = n1.casa_id or n2.casa_id
+                            if casa_escolhida:
+                                # Realizar casamento completo e atômico
+                                self.realizar_casamento(n1, n2, casa_escolhida, surpresa=False)
+
+                                # Retorna para evitar processar mais de uma união no mesmo tick
+                                return
