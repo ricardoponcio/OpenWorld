@@ -27,7 +27,11 @@ class NPCHousingManager:
     repositório de locais, e de nada mais. Isso é o que permite testá-lo com um
     mundo sintético em memória (R-F01). `urbanismo` é colaborador de domínio (O03):
     dono da MECÂNICA de "como um edifício nasce" (`abrir_obra`); este gerenciador
-    continua dono só da POLÍTICA — qual casal, quando."""
+    continua dono só da POLÍTICA — qual casal, quando.
+
+    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "habitacao_hora"
 
     def __init__(self, mundo: EstadoDoMundo, config: dict, urbanismo: GerenciadorUrbanismo = None):
         self._mundo = mundo

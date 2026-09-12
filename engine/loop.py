@@ -72,6 +72,21 @@ class GameLoop:
         self._eventos_globais = GlobalEventManager(mundo)
         self._humor = NPCMoodManager(config)
 
+        # A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cada mecânica declara a própria
+        # cadência (`CADENCIA`/`CADENCIA_HORA_CONFIG`, ver as classes) — acrescentar
+        # uma rotina diária nova é acrescentar uma linha aqui, nunca editar
+        # `_executar_rotinas_agendadas`. Só `por_dia` existe de verdade hoje; um modo
+        # grosso futuro (D17, Seção 5.5 do plano) seria "rode só as `por_dia` e
+        # resolva o resto por taxa" — não implementado, mas o ponto de extensão é
+        # este registro.
+        self._rotinas_diarias = [
+            (self._reproducao.CADENCIA_HORA_CONFIG, self._reproducao.processar_concepcao),
+            (self._ciclo_de_vida.CADENCIA_HORA_CONFIG, self._ciclo_de_vida.processar_crescimento),
+            (self._habitacao.CADENCIA_HORA_CONFIG, self._habitacao.processar_habitacao),
+            (self._urbanismo.CADENCIA_HORA_CONFIG, self._urbanismo.processar_urbanismo),
+            (self._reino.CADENCIA_HORA_CONFIG, self._reino.processar_pagamentos_reino),
+        ]
+
     def executar_tick(self):
         """Executa um tick completo da simulação social, biológica e econômica do reino."""
         self._avancar_relogio()
@@ -162,21 +177,18 @@ class GameLoop:
 
     def _executar_rotinas_agendadas(self):
         """Gatilhos baseados no relógio do jogo, disparados uma vez na hora exata
-        (minuto 0) — concepção noturna, crescimento, expansão urbana, pensões."""
+        (minuto 0) — concepção noturna, crescimento, expansão urbana, pensões.
+
+        A06: despacha por `self._rotinas_diarias` (montado no `__init__` a partir da
+        cadência que cada mecânica declara) — este método nunca muda pra acrescentar
+        uma rotina nova."""
         if self._mundo.data_simulada.minute != 0:
             return
-        cfg_bio = self._cfg_bio
         hora = self._mundo.data_simulada.hour
 
-        if hora == cfg_get(cfg_bio, "concepcao_hora"):
-            self._reproducao.processar_concepcao()
-        if hora == cfg_get(cfg_bio, "crescimento_hora"):
-            self._ciclo_de_vida.processar_crescimento()
-        if hora == cfg_get(cfg_bio, "habitacao_hora"):
-            self._habitacao.processar_habitacao()
-            self._urbanismo.processar_urbanismo()  # O02: comércio por demanda, mesma rotina diária
-        if hora == cfg_get(cfg_bio, "pagamento_reino_hora"):
-            self._reino.processar_pagamentos_reino()
+        for chave_hora, rotina in self._rotinas_diarias:
+            if cfg_get(self._cfg_bio, chave_hora) == hora:
+                rotina()
 
     def _aplicar_metabolismo(self, npc: NPC, minutos: int, maes_em_parto: list):
         """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação —

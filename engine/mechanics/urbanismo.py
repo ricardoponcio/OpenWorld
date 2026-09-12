@@ -40,6 +40,11 @@ CIDADES_GEOJSON_DIR = "database/cidades"
 
 
 class GerenciadorUrbanismo:
+    """A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
+    mecânica — mesmo gatilho diário de `NPCHousingManager` (`habitacao_hora`)."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "habitacao_hora"
+
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo
         self._config = config

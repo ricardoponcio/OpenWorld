@@ -40,7 +40,13 @@ class DadosBatizado:
 class NPCReproductionManager:
     """Concepção, parto e batizado. Recebe o mundo e a config, não a engine (R-F01):
     precisa dos NPCs, dos locais (para superlotação) e dos repositórios de NPC e
-    evento."""
+    evento.
+
+    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` são a
+    cadência declarada pela própria mecânica — `GameLoop` lê isto pra montar o
+    despacho diário, em vez de um `if hora ==` hardcoded por mecânica."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "concepcao_hora"
 
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo

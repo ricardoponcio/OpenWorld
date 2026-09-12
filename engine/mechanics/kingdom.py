@@ -13,6 +13,12 @@ from ..mundo import EstadoDoMundo
 
 
 class KingdomManager:
+    """A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
+    mecânica — a hora vem de `biologia_e_sociedade.pagamento_reino_hora`, não de um
+    bloco `reino` próprio (histórico, não vale a pena mover só por isto)."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "pagamento_reino_hora"
+
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo
         self._config = config

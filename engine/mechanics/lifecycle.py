@@ -12,7 +12,11 @@ class NPCLifecycleManager:
     """Transições de estágio de vida e morte. Recebe o mundo e a config, não a engine
     (R-F01). O gerenciador de herança entra pelo construtor — antes era importado
     dentro de `processar_morte` para quebrar um ciclo que não existe mais, e import
-    dentro de função é padrão proibido (ARQUITETURA.md Seção 15, item 7)."""
+    dentro de função é padrão proibido (ARQUITETURA.md Seção 15, item 7).
+
+    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "crescimento_hora"
 
     def __init__(self, mundo: EstadoDoMundo, config: dict, heranca: NPCLegacyManager = None):
         self._mundo = mundo
