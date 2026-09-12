@@ -18,6 +18,7 @@ if raiz not in sys.path:
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.generate_city_geometry import GeradorCidade
 from cartographer.cities.geometria import quad
+from cartographer.cities.geometria import lotes as lotes_mod
 from cartographer.cities.modelos import SitioCidade, MODELOS
 from cartographer.cities.modelos.base import ModeloCidade, Quadra, Malha
 from config import cfg_get
@@ -236,6 +237,49 @@ def test_sitio_declividade_em_fora_da_janela():
     raio_m = sitio.raio_janela_m / fator_janela
     assert sitio.declividade_em(raio_m * 4, 0.0) is None
     assert sitio.declividade_em(raio_m * 1.5, 0.0) is not None
+
+
+def test_todo_lote_tem_frente():
+    """Q01 — o invariante central do plano: para todo lote de toda quadra, a aresta de
+    FRENTE (`_lotes_da_faixa` monta o polígono sempre como
+    `[ext_t0, ext_t1, ins_t1, ins_t0]`, então é sempre a aresta 0-1) está CONTIDA, com
+    tolerância de 0,1 m, numa aresta do quarteirão urbanizável OU numa viela aberta pra
+    ele (Q01 Passo 2 — a quadra cortada não tem as duas metades como features de
+    quarteirão separadas, só a viela marca o novo limite). Roda direto sobre
+    `lotes.gerar_lotes_do_quarteirao`, sem depender de proximidade de rua renderizada —
+    isso evita o falso-negativo de uma aresta 'servico' de G04 (anel com vão aberto, sem
+    rua nenhuma por design) que uma checagem por distância-até-rua não distingue de uma
+    viela de Q01 (que tem rua real)."""
+    tolerancia = 0.1
+    via_largura = cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_m_por_classe")
+    recuo_rua = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_recuo_rua_m")
+
+    for nome in ("radial", "organica"):
+        cls = MODELOS[nome]
+        sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+        rng = random.Random(sitio.seed)
+        modelo = cls(sitio, CARTOGRAPHER_CONFIG, rng)
+        malha = modelo.construir_malha()
+
+        for quadra in malha.quadras:
+            distancias = [via_largura.get(c, via_largura.get("secundaria", 5.0)) / 2.0 + recuo_rua
+                          for c in quadra.classes_aresta]
+            quad_urbanizavel = quad.encolher_quad(quadra.vertices, distancias)
+            if quad_urbanizavel is None:
+                continue
+            lotes_info, _, vielas, _ = lotes_mod.gerar_lotes_do_quarteirao(
+                quad_urbanizavel, quadra.classes_aresta, quadra.banda, CARTOGRAPHER_CONFIG,
+                modelo.lote_fator_cidade, rng)
+            segmentos_validos = ([(quad_urbanizavel[k], quad_urbanizavel[(k + 1) % 4]) for k in range(4)]
+                                 + list(vielas))
+            for info in lotes_info:
+                p0, p1 = info["poligono"][0], info["poligono"][1]
+                tem_frente = any(
+                    _dist_ponto_segmento(p0, a, b) < tolerancia and _dist_ponto_segmento(p1, a, b) < tolerancia
+                    for a, b in segmentos_validos)
+                assert tem_frente, (
+                    f"modelo {nome}: lote sem frente (quadra {quadra.id}, aresta {info['aresta']}, "
+                    f"indice_no_anel {info['indice_no_anel']})")
 
 
 def test_determinismo():

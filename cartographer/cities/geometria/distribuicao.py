@@ -11,6 +11,13 @@ from dataclasses import dataclass, field
 from config import cfg_get
 from . import quad
 
+# G02/Q01: abaixo disto, dois vértices do footprint viram o MESMO ponto depois do
+# arredondamento de 6 casas decimais em px de mundo (1 px = 15,81 km — Seção 2.1), e o
+# polígono emitido fica com vértice duplicado. 0.1 m dá margem confortável acima da
+# granularidade real do arredondamento (~1,6 cm) sem rejeitar footprint nenhum de
+# verdade (um prédio tem metros de aresta, não centímetros).
+ARESTA_MINIMA_FOOTPRINT_M = 0.1
+
 
 @dataclass
 class _AlocacaoDeLotes:
@@ -32,12 +39,6 @@ class DistribuicaoMixin:
     encolhimento de footprint do edifício dentro do lote."""
 
     _ZONAS_ORDEM = ["nucleo", "centro", "meio", "borda"]
-
-    def _area_alvo_lote(self, banda):
-        """E2 (Seção 5.2): alvo de área do lote cresce com a banda (centro denso, borda
-        folgada) e leva o fator por cidade que o MODELO sorteou (`lote_fator_cidade`),
-        pra duas cidades do mesmo tamanho não serem idênticas."""
-        return self.lote_area_base * (self.lote_fator_por_banda ** (banda - 1)) * self.modelo.lote_fator_cidade
 
     def _zona_de_fallback(self, zona, zonas_disponiveis):
         """F2.2: se a zona pedida não existir nesta cidade (cidade pequena com poucos
@@ -68,7 +69,10 @@ class DistribuicaoMixin:
         fator_linear = math.sqrt(taxa_efetiva)
         cx = sum(p[0] for p in recuado) / len(recuado)
         cy = sum(p[1] for p in recuado) / len(recuado)
-        return [(cx + (x - cx) * fator_linear, cy + (y - cy) * fator_linear) for x, y in recuado]
+        footprint = [(cx + (x - cx) * fator_linear, cy + (y - cy) * fator_linear) for x, y in recuado]
+        if quad.aresta_minima(footprint) < ARESTA_MINIMA_FOOTPRINT_M:
+            return None  # lote em cunha (canto de faixa trapezoidal) — recuo colapsa a ponta
+        return footprint
 
     def _distribuir_edificios(self, malha):
         """Distribuição dirigida (F2, Seção 5.2): decide primeiro QUANTOS de cada tipo a
@@ -89,7 +93,8 @@ class DistribuicaoMixin:
         quarteiroes_por_zona = collections.defaultdict(list)
         lotes_por_quarteirao = collections.defaultdict(list)
         zona_ja_vista = {}
-        for pos, (lote, quadra) in enumerate(self._lotes):
+        for pos, item in enumerate(self._lotes):
+            quadra = item.quadra
             if quadra.id not in zona_ja_vista:
                 zona_ja_vista[quadra.id] = self.modelo.zona_de(quadra)
                 quarteiroes_por_zona[zona_ja_vista[quadra.id]].append(quadra)
@@ -140,7 +145,8 @@ class DistribuicaoMixin:
 
         vistas = set()
         todos_quarteiroes = []
-        for _, quadra in self._lotes:
+        for item in self._lotes:
+            quadra = item.quadra
             if quadra.id not in vistas:
                 vistas.add(quadra.id)
                 todos_quarteiroes.append(quadra)
@@ -163,12 +169,16 @@ class DistribuicaoMixin:
 
     def _emitir_edificios(self, alocacao: _AlocacaoDeLotes) -> None:
         """Passada final: o resto. Lote com atribuição (marco ou comércio de bairro) usa
-        a entrada atribuída; lote sem atribuição vira Residência."""
+        a entrada atribuída; lote sem atribuição vira Residência.
+
+        Armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o edifício usa o MESMO id do lote onde
+        nasce — não um contador global de emissão, que desloca `NPC.casa_id`/
+        `local_trabalho_id` de todo mundo sempre que uma quadra a mais é descartada."""
         residencia_padrao = cfg_get(self.cfg, "cidade_geo_residencia_padrao")
         entrada_padrao = cfg_get(self.cfg, "cidade_geo_catalogo_entrada_padrao")
-        idx_edificio = 0
 
-        for pos, (lote, quadra) in enumerate(self._lotes):
+        for pos, item in enumerate(self._lotes):
+            lote, quadra, lote_id = item.poligono, item.quadra, item.id
             cx = sum(p[0] for p in lote) / len(lote)
             cy = sum(p[1] for p in lote) / len(lote)
 
@@ -195,14 +205,13 @@ class DistribuicaoMixin:
                 capacidade = entrada.get("capacidade", entrada_padrao["capacidade"])
                 salario = entrada.get("salario_base", entrada_padrao["salario_base"])
 
-            idx_edificio += 1
-            slug_id = f"{self.nome.lower().replace(' ', '_')}_{idx_edificio:03d}"
+            sufixo_lote = lote_id.rsplit("_l", 1)[-1]
             nome_completo = (f"{nome_tipo} de {self.nome}" if nome_tipo != "Residência"
-                              else f"Residência {idx_edificio:03d} — {quadra.bairro}")
+                              else f"Residência {quadra.bairro} {sufixo_lote}")
 
             altitude_local = self.sitio.altitude_em(cx, cy)
             self._add_feature("Polygon", footprint + [footprint[0]], "edificio", {
-                "id": slug_id,
+                "id": lote_id,
                 "nome": nome_completo,
                 "categoria": categoria,
                 "tipo_local": nome_tipo,

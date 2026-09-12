@@ -7,12 +7,18 @@ em lotes, footprint, distribuição dirigida (F2/F3, em `distribuicao.py`), mura
 emissão de feature, índice. Nenhum modelo reimplementa nada disto.
 """
 import math
+from collections import namedtuple
 
 from cartographer.cities.escala import zoom_min_por_camada
 from config import cfg_get
 
-from . import quad
+from . import lotes, quad
 from .distribuicao import DistribuicaoMixin
+
+# Q01/armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o que a distribuição de edifícios
+# (distribuicao.py) precisa saber de cada lote emitido. `id` é o id ESTÁVEL do lote
+# (posição na malha, não ordem de emissão) — o edifício que nasce nele reusa o mesmo id.
+_LoteEmitido = namedtuple("_LoteEmitido", ["poligono", "quadra", "id", "classe_frente"])
 
 
 class GeradorCidade(DistribuicaoMixin):
@@ -35,12 +41,10 @@ class GeradorCidade(DistribuicaoMixin):
         self.cfg = modelo.cfg
         self.metros_por_px = sitio.metros_por_px
         # Todo modelo expõe seu próprio "quão grande é a cidade" — pro zoom_min e pra
-        # área-alvo de lote (via `modelo.lote_fator_cidade`, lido em `_area_alvo_lote`).
+        # profundidade de lote (via `modelo.lote_fator_cidade`, Q01: `lotes.py`).
         self.raio_m = modelo.raio_m
+        self.slug = self.nome.lower().replace(" ", "_")
 
-        self.lote_area_base = cfg_get(self.cfg, "cidade_geo_lote_area_base_m2")
-        self.lote_fator_por_banda = cfg_get(self.cfg, "cidade_geo_lote_fator_por_banda")
-        self.lote_profundidade_max = cfg_get(self.cfg, "cidade_geo_lote_profundidade_max")
         self.quadra_area_minima = cfg_get(self.cfg, "cidade_geo_quadra_area_minima_m2")
         self.recuo_rua = cfg_get(self.cfg, "cidade_geo_recuo_rua_m")
         self.via_largura_por_classe = cfg_get(self.cfg, "cidade_via_largura_m_por_classe")
@@ -122,8 +126,13 @@ class GeradorCidade(DistribuicaoMixin):
 
     def _gerar_quarteiroes_e_lotes(self, malha):
         """Pega os quads CRUS que o modelo devolveu (`malha.quadras`) e faz o inset pela
-        faixa de domínio (E1) + subdivisão em lotes (E2) — idêntico pra qualquer modelo."""
-        self._lotes = []  # lista de (lote_poligono, Quadra)
+        faixa de domínio (E1) + a subdivisão em lotes de Q01 (anel perimetral + pátio,
+        `lotes.py`) — idêntico pra qualquer modelo. Toda quadra rende pátio (0, 1 ou 2 —
+        2 só quando funda demais e vira duas) e vielas de serviço (só nesse caso), que
+        são emitidas ao FINAL (`_emitir_vielas`) — `_emitir_ruas` já rodou antes desta
+        função, e a viela só existe depois da subdivisão (não reordene `gerar()`)."""
+        self._lotes = []  # lista de _LoteEmitido
+        vielas_pendentes = []
         for quadra in malha.quadras:
             distancias = [self._distancia_faixa_dominio(c) for c in quadra.classes_aresta]
             quad_urbanizavel = quad.encolher_quad(quadra.vertices, distancias)
@@ -134,13 +143,40 @@ class GeradorCidade(DistribuicaoMixin):
             self._add_feature("Polygon", quad_urbanizavel + [quad_urbanizavel[0]], "quarteirao",
                               {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str})
 
-            area_alvo = self._area_alvo_lote(quadra.banda)
-            for lote in quad.subdividir_lote_recursivo(quad_urbanizavel, area_alvo, self.lote_profundidade_max):
-                if not quad.e_quad_simples(lote):
+            lotes_info, patios, vielas, _ = lotes.gerar_lotes_do_quarteirao(
+                quad_urbanizavel, quadra.classes_aresta, quadra.banda, self.cfg,
+                self.modelo.lote_fator_cidade, self.rng)
+            vielas_pendentes.extend(vielas)
+
+            for patio in patios:
+                self._add_feature("Polygon", patio + [patio[0]], "patio",
+                                  {"bairro": quadra.bairro, "quarteirao_id": quarteirao_id_str})
+
+            for info in lotes_info:
+                poligono = info["poligono"]
+                if not quad.e_quad_simples(poligono):
                     continue  # G02: quarteirão côncavo pode gerar um corte que auto-intersecta
-                self._add_feature("Polygon", lote + [lote[0]], "lote",
-                                  {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str})
-                self._lotes.append((lote, quadra))
+                # Armadilha 3: o id vem da POSIÇÃO na malha (quarteirão + índice no
+                # anel), não de um contador global — estável mesmo se outra quadra for
+                # descartada antes desta.
+                lote_id = f"{self.slug}_{quarteirao_id_str}_l{info['indice_no_anel']:02d}"
+                self._add_feature("Polygon", poligono + [poligono[0]], "lote", {
+                    "bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str,
+                    "id": lote_id, "classe_frente": info["classe_frente"], "area_m2": info["area_m2"],
+                    "aresta": info["aresta"],
+                })
+                self._lotes.append(_LoteEmitido(poligono=poligono, quadra=quadra, id=lote_id,
+                                                 classe_frente=info["classe_frente"]))
+
+        self._emitir_vielas(vielas_pendentes)
+
+    def _emitir_vielas(self, vielas):
+        """As vielas que `lotes.py` abre quando uma quadra é funda demais são ruas de
+        verdade (Q01, Passo 2) — sem isto elas apareceriam no mapa como um corte de
+        lote sem explicação nenhuma."""
+        for k, (p0, p1) in enumerate(vielas):
+            self._add_feature("LineString", [p0, p1], "rua",
+                              {"tipo_via": "servico", "classe_via": "servico", "indice": k})
 
     # ------------------------------------------------------------------
     def _gerar_muralha(self, malha):

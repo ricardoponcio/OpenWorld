@@ -26,6 +26,17 @@ def area_quad(quad):
     return abs(area_sinalizada(quad))
 
 
+def aresta_minima(quad):
+    """Comprimento da menor aresta do polígono. Um quad pode ter área "razoável" e ainda
+    assim ter uma aresta quase-zero (fatia bem fina perto de um canto que tapera) — o
+    `_geojson_coord` arredonda pra 6 casas decimais em PX DE MUNDO (Seção 2.1: 1 px =
+    15,81 km), então dois vértices a menos de ~1,6 cm um do outro em metros locais viram
+    o MESMO ponto depois de arredondar, e o polígono emitido tem um vértice duplicado —
+    'auto-intersectante' por um efeito de arredondamento, não por geometria errada."""
+    n = len(quad)
+    return min(math.dist(quad[i], quad[(i + 1) % n]) for i in range(n))
+
+
 def segmentos_cruzam(a, b, c, d):
     """Interseção própria de dois segmentos, por teste de orientação. Colinearidade
     conta como não-cruzamento: o caso degenerado já é pego pelo piso de área."""
@@ -109,33 +120,29 @@ def encolher_quad(quad, distancias):
     return novo
 
 
-def subdividir_lote_recursivo(quad, area_alvo, profundidade_max, profundidade=0):
-    """Corta o quadrilátero ao meio pelo lado mais longo, recursivamente, até a área
-    ficar perto do alvo (a malha só produz quads, nunca formas mais complexas).
+def lerp(a, b, t):
+    """Interpolação linear entre dois pontos 2D. Q01 (docs/PLANO_CIDADE_VIVA.md): usada
+    pra cortar a aresta externa e a interna de uma faixa pelo MESMO parâmetro `t` — é o
+    que garante que os lotes tilam a faixa sem vão e sem sobreposição."""
+    return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
 
-    ⚠️ Q01 (docs/PLANO_CIDADE_VIVA.md) substitui esta função pelo anel perimetral +
-    pátio — ela produz até 64% dos lotes sem frente pra rua porque não sabe onde estão
-    as ruas. Mantida até lá."""
-    area = area_quad(quad)
-    if area <= area_alvo * 1.6 or profundidade >= profundidade_max:
-        return [quad]
 
-    # Acha o lado mais longo e corta pelo meio dele e do seu oposto. Fórmula em índice
-    # modular relativo a `i0` (não por posição ordenada — um `sorted([i0,i1])` aqui
-    # quebra a correspondência entre m0/m1 e os vértices quando `i0` não é 0 ou 1,
-    # produzindo um quad "em zigue-zague").
+def bisseccao_quad(quad):
+    """Corta o quadrilátero em duas metades pelo lado mais longo (e seu oposto), unindo
+    os dois pontos médios. Q01: usada quando o pátio ficaria grande demais — a quadra
+    vira duas, com uma viela de serviço no corte.
+
+    Devolve `(parte1, parte2, corte, i0)`: `corte` = `(m0, m1)` é o segmento do corte
+    (a viela nasce ali); `i0` é o índice da aresta mais longa, pra quem chama remapear
+    `classes_aresta` (a aresta de índice `i0` e sua oposta ficam cortadas ao meio; as
+    outras duas sobrevivem inteiras num dos dois pedaços)."""
     n = len(quad)  # sempre 4
     comprimentos = [math.dist(quad[i], quad[(i + 1) % n]) for i in range(n)]
     i0 = comprimentos.index(max(comprimentos))
 
-    def meio(a, b):
-        return ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
-
-    m0 = meio(quad[i0], quad[(i0 + 1) % n])
-    m1 = meio(quad[(i0 + 2) % n], quad[(i0 + 3) % n])
+    m0 = lerp(quad[i0], quad[(i0 + 1) % n], 0.5)
+    m1 = lerp(quad[(i0 + 2) % n], quad[(i0 + 3) % n], 0.5)
 
     parte1 = [m0, quad[(i0 + 1) % n], quad[(i0 + 2) % n], m1]
     parte2 = [m1, quad[(i0 + 3) % n], quad[i0 % n], m0]
-
-    return (subdividir_lote_recursivo(parte1, area_alvo, profundidade_max, profundidade + 1) +
-            subdividir_lote_recursivo(parte2, area_alvo, profundidade_max, profundidade + 1))
+    return parte1, parte2, (m0, m1), i0

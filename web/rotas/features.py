@@ -11,7 +11,7 @@ registrar_erro_handler(features_bp)
 # muralha) — um arquivo por cidade em `database/cidades/<slug>.geojson`, agregados
 # aqui por `properties.camada` (não por arquivo) pra virar UMA camada Leaflet só
 # ("rua" mostra as ruas de todas as cidades visíveis no bbox, não uma por cidade).
-CAMADAS_INTERNAS_CIDADE = {"rua", "quarteirao", "lote", "edificio", "muralha", "torre", "portao", "praca"}
+CAMADAS_INTERNAS_CIDADE = {"rua", "quarteirao", "patio", "lote", "edificio", "muralha", "torre", "portao", "praca"}
 
 
 def _bbox_intersecta(a, b):

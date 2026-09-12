@@ -50,7 +50,7 @@ let leafletMetrosPorPixelMundo = 15811.4;
 let leafletViaLarguraM = { principal: 11, anel: 7, secundaria: 5 };
 let leafletViaLarguraMinPx = 1.5;
 const CAMADAS_MUNDO = ['cidades', 'pois', 'estradas', 'fronteiras'];
-const CAMADAS_DETALHE_CIDADE = ['muralha', 'torre', 'portao', 'praca', 'rua', 'quarteirao', 'lote', 'edificio'];
+const CAMADAS_DETALHE_CIDADE = ['muralha', 'torre', 'portao', 'praca', 'rua', 'quarteirao', 'patio', 'lote', 'edificio'];
 const CAMADAS_VETORIAIS_DISPONIVEIS = [...CAMADAS_MUNDO, ...CAMADAS_DETALHE_CIDADE];
 const CAMADAS_NOMES_AMIGAVEIS = { cidades: '🏰 Cidades', pois: '📍 Pontos de Interesse', estradas: '🛣️ Estradas', fronteiras: '🗺️ Fronteiras' };
 const TIPO_CIDADE_EMOJI = { capital: '👑', fortaleza: '🏯', portuaria: '⚓', pesqueira: '🎣', comercial: '💰', mistica: '🔮', 'mística': '🔮', mineira: '⛏️', agricola: '🌾', 'agrícola': '🌾', residencial: '🏠' };
@@ -217,6 +217,9 @@ const ESTILO_CAMADA_CIDADE = {
     rua: estiloRua,
     quarteirao: { color: '#888', weight: 1, opacity: 0.4, fillOpacity: 0.04 },
     praca: { color: '#2ecc71', weight: 1, opacity: 0.6, fillOpacity: 0.25 },
+    // Q01 (docs/PLANO_CIDADE_VIVA.md): o miolo da quadra que não é lote — horta, poço,
+    // quintal comum. Sem contorno próprio (o do quarteirão já marca o limite).
+    patio: { color: '#2ecc71', weight: 0, opacity: 0, fillOpacity: 0.18 },
     // D3 do DIAGNOSTICO_V3: lote nunca tinha estilo porque a camada nunca era registrada.
     // Mais fino que quarteirao (é o lote individual dentro dele).
     lote: { color: '#6a5acd', weight: 0.5, opacity: 0.35, fillOpacity: 0.06 },
@@ -235,8 +238,8 @@ function criarCamadasVetoriaisLeaflet() {
     // futura escrever o GeoJSON correspondente (hoje ficam vazias, sem erro nenhum).
     leafletCamadasVetoriais['cidades'].addTo(leafletMap);
 
-    // Fase 4: as 7 camadas de detalhe de cidade viram UM grupo — um toggle só
-    // ("🏛️ Detalhe da Cidade"), não 7 checkboxes pra ligar/desligar juntos toda vez.
+    // Fase 4: as camadas de detalhe de cidade viram UM grupo — um toggle só
+    // ("🏛️ Detalhe da Cidade"), não um checkbox por camada pra ligar/desligar toda vez.
     const grupoDetalheCidade = L.layerGroup();
     CAMADAS_DETALHE_CIDADE.forEach(nome => {
         const opcoes = ESTILO_CAMADA_CIDADE[nome] ? { style: ESTILO_CAMADA_CIDADE[nome] } : {};
