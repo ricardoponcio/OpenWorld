@@ -1,20 +1,29 @@
 """
 RadialModelo — o traçado de hoje (burgo medieval em anéis + radiais ao redor de um
-mercado), movido pra cá pela refatoração do F4. A F4.7 exige que a saída seja BYTE A BYTE
-igual à de antes da refatoração — nenhuma linha de matemática foi reescrita, só movida e
-reembalada em `Malha`/`Quadra`/`Rua`.
+mercado), movido pra cá pela refatoração do F4.
+
+S01/S02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): o número de setores deixou de
+ser único pra cidade inteira — ele DOBRA a cada banda em que o arco ultrapassaria a
+largura alvo (`self.setores_por_banda`, monotônico não-decrescente). Isso muda a saída
+de toda cidade radial (armadilha 1 do PLANO_CIDADE_VIVA.md: determinístico não quer
+dizer igual ao de antes) e é o motivo de a "grade" deixar de ser um array 2D regular
+`(banda, setor)` e virar uma lista de linhas de tamanho variável.
 """
 import math
 
 from config import cfg_get
 from cartographer.cities.escala import faixa_raio_m
-from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono
+from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono, densificar_anel
 
 # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
 # amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
 # segurança contra a soma chegar a 1.0 (que é o anel invertido — Seção 1.1 do
 # docs/PLANO_CIDADE_VIVA.md).
 FRACAO_VAO_MAXIMA_SEGURA = 0.45
+
+# S01: o arco de uma quadra pode ficar até 1.5x a largura alvo antes de a banda seguinte
+# dobrar os setores — dá uma faixa de 0.75x a 1.5x em vez de saturar sempre no teto.
+FATOR_TOLERANCIA_LARGURA = 1.5
 
 
 class RadialModelo(ModeloCidade):
@@ -51,6 +60,12 @@ class RadialModelo(ModeloCidade):
         sorteio_setores = self.rng.uniform(*faixa_setores_por_portao)
         self.num_setores = max(self.num_portoes * 2, round(self.num_portoes * sorteio_setores))
 
+        # S01: raios_base é pura aritmética (sem rng) — calculado aqui, não mais dentro
+        # de construir_malha, porque setores_por_banda precisa dele antes de a grade
+        # de vértices existir.
+        self.raios_base = [self.raio_m * (j + 1) / (self.num_aneis + 1) for j in range(self.num_aneis)]
+        self.setores_por_banda = self._calcular_setores_por_banda(config)
+
         self.praca_fracao_nucleo = cfg_get(config, "cidade_geo_praca_fracao_nucleo")
         self.praca_raio_min = cfg_get(config, "cidade_geo_praca_raio_min_m")
         self.praca_raio_max = cfg_get(config, "cidade_geo_praca_raio_max_m")
@@ -59,6 +74,22 @@ class RadialModelo(ModeloCidade):
                                max(self.praca_raio_min, self.praca_fracao_nucleo * raio_banda0))
         self.recuo_rua = cfg_get(config, "cidade_geo_recuo_rua_m")
         self.via_largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
+
+    def _calcular_setores_por_banda(self, config):
+        """S01: `s` só CRESCE (nunca diminui) — é o que garante que
+        `setores_por_banda[j]` seja sempre múltiplo de `setores_por_banda[j-1]`, a
+        propriedade de que as radiais (que nascem numa banda e continuam pra fora,
+        nunca somem) e a densificação do anel interno (S02) dependem."""
+        largura_alvo = cfg_get(config, "cidade_geo_quadra_largura_alvo_m")
+        setores_max = cfg_get(config, "cidade_geo_setores_max")
+        s = self.num_setores
+        setores_por_banda = []
+        for j in range(self.num_aneis + 1):
+            raio_j = self.raios_base[j] if j < self.num_aneis else self.raio_m
+            while (2 * math.pi * raio_j / s) > largura_alvo * FATOR_TOLERANCIA_LARGURA and s * 2 <= setores_max:
+                s *= 2
+            setores_por_banda.append(s)
+        return setores_por_banda
 
     # ------------------------------------------------------------------
     # Leitura de terreno local — G06: delega a `SitioCidade`, o único dono da grade
@@ -106,58 +137,60 @@ class RadialModelo(ModeloCidade):
         return vao * self.anel_fracao_vao
 
     # ------------------------------------------------------------------
-    def _grade_de_vertices(self, angulos, raios_base, perturb):
-        """Devolve `vertices[j][i]` — a grade que TANTO as ruas QUANTO as quadras leem.
-        Ponto de extensão pra modelos que deformam a malha (G04, `organica`): deforme
-        AQUI, nunca a lista de ruas depois de pronta (Seção 1.2 do
-        docs/PLANO_CIDADE_VIVA.md) — senão rua e quadra deixam de coincidir."""
+    def _grade_de_vertices(self):
+        """S01/S02: devolve `vertices[j]` — uma LISTA de linhas de tamanho variável
+        (`len(vertices[j]) == self.setores_por_banda[j]`), não mais um array 2D
+        regular. Ponto de extensão pra modelos que deformam a malha (G04, `organica`):
+        deforme AQUI, nunca a lista de ruas depois de pronta (Seção 1.2 do
+        docs/PLANO_CIDADE_VIVA.md) — senão rua e quadra deixam de coincidir.
+
+        A asserção de anéis cruzados compara o vértice da banda `j` com o ponto
+        CORRESPONDENTE do anel `j-1` já densificado (S02) pra resolução de `j` — bandas
+        vizinhas podem ter contagens de setor diferentes, então "mesmo índice de
+        setor" deixou de fazer sentido; "mesmo ângulo" (via densificação) é o que
+        substitui."""
         amplitude_m = self._amplitude_anel_m()
 
         vertices = []
-        for j in range(self.num_aneis):
-            raio_linha = []
-            for i in range(self.num_setores):
-                r = raios_base[j] + amplitude_m * perturb[j, i]
-                raio_linha.append(self._polar(r, angulos[i]))
-            vertices.append(raio_linha)
-        borda = []
-        for i in range(self.num_setores):
-            r = self.raio_m + amplitude_m * perturb[self.num_aneis, i]
-            borda.append(self._polar(r, angulos[i]))
-        vertices.append(borda)
+        for j in range(self.num_aneis + 1):
+            s_j = self.setores_por_banda[j]
+            raio_base_j = self.raios_base[j] if j < self.num_aneis else self.raio_m
+            perturb_j = self.np_rng.uniform(-1.0, 1.0, size=s_j)
+            linha = [self._polar(raio_base_j + amplitude_m * perturb_j[i], 2 * math.pi * i / s_j)
+                     for i in range(s_j)]
+            vertices.append(linha)
 
-        # Invariante, não preferência: com a amplitude saturada em FRACAO_VAO_MAXIMA_SEGURA
-        # isto nunca deveria disparar — se disparar, é a config que subiu
-        # cidade_geo_anel_perturbacao_fracao_vao além do que a saturação intencionalmente
-        # limita (ela só limita a AMPLITUDE, não impede num_aneis de mudar o vão).
-        for i in range(self.num_setores):
-            raios_do_setor = [math.hypot(*vertices[j][i]) for j in range(len(vertices))]
-            assert all(b > a for a, b in zip(raios_do_setor, raios_do_setor[1:])), (
-                f"{self.sitio.nome}: anéis cruzados no setor {i} — "
-                f"cidade_geo_anel_perturbacao_fracao_vao alto demais")
+        # Invariante, não preferência (ver docstring da classe/G01): com a amplitude
+        # saturada em FRACAO_VAO_MAXIMA_SEGURA isto nunca deveria disparar.
+        for j in range(1, len(vertices)):
+            s_j = self.setores_por_banda[j]
+            interno_denso = densificar_anel(vertices[j - 1], s_j)
+            for i in range(s_j):
+                r_interno = math.hypot(*interno_denso[i])
+                r_externo = math.hypot(*vertices[j][i])
+                assert r_externo > r_interno, (
+                    f"{self.sitio.nome}: anéis cruzados na banda {j}, setor {i} — "
+                    f"cidade_geo_anel_perturbacao_fracao_vao alto demais")
         return vertices
 
     def construir_malha(self) -> Malha:
-        angulos = [2 * math.pi * i / self.num_setores for i in range(self.num_setores)]
-        raios_base = [self.raio_m * (j + 1) / (self.num_aneis + 1) for j in range(self.num_aneis)]
-
-        perturb = self.np_rng.uniform(-1.0, 1.0, size=(self.num_aneis + 1, self.num_setores))
-        vertices = self._grade_de_vertices(angulos, raios_base, perturb)
+        vertices = self._grade_de_vertices()
         borda = vertices[-1]
+        s_final = self.setores_por_banda[-1]
         amplitude_m = self._amplitude_anel_m()
 
-        passo = max(1, self.num_setores // self.num_portoes)
+        passo = max(1, s_final // self.num_portoes)
 
         def _rotacao_uniforme(deslocamento):
-            return [(deslocamento + k * passo) % self.num_setores for k in range(self.num_portoes)]
+            return [(deslocamento + k * passo) % s_final for k in range(self.num_portoes)]
 
         if self.sitio.terreno is not None:
-            declividades = [self._declividade_local(*borda[i]) for i in range(self.num_setores)]
-            ordem = sorted(range(self.num_setores), key=lambda i: declividades[i])
+            declividades = [self._declividade_local(*borda[i]) for i in range(s_final)]
+            ordem = sorted(range(s_final), key=lambda i: declividades[i])
             espacamento_min = passo
             indices_portao = []
             for i in ordem:
-                if all(min((i - j) % self.num_setores, (j - i) % self.num_setores) >= espacamento_min
+                if all(min((i - j) % s_final, (j - i) % s_final) >= espacamento_min
                        for j in indices_portao):
                     indices_portao.append(i)
                 if len(indices_portao) == self.num_portoes:
@@ -173,8 +206,8 @@ class RadialModelo(ModeloCidade):
 
         # F1.2/F1.3: posiciona a praça primeiro, depois define o raio do núcleo cívico a
         # partir dela — garante por construção que a praça caiba dentro do núcleo.
-        centro_praca = self._melhor_centro_praca(raios_base[0])
-        raio_banda0 = raios_base[0]
+        centro_praca = self._melhor_centro_praca(self.raios_base[0])
+        raio_banda0 = self.raios_base[0]
         raio_nucleo_candidato = (math.hypot(*centro_praca) + self.praca_raio +
                                   self._distancia_faixa_dominio("anel"))
         # G01: o anel do núcleo usa a MESMA amplitude_m que os demais (perturbação
@@ -187,26 +220,61 @@ class RadialModelo(ModeloCidade):
         nucleo = None
         raio_nucleo = 0.0
         ruas = []
+        s_nucleo = self.setores_por_banda[0]
         if nucleo_urbanizavel:
             raio_nucleo = raio_nucleo_candidato
-            perturb_nucleo = self.np_rng.uniform(-1.0, 1.0, size=self.num_setores)
+            perturb_nucleo = self.np_rng.uniform(-1.0, 1.0, size=s_nucleo)
             # G01: mesma amplitude absoluta dos demais anéis — o anel do núcleo é vizinho
             # de raios_base[0] e precisa respeitar o mesmo vão, não o raio (bem menor) do
-            # próprio núcleo.
-            nucleo = [self._polar(raio_nucleo + amplitude_m * perturb_nucleo[i], angulos[i])
-                      for i in range(self.num_setores)]
-            for i in range(self.num_setores):
+            # próprio núcleo. Mesma resolução de setores da banda 0 (S01/S02).
+            nucleo = [self._polar(raio_nucleo + amplitude_m * perturb_nucleo[i], 2 * math.pi * i / s_nucleo)
+                      for i in range(s_nucleo)]
+            for i in range(s_nucleo):
                 assert math.hypot(*nucleo[i]) < math.hypot(*vertices[0][i]), (
                     f"{self.sitio.nome}: anel do núcleo cruza raios_base[0] no setor {i}")
             ruas.append(Rua(pontos=nucleo + [nucleo[0]], classe_via="anel", tipo_via="anel", indice=-1))
 
         for j, linha in enumerate(vertices):
             ruas.append(Rua(pontos=linha + [linha[0]], classe_via="anel", tipo_via="anel", indice=j))
-        for i in range(self.num_setores):
-            origem = nucleo[i] if nucleo is not None else (0.0, 0.0)
-            pontos = [origem] + [vertices[j][i] for j in range(self.num_aneis + 1)]
-            classe = "principal" if i in setores_portao else "secundaria"
-            ruas.append(Rua(pontos=pontos, classe_via=classe, tipo_via="radial", indice=i))
+
+        # S02: o anel INTERNO de cada banda, densificado pra resolução da banda ATUAL —
+        # calculado uma vez, reusado pela radial (ponto de nascimento) e pela quadra
+        # (aresta interna), pra uma nova radial nascer exatamente sobre o ponto que a
+        # quadra também usa (senão rua e quadra deixam de coincidir — o mesmo bug que
+        # G04/Seção 1.2 já existia pra evitar, só que agora entre bandas vizinhas).
+        interno_denso_por_banda = {}
+        for j in range(1, self.num_aneis + 1):
+            interno_denso_por_banda[j] = densificar_anel(vertices[j - 1], self.setores_por_banda[j])
+        if nucleo is not None:
+            interno_denso_por_banda[0] = densificar_anel(nucleo, self.setores_por_banda[0])
+
+        # S01: cada radial nasce na banda em que `setores_por_banda` primeiro alcança
+        # sua resolução, e continua até a borda — nunca some no meio (setores_por_banda
+        # só cresce, então `passo_j` só diminui e divide `passo_{j-1}`). Uma radial que
+        # nasce na banda 0 começa no núcleo/centro; uma que nasce numa banda j > 0
+        # começa no ponto (denso) do anel j-1 onde ela foi inserida — é o mesmo ponto
+        # que a quadra usa como aresta interna, então rua e quadra continuam
+        # coincidindo (validado por `test_rua_coincide_com_aresta_de_quadra`).
+        for k in range(s_final):
+            pontos = []
+            banda_nascimento = None
+            for j in range(self.num_aneis + 1):
+                s_j = self.setores_por_banda[j]
+                passo_j = s_final // s_j
+                if k % passo_j == 0:
+                    if banda_nascimento is None:
+                        banda_nascimento = j
+                    pontos.append(vertices[j][k // passo_j])
+            if banda_nascimento == 0:
+                passo_nucleo = s_final // s_nucleo
+                origem = nucleo[k // passo_nucleo] if nucleo is not None else (0.0, 0.0)
+                pontos = [origem] + pontos
+            elif banda_nascimento in interno_denso_por_banda:
+                passo_nascimento = s_final // self.setores_por_banda[banda_nascimento]
+                origem = interno_denso_por_banda[banda_nascimento][k // passo_nascimento]
+                pontos = [origem] + pontos
+            classe = "principal" if k in setores_portao else "secundaria"
+            ruas.append(Rua(pontos=pontos, classe_via=classe, tipo_via="radial", indice=k))
 
         portoes = [(borda[i][0], borda[i][1], f"Portão de {self.sitio.nome} #{i}") for i in indices_portao]
 
@@ -216,8 +284,9 @@ class RadialModelo(ModeloCidade):
         quadras = []
         banda_inicial = 0 if nucleo_urbanizavel else 1
         for j in range(banda_inicial, self.num_aneis + 1):
-            raio_interno = nucleo if j == 0 else vertices[j - 1]
+            s_j = self.setores_por_banda[j]
             raio_externo = vertices[j]
+            raio_interno = interno_denso_por_banda[j]
             if j == 0:
                 bairro = "Núcleo"
             elif j == 1:
@@ -226,13 +295,17 @@ class RadialModelo(ModeloCidade):
                 bairro = "Bairro Médio"
             else:
                 bairro = "Bairro Externo"
-            for i in range(self.num_setores):
-                i2 = (i + 1) % self.num_setores
+            passo_j = s_final // s_j
+            for i in range(s_j):
+                i2 = (i + 1) % s_j
                 quad = [raio_interno[i], raio_externo[i], raio_externo[i2], raio_interno[i2]]
+                # As arestas 0/2 (radiais) desta banda correspondem ao índice GLOBAL
+                # (resolução da borda) i*passo_j/i2*passo_j — é nessa resolução que
+                # `setores_portao` foi calculado.
                 classes_aresta = [
-                    self._classe_via_radial(i, setores_portao),
+                    self._classe_via_radial(i * passo_j, setores_portao),
                     "anel",
-                    self._classe_via_radial(i2, setores_portao),
+                    self._classe_via_radial(i2 * passo_j, setores_portao),
                     "anel",
                 ]
                 quadras.append(Quadra(vertices=quad, classes_aresta=classes_aresta,
@@ -240,9 +313,10 @@ class RadialModelo(ModeloCidade):
 
         # Muralha + torres — sempre computadas (custam pouco: um np_rng.uniform), mesmo
         # quando `precisa_muralha()` vai acabar não usando; GeradorCidade decide se
-        # emite. Isso preserva a ordem de consumo do np_rng idêntica à de antes do F4
-        # (perturb -> perturb_nucleo -> perturb_muralha), sem precisar saber aqui se a
-        # cidade vai ter muralha ou não (essa pergunta é o gancho `precisa_muralha`).
+        # emite. Isso preserva a ordem de consumo do np_rng de forma estável dentro
+        # desta versão (perturb por banda -> perturb_nucleo -> perturb_muralha), sem
+        # precisar saber aqui se a cidade vai ter muralha ou não (essa pergunta é o
+        # gancho `precisa_muralha`).
         #
         # G03 (Seção 1.3): a muralha é derivada da BORDA real que as quadras usam, não
         # de um raio+array de aleatórios paralelo e descorrelacionado — antes disso a
@@ -252,9 +326,9 @@ class RadialModelo(ModeloCidade):
         # daí o `abs`.
         folga_base = cfg_get(self.cfg, "cidade_geo_muralha_folga_m")
         espacamento_torres = cfg_get(self.cfg, "cidade_geo_muralha_torres_espacamento_m")
-        perturb_muralha = self.np_rng.uniform(-1.0, 1.0, size=self.num_setores)
+        perturb_muralha = self.np_rng.uniform(-1.0, 1.0, size=s_final)
         folgas = [folga_base * (1.0 + self.irreg * 0.3 * abs(perturb_muralha[i]))
-                  for i in range(self.num_setores)]
+                  for i in range(s_final)]
         contorno = envolver_poligono(borda, folgas)
         torres = pontos_ao_longo_do_poligono(contorno, espacamento_torres)
 

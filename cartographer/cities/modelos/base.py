@@ -99,6 +99,30 @@ def gerar_fileiras_de_quadras(eixo_pontos, profundidade_m, comprimento_celula_m,
     return quadras, ruas_transversais
 
 
+def densificar_anel(anel, n_alvo):
+    """S02 (docs/PLANO_POPULACAO_E_ESCALA.md): insere pontos num anel já pronto,
+    SOBRE os segmentos que ele já tem, até ele ter `n_alvo` pontos — `n_alvo` tem que
+    ser múltiplo de `len(anel)`. Como o ponto novo cai exatamente sobre o segmento
+    entre dois vértices existentes, a POLILINHA não muda de forma, só ganha vértice —
+    é o que permite ao Bloco S dobrar o número de setores numa banda sem que a rua do
+    anel INTERNO mude de traçado, e é o truque que mantém toda `Quadra` com
+    exatamente 4 vértices depois que os setores dobram (armadilha: `quad.py` indexa
+    `[k]`/`[(k+1)%4]` — uma `Quadra` com 5 vértices quebra a subdivisão em lotes)."""
+    n = len(anel)
+    if n_alvo == n:
+        return list(anel)
+    if n_alvo % n != 0:
+        raise ValueError(f"densificar_anel: n_alvo ({n_alvo}) não é múltiplo de len(anel) ({n})")
+    f = n_alvo // n
+    denso = []
+    for i in range(n_alvo):
+        p0 = anel[i // f]
+        p1 = anel[(i // f + 1) % n]
+        t = (i % f) / f
+        denso.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
+    return denso
+
+
 def envolver_poligono(poligono, folga):
     """Infla um polígono radialmente em torno do próprio centroide, garantindo que todo
     vértice original fique DENTRO do resultado com ao menos `folga` de sobra. Usado pela

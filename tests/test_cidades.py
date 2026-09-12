@@ -311,24 +311,15 @@ def test_ocupacao_inicial_nunca_ultrapassa_o_alvo():
             f"(+{tolerancia_pp:.0%} de tolerância)")
 
 
-@pytest.mark.parametrize("nome_modelo", [
-    "grade", "linear",
-    pytest.param("radial", marks=pytest.mark.xfail(
-        reason="Q01/Q03 (Registro de execução): num_setores (fora do escopo deste plano) "
-               "produz quadras com largura tangencial de 200-400 m nas bandas externas de "
-               "cidades radiais — bem maior que a profundidade (~95-140 m de G05). Testado "
-               "aumentar PROFUNDIDADE_CORTE_MAXIMA (0/2/5): mais corte PIORA. Decisão "
-               "pendente pro dono do projeto: calibrar num_setores por banda?",
-        strict=False)),
-    pytest.param("organica", marks=pytest.mark.xfail(
-        reason="Mesma causa raiz de radial (organica herda a malha de setores) — ver "
-               "Registro de execução, Q01.", strict=False)),
-])
+@pytest.mark.parametrize("nome_modelo", ["grade", "linear", "radial", "organica"])
 def test_lotes_por_quadra_em_faixa(nome_modelo):
-    """V01/Q01/Q03 — mediana de lotes por quadra entre 4 e 30. `radial`/`organica` são
-    xfail (não strict — se algum dia passarem, o teste avisa em vez de quebrar o
-    build): achado já documentado e investigado, não é bug da subdivisão de Q01 (o
-    MESMO código, em grade/linear, fica dentro do alvo)."""
+    """V01/Q01/Q03/S01 — mediana de lotes por quadra entre 4 e 30. Achado original
+    (Registro de execução, Q01/Q03): `num_setores` era o mesmo em toda banda radial, e
+    o arco da quadra crescia linearmente com o raio enquanto a profundidade (vão entre
+    anéis) era constante — quadras de até 200-400 m de largura tangencial nas bandas
+    externas. S01 (docs/PLANO_POPULACAO_E_ESCALA.md) resolveu dobrando o número de
+    setores quando o arco ultrapassa a largura alvo; `radial`/`organica` deixaram de
+    ser `xfail` porque passam de verdade agora."""
     geo = _gerar(MODELOS[nome_modelo])
     por_quarteirao = {}
     for f in geo["features"]:
