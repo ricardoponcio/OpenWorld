@@ -17,6 +17,7 @@ if raiz not in sys.path:
 
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.generate_city_geometry import GeradorCidade
+from cartographer.cities.geometria import quad
 from cartographer.cities.modelos import SitioCidade, MODELOS
 from cartographer.cities.modelos.base import ModeloCidade, Quadra, Malha
 from config import cfg_get
@@ -128,19 +129,15 @@ def test_nenhum_poligono_auto_intersectante():
             if f["geometry"]["type"] != "Polygon":
                 continue
             anel = f["geometry"]["coordinates"][0][:-1]
-            assert GeradorCidade._e_quad_simples(anel) if len(anel) == 4 else True, (
+            assert quad.e_quad_simples(anel) if len(anel) == 4 else True, (
                 f"modelo {nome}: polígono {f['properties']['camada']} auto-intersectante")
 
 
 def test_encolher_quad_rejeita_quad_concavo():
     """G02: `_encolher_quad` devolve None para um quad de entrada já auto-intersectante
     (bowtie), em vez de tentar encolher e emitir geometria inválida."""
-    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
-    rng = random.Random(sitio.seed)
-    modelo = MODELOS["radial"](sitio, CARTOGRAPHER_CONFIG, rng)
-    gerador = GeradorCidade(modelo)
     bowtie = [(0.0, 0.0), (40.0, 40.0), (40.0, 0.0), (0.0, 40.0)]
-    assert gerador._encolher_quad(bowtie, [3.0] * 4) is None
+    assert quad.encolher_quad(bowtie, [3.0] * 4) is None
 
 
 def _ponto_dentro_poligono(p, poligono):
