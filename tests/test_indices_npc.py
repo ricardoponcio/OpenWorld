@@ -93,6 +93,25 @@ def test_remover_npc_sai_dos_tres_indices():
     assert npc.id not in {n.id for n in mundo.npcs_por_cidade.get(1, [])}
 
 
+def test_mudar_cidade_move_entre_os_indices_e_limpa_casa_trabalho():
+    """A05: só a porta — ninguém chama isto ainda, mas o contrato tem que valer:
+    casa/localização/trabalho da cidade de origem não fazem sentido no destino."""
+    npc = adulto("npc_1", "Migrante", casa_id="casa_1", localizacao_atual_id="casa_1",
+                 cidade_id=1, local_trabalho_id="loja_1")
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+
+    mundo.mudar_cidade(npc, 2)
+
+    assert npc.cidade_id == 2
+    assert npc.casa_id == ""
+    assert npc.localizacao_atual_id == ""
+    assert npc.local_trabalho_id is None
+    assert npc.id in {n.id for n in mundo.npcs_por_cidade.get(2, [])}
+    assert npc.id not in {n.id for n in mundo.npcs_por_cidade.get(1, [])}
+    assert npc.id not in {n.id for n in mundo.npcs_por_casa.get("casa_1", [])}
+    assert npc.id not in {n.id for n in mundo.npcs_por_localizacao.get("casa_1", [])}
+
+
 def test_indices_batem_com_reconstrucao_do_zero():
     cidade = Cidade(id=1, continente_uuid="c", nome="Vila Teste", tamanho="pequeno",
                      tipo="residencial", x_global=0, y_global=0)

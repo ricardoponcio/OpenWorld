@@ -170,6 +170,40 @@ class EstadoDoMundo:
                 del bucket[i]
                 return
 
+    def mudar_cidade(self, npc, cidade_id) -> None:
+        """A05 (docs/PLANO_POPULACAO_E_ESCALA.md): SÓ A PORTA — nada na simulação
+        chama isto ainda. P04 (docs/PLANO_CIDADE_VIVA.md) fixou que um NPC não
+        atravessa cidade, e boa parte do ganho de performance do projeto depende
+        disso continuar valendo dentro de um tick; esta porta existe pra quando uma
+        mecânica de migração precisar existir (cidade que decai perde gente, cidade
+        que prospera atrai), sem cada uma reinventar a atualização dos três índices.
+
+        Casa, localização e trabalho pertencem à cidade de ORIGEM — não fazem sentido
+        na cidade de destino, então saem junto. Uma mecânica de migração futura tem
+        que resolver casa/trabalho no destino ANTES de chamar isto (ou logo depois,
+        antes do NPC ser processado de novo); esta porta não tenta adivinhar.
+
+        Quem escrever essa mecânica no futuro tem que respeitar, sem exceção: casal
+        não se separa (os dois se mudam juntos, ou nenhum), dependente acompanha o
+        responsável (nunca uma criança sozinha numa cidade nova), e o NPC precisa de
+        lote ou vaga já reservados no destino ANTES de sair da origem — nunca um NPC
+        "no limbo" entre cidades por um tick que seja.
+
+        [Seção 5.2 do plano]: se um dia existir um processo por cidade, migração
+        deixa de ser uma chamada de método e passa a ser uma mensagem entre
+        processos — ter a operação isolada aqui, e não espalhada, é o que torna essa
+        transição possível depois."""
+        self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
+        self._remover_de_bucket(self.npcs_por_casa, npc.casa_id, npc)
+        self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
+
+        npc.cidade_id = cidade_id
+        npc.casa_id = ""
+        npc.localizacao_atual_id = ""
+        npc.local_trabalho_id = None
+
+        self.npcs_por_cidade.setdefault(cidade_id, []).append(npc)
+
     def _reconstruir_indices_de_npc(self) -> None:
         """(Re)constrói os três índices do zero a partir de `self.npcs` — usado no
         carregamento inicial, e sempre que alguém substituir `self.npcs` por uma lista
