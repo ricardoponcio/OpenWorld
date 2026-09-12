@@ -14,7 +14,6 @@ import random
 from ..models import NPC, Acao
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
-from ..consultas_local import LocationUtils
 from ..mundo import EstadoDoMundo
 
 
@@ -77,9 +76,11 @@ class NPCMovementManager:
             npc.acao_atual = Acao.OCIOSO
 
     def mover_para_social(self, npc: NPC):
-        """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local."""
-        locais = self._mundo.locais
-        sociais = [l_id for l_id, l in locais.items() if l.tipo == 'Social' and l.status == 1] if locais else []
+        """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local.
+
+        P01 (docs/PLANO_CIDADE_VIVA.md): consulta o índice por cidade em vez de varrer
+        `mundo.locais` inteiro (Seção 1.6 — este era um dos laços mais caros do tick)."""
+        sociais = self._mundo.indice.sociais(npc.cidade_id)
 
         num_dep = npc.num_dependentes
         chance_ficar_em_casa = cfg_get(self._config, "ia_decisao", "chance_ficar_em_casa_com_dependentes")
@@ -91,10 +92,7 @@ class NPCMovementManager:
             limiar_pobreza = cfg_get(cfg_dec, "limiar_pobreza_pc")
 
             if npc.dinheiro_total_pc < limiar_pobreza:
-                sociais_gratuitos = [
-                    l_id for l_id in sociais
-                    if LocationUtils.is_local_publico(locais[l_id])
-                ]
+                sociais_gratuitos = self._mundo.indice.sociais_publicos(npc.cidade_id)
                 if sociais_gratuitos:
                     self.mover_para(npc, random.choice(sociais_gratuitos))
                     return
@@ -105,13 +103,7 @@ class NPCMovementManager:
 
     def mover_para_restaurante(self, npc: NPC):
         """Move o NPC para uma taverna/praça ativa, ou casa em último caso."""
-        locais = self._mundo.locais
-        locais_comida = []
-        if locais:
-            for l_id, l in locais.items():
-                if l.status != 1: continue
-                if LocationUtils.is_local_comida(l):
-                    locais_comida.append(l_id)
+        locais_comida = self._mundo.indice.comida(npc.cidade_id)
 
         # Chance de comer fora (restaurante/taverna) em vez de em casa — o resto vai pra
         # casa, o que reduz superlotação de restaurantes.
@@ -122,14 +114,13 @@ class NPCMovementManager:
             self.mover_para_casa(npc)
 
     def mover_aleatoriamente(self, npc: NPC):
-        """Move o NPC aleatoriamente entre locais públicos/sociais ou sua casa."""
-        locais_permitidos = []
-        if self._mundo.locais:
-            for l_id, l in self._mundo.locais.items():
-                if l.status != 1: continue
-                # Permite apenas locais Sociais, Lojas comerciais, ou a própria casa do NPC (evita que ociosos invadam quartéis e fazendas)
-                if LocationUtils.is_local_passeio(l, npc.casa_id):
-                    locais_permitidos.append(l_id)
+        """Move o NPC aleatoriamente entre locais públicos/sociais ou sua casa. A
+        própria casa do NPC sempre é uma opção válida (LocationUtils.is_local_passeio
+        antes tratava isso caso a caso; o índice só sabe do que é compartilhado, então a
+        casa entra à parte aqui) — evita que ociosos invadam quartéis e fazendas."""
+        locais_permitidos = list(self._mundo.indice.passeio(npc.cidade_id))
+        if npc.casa_id and npc.casa_id not in locais_permitidos:
+            locais_permitidos.append(npc.casa_id)
 
         if locais_permitidos:
             self.mover_para(npc, random.choice(locais_permitidos))
