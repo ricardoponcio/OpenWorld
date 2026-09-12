@@ -13,22 +13,26 @@ CORREÇÕES APLICADAS:
     Bug C: A seleção de casais filtra explicitamente por is_adulto() antes de
            verificar tem_conjuge(), evitando que bebês/crianças sejam donos de obras.
 """
-from ..models import Acao, Local, TipoLocal, CategoriaLocal, NPC
+from ..models import Acao, TipoLocal, CategoriaLocal, NPC
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
 from ..mundo import EstadoDoMundo
+from .urbanismo import GerenciadorUrbanismo
 
 class NPCHousingManager:
     """Expansão urbana: detecta casas superlotadas e inicia obras.
 
     Recebe o mundo (não a engine inteira) — precisa de locais, npcs, cidades e do
     repositório de locais, e de nada mais. Isso é o que permite testá-lo com um
-    mundo sintético em memória (R-F01)."""
+    mundo sintético em memória (R-F01). `urbanismo` é colaborador de domínio (O03):
+    dono da MECÂNICA de "como um edifício nasce" (`abrir_obra`); este gerenciador
+    continua dono só da POLÍTICA — qual casal, quando."""
 
-    def __init__(self, mundo: EstadoDoMundo, config: dict):
+    def __init__(self, mundo: EstadoDoMundo, config: dict, urbanismo: GerenciadorUrbanismo = None):
         self._mundo = mundo
         self._config = config
+        self._urbanismo = urbanismo or GerenciadorUrbanismo(mundo, config)
 
     def iniciar_obra_para_casal(self, n1: NPC, n2: NPC = None) -> bool:
         """
@@ -43,33 +47,17 @@ class NPCHousingManager:
             return False
 
         cfg_urbano = cfg_get(self._config, "geracao_urbana")
-        casa_atual = self._mundo.locais.get(n1.casa_id)
-        perto_de = tuple(casa_atual.coordenadas) if casa_atual and casa_atual.coordenadas else None
-
-        lote_id = self._mundo.db.lotes.reservar_livre(
-            cidade_id=n1.cidade_id, npc_id=n1.id, perto_de=perto_de)
-        if lote_id is None:
-            self._pedir_expansao(n1.cidade_id)
-            return False
-
-        lote = self._mundo.db.lotes.buscar_por_id(lote_id)
         sobrenome = n1.nome.split()[-1]
 
-        obra = Local(
-            id=lote_id,
-            nome=f"Obra de {sobrenome}",
-            tipo=TipoLocal.CASA.value,
-            categoria=CategoriaLocal.RESIDENCIA.value,
-            cidade_id=n1.cidade_id,
-            descricao=f"Obra da família {sobrenome}, em construção.",
-            dono_npc_id=n1.id,
-            coordenadas=[lote.x, lote.y],
-            status=0,
-            integridade=0,
-            capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"),
-            bairro=lote.bairro,
-        )
-        self._mundo.registrar_local(obra)
+        # O03: abrir_obra (urbanismo.py) é o único caminho pra um edifício novo nascer
+        # — housing.py escolhe o casal e monta o nome, urbanismo reserva o lote e cria
+        # o Local em obra.
+        obra = self._urbanismo.abrir_obra(
+            n1.cidade_id, n1, CategoriaLocal.RESIDENCIA.value, TipoLocal.CASA.value,
+            f"Obra de {sobrenome}", cfg_get(cfg_urbano, "capacidade_padrao_residencia"))
+        if obra is None:
+            self._pedir_expansao(n1.cidade_id)
+            return False
         return True
 
     def _pedir_expansao(self, cidade_id: int) -> None:

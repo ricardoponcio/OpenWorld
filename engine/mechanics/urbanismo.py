@@ -73,52 +73,77 @@ class GerenciadorUrbanismo:
             return
         empreendedor = max(candidatos, key=lambda n: n.dinheiro_total_pc)
 
-        lote_id = self._reservar_lote_comercial(cidade_id, empreendedor)
-        if lote_id is None:
-            return
-
-        lote = self._mundo.db.lotes.buscar_por_id(lote_id)
         nome_padrao = cfg_get(cfg_urb, "nome_padrao_por_categoria").get(categoria, categoria.capitalize())
-        capacidade = cfg_get(cfg_urb, "capacidade_padrao_estabelecimento")
-        salario = cfg_get(cfg_urb, "salario_padrao_estabelecimento")
         cidade = self._mundo.cidades.get(cidade_id)
         nome_cidade = cidade.nome if cidade else str(cidade_id)
+        capacidade = cfg_get(cfg_urb, "capacidade_padrao_estabelecimento")
+        salario = cfg_get(cfg_urb, "salario_padrao_estabelecimento")
+
+        # O03: abrir_obra é o ÚNICO caminho pra um edifício novo nascer durante a
+        # simulação — o mesmo que housing.py usa pra casa de casal.
+        novo = self.abrir_obra(
+            cidade_id, empreendedor, categoria, nome_padrao, f"{nome_padrao} de {nome_cidade}",
+            capacidade, salario, preferir_frente=("principal", "anel"))
+        if novo is None:
+            return
 
         empreendedor.dinheiro_total_pc -= custo
         self._mundo.db.npcs.salvar(empreendedor)
-
-        novo = Local(
-            id=lote_id,
-            nome=f"{nome_padrao} de {nome_cidade}",
-            tipo=nome_padrao,
-            categoria=categoria,
-            cidade_id=cidade_id,
-            descricao=f"{nome_padrao}, em construção — erguida por demanda da população.",
-            dono_npc_id=empreendedor.id,
-            coordenadas=[lote.x, lote.y],
-            status=0,
-            integridade=0,
-            capacidade=capacidade,
-            salario_base=salario,
-            bairro=lote.bairro,
-        )
-        self._mundo.registrar_local(novo)
         WorldLogger.info(
             f"🏪 [URBANISMO] {empreendedor.nome} investiu {custo} PC e abriu {novo.nome} "
             f"(déficit de {categoria}) — obra em andamento.",
             npc=empreendedor,
         )
 
-    def _reservar_lote_comercial(self, cidade_id, empreendedor: NPC):
-        """Loja quer frente pra via de movimento (principal/anel) — tenta essas
-        classes primeiro, cai pra qualquer lote livre se não houver."""
-        casa_atual = self._mundo.locais.get(empreendedor.casa_id)
+    # ------------------------------------------------------------------
+    # O03 — o único caminho pra um edifício nascer durante a simulação
+    # ------------------------------------------------------------------
+    def abrir_obra(self, cidade_id, dono_npc: NPC, categoria: str, tipo_local: str, nome: str,
+                    capacidade: int, salario_base: int = 0, preferir_frente=None):
+        """Reserva lote, cria o `Local` em obra (status=0, integridade=0) e devolve
+        ele — ou `None` se não houver terreno (T01: `reservar_livre` já devolve
+        `None` nesse caso, sem exceção; é o sinal de auto-expansão, X01).
+
+        É o ÚNICO caminho pra um edifício novo nascer durante a simulação
+        (armadilha 3, docs/PLANO_CIDADE_VIVA.md: o id do Local É o id do lote onde
+        nasce) — `housing.py` (casa de casal) e `urbanismo.py` (comércio por demanda)
+        chamam este método; nenhum dos dois duplica a sequência reservar/criar/marcar.
+        `housing.py` continua dono da POLÍTICA ("qual casal, quando"); aqui é dono só
+        da MECÂNICA ("como um edifício nasce").
+
+        `preferir_frente`: sequência de classes de frente tentadas em ordem antes do
+        fallback "qualquer lote livre" (loja quer frente pra via de movimento; casa
+        não se importa, passa `None`)."""
+        casa_atual = self._mundo.locais.get(dono_npc.casa_id)
         perto_de = tuple(casa_atual.coordenadas) if casa_atual and casa_atual.coordenadas else None
 
-        for classe in ("principal", "anel"):
+        lote_id = None
+        for classe in (preferir_frente or ()):
             lote_id = self._mundo.db.lotes.reservar_livre(
-                cidade_id=cidade_id, npc_id=empreendedor.id, perto_de=perto_de, classe_frente=classe)
+                cidade_id=cidade_id, npc_id=dono_npc.id, perto_de=perto_de, classe_frente=classe)
             if lote_id is not None:
-                return lote_id
-        return self._mundo.db.lotes.reservar_livre(
-            cidade_id=cidade_id, npc_id=empreendedor.id, perto_de=perto_de)
+                break
+        if lote_id is None:
+            lote_id = self._mundo.db.lotes.reservar_livre(
+                cidade_id=cidade_id, npc_id=dono_npc.id, perto_de=perto_de)
+        if lote_id is None:
+            return None
+
+        lote = self._mundo.db.lotes.buscar_por_id(lote_id)
+        obra = Local(
+            id=lote_id,
+            nome=nome,
+            tipo=tipo_local,
+            categoria=categoria,
+            cidade_id=cidade_id,
+            descricao=f"{nome}, em construção.",
+            dono_npc_id=dono_npc.id,
+            coordenadas=[lote.x, lote.y],
+            status=0,
+            integridade=0,
+            capacidade=capacidade,
+            salario_base=salario_base,
+            bairro=lote.bairro,
+        )
+        self._mundo.registrar_local(obra)
+        return obra
