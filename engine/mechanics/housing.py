@@ -52,22 +52,13 @@ class NPCHousingManager:
         # O03: abrir_obra (urbanismo.py) é o único caminho pra um edifício novo nascer
         # — housing.py escolhe o casal e monta o nome, urbanismo reserva o lote e cria
         # o Local em obra.
+        # `abrir_obra` já dispara `avaliar_expansao` (X01) sozinho quando não há lote
+        # livre — nada a fazer aqui além de esperar o próximo gatilho; o casal
+        # simplesmente não constrói agora.
         obra = self._urbanismo.abrir_obra(
             n1.cidade_id, n1, CategoriaLocal.RESIDENCIA.value, TipoLocal.CASA.value,
             f"Obra de {sobrenome}", cfg_get(cfg_urbano, "capacidade_padrao_residencia"))
-        if obra is None:
-            self._pedir_expansao(n1.cidade_id)
-            return False
-        return True
-
-    def _pedir_expansao(self, cidade_id: int) -> None:
-        """X01 (docs/PLANO_CIDADE_VIVA.md): a cidade satura e pede espaço novo — o
-        gatilho de auto-expansão vai morar em `GerenciadorUrbanismo` (Bloco X, ainda não
-        implementado nesta base). Por ora só registra o evento — sem lote livre, o
-        casal simplesmente não constrói agora; tentará de novo no próximo gatilho."""
-        WorldLogger.warning(
-            f"[HABITAÇÃO] Cidade {cidade_id} sem lote livre pra nova obra — "
-            f"auto-expansão (Bloco X) ainda não disparada automaticamente.")
+        return obra is not None
 
     def processar_habitacao(self):
         """
