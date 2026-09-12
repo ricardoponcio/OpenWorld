@@ -76,6 +76,29 @@ class RepositorioNPC:
                 npc.gravidez_ticks
             ))
 
+    def salvar_muitos(self, npcs: list) -> None:
+        """P05 (docs/PLANO_CIDADE_VIVA.md): uma transação pra TODOS os NPCs alterados
+        no tick, não um commit por NPC — `DatabaseManager.connection()` commita na
+        saída do `with`, e `GameLoop` chamava `salvar(npc)` um de cada vez (750 NPCs =
+        750 commits por tick; o profiler mediu 7 ms só em commit com 20 NPCs)."""
+        if not npcs:
+            return
+        with self.db.connection() as conn:
+            conn.cursor().executemany(
+                '''INSERT OR REPLACE INTO npcs
+                   (id, nome, profissao, profissao_id, cidade_id, casa_id, local_trabalho_id, localizacao_atual_id,
+                    acao_atual, energia, dinheiro_total_pc, social, fome, saude, humor,
+                    genero, estagio_vida, raca, personalidade, background, data_nascimento, estado_civil, conjuge_id, pai_id, mae_id, genealogia, relacionamentos, memoria_eventos, gravidez_ticks)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                [(npc.id, npc.nome, npc.profissao, npc.profissao_id, npc.cidade_id, npc.casa_id, npc.local_trabalho_id,
+                  npc.localizacao_atual_id, npc.acao_atual.value, npc.energia, npc.dinheiro_total_pc,
+                  npc.social, npc.fome, npc.saude, npc.humor,
+                  npc.genero, npc.estagio_vida, npc.raca, npc.personalidade, npc.background,
+                  npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
+                  json.dumps(npc.genealogia), json.dumps(npc.relacionamentos), json.dumps(npc.memoria_eventos),
+                  npc.gravidez_ticks)
+                 for npc in npcs])
+
     def renomear(self, npc_id: str, novo_nome: str):
         with self.db.connection() as conn:
             conn.cursor().execute("UPDATE npcs SET nome = ? WHERE id = ?", (novo_nome, npc_id))

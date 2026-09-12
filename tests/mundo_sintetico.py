@@ -39,6 +39,12 @@ class RepositorioFalso:
         `entidade in db.X.salvos` continuar funcionando sem mudança nos testes."""
         self.salvos.append(args[0] if len(args) == 1 else args)
 
+    def salvar_muitos(self, entidades):
+        """P05: `GameLoop.executar_tick` salva os NPCs do tick numa única chamada em
+        lote — o dublê só estende `salvos`, pra `entidade in db.npcs.salvos` continuar
+        funcionando sem mudança nos testes que já usam esse padrão."""
+        self.salvos.extend(entidades)
+
     def salvar_relacionamento(self, a_id, b_id, afinidade, vinculo):
         self.relacionamentos.append((a_id, b_id, afinidade, vinculo))
 

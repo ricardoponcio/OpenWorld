@@ -60,6 +60,7 @@ class GameLoop:
         npcs_por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
 
         maes_em_parto = []
+        npcs_alterados = []
         for npc in self._mundo.npcs:
             if not npc.esta_vivo():
                 continue
@@ -73,10 +74,17 @@ class GameLoop:
             if npc.saude <= 0:
                 self._ciclo_de_vida.processar_morte(npc)
                 continue
-            self._mundo.db.npcs.salvar(npc)
+            npcs_alterados.append(npc)
 
         self._remover_falecidos()
         self._processar_partos(maes_em_parto)
+        # P05 (docs/PLANO_CIDADE_VIVA.md): UMA transação pro tick inteiro, não um
+        # commit por NPC (750 NPCs = 750 commits; o profiler mediu 7 ms só em commit
+        # com 20 NPCs). Depois de partos/mortes de propósito: `processar_parto` pode
+        # ter mutado mãe/pai (que já estão em `npcs_alterados`, por referência) — salvar
+        # depois pega o estado mais recente, não uma foto de antes do parto. NPC morto
+        # nunca entra na lista (o `continue` acima pula), então nunca é regravado vivo.
+        self._mundo.db.npcs.salvar_muitos(npcs_alterados)
         self._social.processar_interacoes()
 
     def _avancar_relogio(self):
