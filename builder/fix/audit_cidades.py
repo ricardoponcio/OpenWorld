@@ -11,6 +11,11 @@ MOMENTO DE USO: depois de cada tarefa do Bloco G ou Q (README do plano, regra de
 ⚠️ FERRAMENTA MANUAL DE DIAGNÓSTICO. Roda fora da engine, lê só arquivo GeoJSON. Não
 importe este módulo de dentro de engine/, web/ ou cartographer/ — não faz parte do
 runtime (ARQUITETURA.md, "é diagnóstico manual, fora do runtime").
+
+⚠️ NUNCA leia a saída deste script com `| tail` nem `| head` — o pipe engole o código
+de saída (`$?`), e já enganou uma sessão inteira (docs/PLANO_POPULACAO_E_ESCALA.md,
+regra de execução #4). A saída cabe numa tela sem paginar; rode direto e confira
+`echo $?` depois, se precisar do código.
 """
 import os
 import sys
@@ -160,6 +165,33 @@ def _pior_invasao_muralha(features):
     return pior
 
 
+def _razao_largura_profundidade(quarteiroes, metros_por_px):
+    """L04 (docs/PLANO_POPULACAO_E_ESCALA.md): mediana da razão largura/profundidade
+    das quadras de uma cidade — o número que denuncia a regressão de S01 (quadra
+    larga demais, profundidade constante). Um quarteirão sempre tem 4 arestas na
+    ordem [radial, anel, radial, anel] (gerador.py); pareia arestas OPOSTAS (0-2,
+    1-3) e trata o par mais curto como profundidade — verdadeiro pros modelos radial/
+    organica (o alvo de S01), e uma aproximação razoável pra grade/linear."""
+    razoes = []
+    for f in quarteiroes:
+        pontos = _achatar_anel(f["geometry"]["coordinates"])
+        if len(pontos) != 4:
+            continue
+        arestas = [math.dist(pontos[k], pontos[(k + 1) % 4]) * metros_por_px for k in range(4)]
+        par_a = (arestas[0] + arestas[2]) / 2.0
+        par_b = (arestas[1] + arestas[3]) / 2.0
+        profundidade, largura = min(par_a, par_b), max(par_a, par_b)
+        if profundidade > 1e-6:
+            razoes.append(largura / profundidade)
+    return statistics.median(razoes) if razoes else None
+
+
+def _densidade_lotes_por_raio2(num_lotes, raio_m):
+    if not raio_m:
+        return None
+    return num_lotes / (raio_m ** 2)
+
+
 def _percentual_sem_frente(features, metros_por_px, limite_m=25.0):
     ruas = [_achatar_anel([f["geometry"]["coordinates"]]) + [_achatar_anel([f["geometry"]["coordinates"]])[0]]
             for f in features if f["properties"].get("camada") == "rua"]
@@ -221,7 +253,18 @@ def auditar_cidade(caminho, metros_por_px):
         "sem_frente_pct": sem_frente_pct,
         "fora_muro_m": pior_invasao,
         "area_lote_mediana_m2": statistics.median(areas_lote_m2) if areas_lote_m2 else 0.0,
+        # L04: largura/profundidade denuncia a regressão de S01; lotes/raio² é a
+        # constante de densidade que R02 vai calibrar por modelo.
+        "largura_profundidade": _razao_largura_profundidade(quarteiroes, metros_por_px),
+        "lotes_por_raio2": _densidade_lotes_por_raio2(len(lotes), raio_m),
     }
+
+
+# L04: mediana de lotes por quadra fora de [4, 30] é violação dura, mesmo critério que
+# bowtie/anel/muro/frente — S01 (docs/PLANO_POPULACAO_E_ESCALA.md) existe pra manter a
+# quadra "quase quadrada" dentro dessa faixa.
+LOTES_POR_QUADRA_MEDIANA_MIN = 4
+LOTES_POR_QUADRA_MEDIANA_MAX = 30
 
 
 def _viola_invariantes(linha):
@@ -232,6 +275,9 @@ def _viola_invariantes(linha):
     if linha["fora_muro_m"] is not None and linha["fora_muro_m"] > TOLERANCIA_FORA_MURO_M:
         return True
     if linha["sem_frente_pct"] > TOLERANCIA_SEM_FRENTE_PCT:
+        return True
+    mediana = linha["l_quadra_mediana"]
+    if not (LOTES_POR_QUADRA_MEDIANA_MIN <= mediana <= LOTES_POR_QUADRA_MEDIANA_MAX):
         return True
     return False
 
@@ -253,7 +299,8 @@ def main():
 
     cabecalho = (f"{'cidade':<22} {'modelo':<10} {'aneis':>5} {'vao_m':>6} {'quadras':>7} "
                  f"{'lotes':>6} {'ocup%':>6} {'bowtie_q':>8} {'bowtie_l':>8} {'anel_x':>6} "
-                 f"{'l/quadra':>9} {'max/qd':>7} {'sem_front%':>10} {'fora_muro':>9} {'area_med_m2':>11}")
+                 f"{'l/quadra':>9} {'max/qd':>7} {'sem_front%':>10} {'fora_muro':>9} "
+                 f"{'area_med_m2':>11} {'larg/prof':>9} {'lotes/raio2':>11}")
     print(cabecalho)
     print("-" * len(cabecalho))
 
@@ -269,10 +316,14 @@ def main():
               f"{_fmt(linha['l_quadra_mediana'], 1):>9} {_fmt(linha['l_quadra_max']):>7} "
               f"{_fmt(linha['sem_frente_pct'], 1):>10} "
               f"{_fmt(linha['fora_muro_m'], 1) if linha['fora_muro_m'] is not None else '-':>9} "
-              f"{_fmt(linha['area_lote_mediana_m2'], 1):>11}")
+              f"{_fmt(linha['area_lote_mediana_m2'], 1):>11} "
+              f"{_fmt(linha['largura_profundidade'], 2):>9} "
+              f"{_fmt(linha['lotes_por_raio2'], 4):>11}")
 
     if algum_violado:
-        print("\n❌ Um ou mais invariantes violados (bowtie, anéis cruzados, muro ou lote sem frente).")
+        print("\n❌ Um ou mais invariantes violados (bowtie, anéis cruzados, muro, lote sem "
+              f"frente, ou mediana de lotes/quadra fora de [{LOTES_POR_QUADRA_MEDIANA_MIN}, "
+              f"{LOTES_POR_QUADRA_MEDIANA_MAX}]).")
         sys.exit(1)
     print("\n✅ Nenhum invariante violado nas cidades auditadas.")
 
