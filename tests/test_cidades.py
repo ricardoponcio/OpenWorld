@@ -193,9 +193,11 @@ def _dist_ponto_polilinha(p, pontos):
 def test_rua_coincide_com_aresta_de_quadra():
     """G04 — Seção 1.2: rua e quadra são duas leituras da mesma grade; quem perturba a
     grade (organica) tem que perturbar as duas juntas. Para toda aresta de quadra que
-    não seja 'servico', o PONTO MÉDIO da aresta tem que estar a menos de
-    largura_da_classe/2 + 1.0 m (tolerância maior que a de produção — o objetivo aqui é
-    provar a COERÊNCIA rua/quadra, não recalibrar recuo) de alguma rua.
+    não seja 'servico' (viela de verdade, sem inset aqui) nem 'sem_via' (L02: não
+    existe via nenhuma ali, por definição — não teria rua próxima mesmo), o PONTO
+    MÉDIO da aresta tem que estar a menos de largura_da_classe/2 + 1.0 m (tolerância
+    maior que a de produção — o objetivo aqui é provar a COERÊNCIA rua/quadra, não
+    recalibrar recuo) de alguma rua.
 
     Só radial/organica: são os dois que compartilham a grade perturbada por G01/G04.
     `grade`/`linear` têm vocabulário próprio (ex.: linear reusa a classe 'anel' só como
@@ -213,7 +215,7 @@ def test_rua_coincide_com_aresta_de_quadra():
             n = len(quadra.vertices)
             for k in range(n):
                 classe = quadra.classes_aresta[k]
-                if classe == "servico":
+                if classe in ("servico", "sem_via"):
                     continue
                 p0, p1 = quadra.vertices[k], quadra.vertices[(k + 1) % n]
                 meio = ((p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0)
@@ -393,3 +395,15 @@ def test_profundidade_de_lote_e_limitada_por_banda():
         assert maior <= mediana * 3.0, (
             f"organica banda {banda}: lote de {maior:.0f} m² contra mediana de {mediana:.0f} m² "
             f"(mais de 3x)")
+
+
+def test_sem_lote_em_aresta_cega():
+    """L02/W01 (docs/PLANO_POPULACAO_E_ESCALA.md): nenhum lote com
+    `classe_frente == "sem_via"` — a aresta cega do anel aberto (`organica`) não pode
+    dar frente a lote nenhum, por definição."""
+    geo = _gerar(MODELOS["organica"])
+    for f in geo["features"]:
+        if f["properties"]["camada"] != "lote":
+            continue
+        assert f["properties"]["classe_frente"] != "sem_via", (
+            f"lote {f['properties'].get('id')} com frente pra uma aresta sem via")

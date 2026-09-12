@@ -95,7 +95,7 @@ class OrganicaModelo(RadialModelo):
                 # 4, e ainda assim ficava sem rua na aresta 4->5).
                 gap_externo = aneis_abertos.get(j, ())
                 if i in gap_externo or i2 in gap_externo:
-                    quadra.classes_aresta[1] = "servico"  # aresta externa (vertices[j])
+                    quadra.classes_aresta[1] = "sem_via"  # aresta externa (vertices[j])
 
                 # S02: a aresta interna vem de vertices[j-1] DENSIFICADO pra resolução
                 # `s_j` — mas o vão aberto de `aneis_abertos[j-1]` foi calculado na
@@ -115,7 +115,7 @@ class OrganicaModelo(RadialModelo):
                         return origem in gap_interno or (origem + 1) % s_anterior in gap_interno
 
                     if _toca_o_vao(i) or _toca_o_vao(i2):
-                        quadra.classes_aresta[3] = "servico"  # aresta interna (vertices[j-1])
+                        quadra.classes_aresta[3] = "sem_via"  # aresta interna (vertices[j-1])
 
         return malha
 

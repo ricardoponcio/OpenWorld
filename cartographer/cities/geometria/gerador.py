@@ -127,6 +127,10 @@ class GeradorCidade(DistribuicaoMixin):
     # por QUALQUER modelo (Seção 5.5). "O que NÃO é gancho" da Seção 4.3.
     # ------------------------------------------------------------------
     def _distancia_faixa_dominio(self, classe):
+        # L02 (docs/PLANO_POPULACAO_E_ESCALA.md): "sem_via" não tem via nenhuma pra
+        # recuar dela — distância zero, nunca o default de "secundaria".
+        if classe == "sem_via":
+            return 0.0
         largura = self.via_largura_por_classe.get(classe, self.via_largura_por_classe.get("secundaria", 5.0))
         return largura / 2.0 + self.recuo_rua
 

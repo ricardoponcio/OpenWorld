@@ -144,6 +144,10 @@ def gerar_lotes_do_quarteirao(quad_ext, classes_aresta, banda, config, lote_fato
         pair = (k_longo, (k_longo + 2) % 4)
         eixo_medio = _eixo_medio_sem_patio(quad_ext, pair, config, banda, lote_fator_cidade)
         for k in pair:
+            # L02: nenhuma faixa de lotes na aresta "sem_via" — não existe rua ali,
+            # nenhum lote pode ter frente.
+            if classes_aresta[k] == "sem_via":
+                continue
             lotes_k, idx = _lotes_da_faixa(quad_ext, k, eixo_medio, classes_aresta[k], faixa_frente, rng, idx)
             lotes.extend(lotes_k)
         # L01: o teto de profundidade de _eixo_medio_sem_patio pode deixar um miolo
@@ -157,6 +161,9 @@ def gerar_lotes_do_quarteirao(quad_ext, classes_aresta, banda, config, lote_fato
             patios = [eixo_medio]
     else:
         for k in range(4):
+            # L02: nenhuma faixa de lotes na aresta "sem_via".
+            if classes_aresta[k] == "sem_via":
+                continue
             lotes_k, idx = _lotes_da_faixa(quad_ext, k, quad_interno, classes_aresta[k], faixa_frente, rng, idx)
             lotes.extend(lotes_k)
         patios = [quad_interno]
@@ -174,7 +181,12 @@ def preparar_quadra(quad_bruto, classes_aresta, banda, config, lote_fator_cidade
 
     Devolve `None` se a quadra encolhida for degenerada ou pequena demais (mesmo
     critério de `gerador.py`), senão `(quad_urbanizavel, lotes_info, patios, vielas,
-    indice_final)`."""
+    indice_final)`.
+
+    L02 (docs/PLANO_POPULACAO_E_ESCALA.md): uma quadra com as 4 arestas "sem_via" não
+    tem frente nenhuma pra lote nenhum — descartada aqui, mesmo critério de "degenerada"."""
+    if all(c == "sem_via" for c in classes_aresta):
+        return None
     distancias = [distancia_faixa_dominio_fn(c) for c in classes_aresta]
     quad_urbanizavel = quad.encolher_quad(quad_bruto, distancias)
     if quad_urbanizavel is None or quad.area_quad(quad_urbanizavel) < quadra_area_minima:

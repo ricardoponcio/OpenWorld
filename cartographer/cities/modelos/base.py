@@ -47,7 +47,12 @@ def distancia_faixa_dominio(config, classe):
     """Meia-largura da via + recuo — a distância que `quad.encolher_quad` insere entre o
     quarteirão bruto e a faixa de domínio da rua. Era duplicado, idêntico, em
     `gerador.py` e em `linear.py`; extraído aqui pra `cartographer/cities/expansao.py`
-    (X02, docs/PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo."""
+    (X02, docs/PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo.
+
+    L02 (docs/PLANO_POPULACAO_E_ESCALA.md): "sem_via" tem distância zero — não há via
+    nenhuma pra recuar dela."""
+    if classe == "sem_via":
+        return 0.0
     largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
     largura = largura_por_classe.get(classe, largura_por_classe.get("secundaria", 5.0))
     return largura / 2.0 + cfg_get(config, "cidade_geo_recuo_rua_m")
@@ -154,7 +159,14 @@ class Rua:
 @dataclass
 class Quadra:
     vertices: list          # EXATAMENTE 4 vértices
-    classes_aresta: list     # 4 strings — a classe_via da rua sobre a aresta k
+    # 4 strings — a classe_via da rua sobre a aresta k. Valores válidos:
+    # "principal" | "anel" | "secundaria" (vias de verdade, com largura em
+    # cidade_via_largura_m_por_classe) | "servico" (viela DE VERDADE — vira Rua,
+    # dá frente legítima) | "sem_via" (L02, docs/PLANO_POPULACAO_E_ESCALA.md: NÃO
+    # existe via nenhuma nesta aresta — nenhum lote pode ter frente ali; distância de
+    # faixa de domínio zero, não há via pra recuar). Armadilha 6: "servico" já
+    # significou as duas coisas no mesmo campo — não confunda os dois de novo.
+    classes_aresta: list
     banda: int               # 0 = núcleo ... num_bandas-1 = borda. Alimenta _area_alvo_lote
     bairro: str
     id: object               # identificador estável do quarteirão (hashable)
