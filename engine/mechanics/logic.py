@@ -30,9 +30,9 @@ class NPCBrain:
 
     @staticmethod
     def calcular_utilidade(npc: NPC, hora_atual: int, config: Dict, locais: Dict = None,
-                            eventos_globais: Optional[List] = None) -> Dict[Acao, float]:
+                            eventos_globais: Optional[List] = None, indice=None) -> Dict[Acao, float]:
         ctx = ContextoDecisao(npc=npc, hora=hora_atual, config=config, locais=locais,
-                               eventos_globais=eventos_globais or [])
+                               eventos_globais=eventos_globais or [], indice=indice)
 
         utilidades = {acao: 0.0 for acao in Acao}
         for avaliador in NPCBrain.AVALIADORES:
@@ -43,7 +43,7 @@ class NPCBrain:
 
     @staticmethod
     def decidir_acao(npc: NPC, hora_atual: int, config: Dict, locais: Dict = None,
-                      eventos_globais: Optional[List] = None):
+                      eventos_globais: Optional[List] = None, indice=None):
         """`config` é o config.json completo — ver `calcular_utilidade`."""
         # --- REDE DE SEGURANÇA: Habitação ---
         if locais and (npc.casa_id not in locais):
@@ -51,7 +51,7 @@ class NPCBrain:
             if casas_disponiveis:
                 npc.casa_id = casas_disponiveis[0]
 
-        utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, config, locais, eventos_globais)
+        utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, config, locais, eventos_globais, indice)
         npc.acao_atual = max(utilidades, key=utilidades.get)
 
         # Validação de Segurança do Trabalho

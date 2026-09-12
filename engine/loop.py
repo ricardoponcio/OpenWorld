@@ -129,7 +129,7 @@ class GameLoop:
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list):
         acao_anterior = npc.acao_atual
         NPCBrain.decidir_acao(npc, self._mundo.data_simulada.hour, self._config,
-                              self._mundo.locais, eventos_globais)
+                              self._mundo.locais, eventos_globais, self._mundo.indice)
 
         if npc.acao_atual != acao_anterior:
             WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}", npc=npc)

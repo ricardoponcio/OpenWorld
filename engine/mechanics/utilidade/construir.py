@@ -22,6 +22,6 @@ class AvaliadorConstruir(AvaliadorDeUtilidade):
         hora_sono = (hora_atual >= cfg_get(cfg, "hora_inicio_sono_obrigatorio")
                      or hora_atual < cfg_get(cfg, "hora_fim_construir_madrugada"))
 
-        if not tem_trabalho_ativo and not hora_sono and NPCUtils.obter_obra_do_npc(ctx.locais, npc):
+        if not tem_trabalho_ativo and not hora_sono and NPCUtils.obter_obra_do_npc(ctx, npc):
             return cfg_get(cfg, "utilidade_construir")
         return 0.0

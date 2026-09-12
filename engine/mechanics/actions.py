@@ -203,7 +203,7 @@ class NPCActionManager:
         npc.social -= social_perda
 
     def _executar_construir(self, npc: NPC):
-        obra = NPCUtils.obter_obra_do_npc(self._mundo.locais, npc)
+        obra = NPCUtils.obter_obra_do_npc(self._mundo, npc)
 
         if not obra:
             npc.acao_atual = Acao.OCIOSO
@@ -219,7 +219,7 @@ class NPCActionManager:
         npc.energia -= perda_energia
         npc.fome += ganho_fome
         obra.integridade += ganho_integridade  # Conclui em ~10 ticks (~2.5 horas in-game de trabalho ativo)
-        self._mundo.db.locais.salvar(obra)
+        self._mundo.registrar_local(obra)
 
         if WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
             WorldLogger.debug(f"🔨 [CONSTRUÇÃO] {npc.nome} está construindo a casa! (Integridade: {obra.integridade}%)", npc=npc)
@@ -250,6 +250,6 @@ class NPCActionManager:
                     m.localizacao_atual_id = obra.id
                     self._mundo.db.npcs.salvar(m)
 
-            self._mundo.db.locais.salvar(obra)
+            self._mundo.registrar_local(obra)  # P02: status virou 1 — reindexa (ex.: residencias_ativas)
             WorldLogger.info(f"🏡 [MUDANÇA] A família de {dono.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=dono)
             npc.acao_atual = Acao.OCIOSO

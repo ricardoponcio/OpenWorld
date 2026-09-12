@@ -82,7 +82,7 @@ class InfrastructureManager:
                 taxa += excedente * desgaste_excedente
 
             local.integridade = max(0.0, local.integridade - taxa)
-            self._mundo.db.locais.salvar(local)
+            self._mundo.registrar_local(local)
 
             self._aplicar_consequencias(local, local_id, cfg)
 
@@ -118,7 +118,7 @@ class InfrastructureManager:
         O JobMarket detectará os desempregados e os realocará no próximo ciclo.
         """
         local.status = 0
-        self._mundo.db.locais.salvar(local)
+        self._mundo.desativar_local(local.id)
         WorldLogger.info(
             f"🚧 [INFRAESTRUTURA] {local.nome} foi FECHADO por condições estruturais "
             f"{EstadoInfraestrutura.CRITICO.value} "
@@ -149,7 +149,7 @@ class InfrastructureManager:
         local.integridade = 0
         local.capacidade  = 0
         local.nome        = f"Ruínas de {nome_original}"
-        self._mundo.db.locais.salvar(local)
+        self._mundo.desativar_local(local.id)
         self._mundo.db.lotes.liberar(local_id)
         WorldLogger.info(
             f"💀 [COLAPSO] {nome_original} entrou em colapso total e se tornou uma "
@@ -198,7 +198,7 @@ class InfrastructureManager:
             local_id, local = random.choice(locais_danificados)
             npc.dinheiro_total_pc -= custo
             local.integridade = min(100.0, local.integridade + ganho)
-            self._mundo.db.locais.salvar(local)
+            self._mundo.registrar_local(local)
             self._mundo.db.npcs.salvar(npc)
             WorldLogger.debug(
                 f"🔧 [REPARO ESPONTÂNEO] {npc.nome} realizou manutenção em {local.nome} "

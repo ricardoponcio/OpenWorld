@@ -40,7 +40,7 @@ class NPCHousingManager:
         Reutilizável para expansão urbana e novos casamentos.
         """
         # Evita duplicar se já possui obra ativa em andamento
-        if NPCUtils.obter_obra_do_npc(self._mundo.locais, n1) or (n2 and NPCUtils.obter_obra_do_npc(self._mundo.locais, n2)):
+        if NPCUtils.obter_obra_do_npc(self._mundo, n1) or (n2 and NPCUtils.obter_obra_do_npc(self._mundo, n2)):
             return False
 
         cfg_urbano = cfg_get(self._config, "geracao_urbana")
@@ -70,8 +70,7 @@ class NPCHousingManager:
             integridade=0,
             capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"),
         )
-        self._mundo.locais[nova_obra_id] = obra
-        self._mundo.db.locais.salvar(obra)
+        self._mundo.registrar_local(obra)
         return True
 
     def processar_habitacao(self):
@@ -118,7 +117,7 @@ class NPCHousingManager:
 
             # Bug B: se QUALQUER morador já tem obra em andamento, não disparar nova obra
             ja_ha_obra = any(
-                NPCUtils.obter_obra_do_npc(self._mundo.locais, m) is not None
+                NPCUtils.obter_obra_do_npc(self._mundo, m) is not None
                 for m in moradores
             )
             if ja_ha_obra:

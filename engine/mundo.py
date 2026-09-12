@@ -37,3 +37,30 @@ class EstadoDoMundo:
     def __post_init__(self):
         if self.indice is None:
             self.indice = IndiceDeLocais(self.locais)
+
+    # ------------------------------------------------------------------
+    # P02 (docs/PLANO_CIDADE_VIVA.md): único caminho de escrita de Local — um índice
+    # que alguém esquece de atualizar é pior que nenhum índice (o bug é intermitente e
+    # invisível). Todo lugar que cria ou desativa um Local (housing, urbanismo, decay,
+    # ações do Modo Mestre) passa por aqui, nunca por `db.locais.salvar` direto.
+    # ------------------------------------------------------------------
+    def registrar_local(self, local) -> None:
+        """Cria um Local novo, ou reindexa um já existente cujo estado mudou (ex.:
+        obra concluída, status 0->1) — idempotente: reindexar do zero em vez de tentar
+        atualizar incrementalmente evita duplicata ou entrada órfã em `obra_por_dono`."""
+        if local.id in self.locais:
+            self.indice.remover(local.id)
+        self.locais[local.id] = local
+        self.indice.registrar(local.id, local)
+        self.db.locais.salvar(local)
+
+    def desativar_local(self, local_id: str) -> None:
+        """Persiste e reindexa um Local cujos campos (status, e o que mais for o caso —
+        nome, tipo, integridade) o CHAMADOR já ajustou. Sai de todo índice de
+        "disponível agora"; `locais`/`indice.por_id` continuam com ele (narrativa,
+        auditoria)."""
+        local = self.locais.get(local_id)
+        if local is None:
+            return
+        self.indice.remover(local_id)
+        self.db.locais.salvar(local)

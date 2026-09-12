@@ -146,22 +146,23 @@ class NPCUtils:
         return False
 
     @staticmethod
-    def obter_obra_do_npc(locais: Dict[str, 'Local'], npc: NPC):
+    def obter_obra_do_npc(mundo, npc: NPC):
         """
         Retorna a obra (Local em construção, status=0) cujo dono é o NPC ou seu
-        cônjuge (R-C03). Antes, o dono era gravado como texto livre dentro de
-        `descricao` (f"Dono: {id}") e recuperado com `npc.id in descricao` — uma busca
-        por substring que casava `npc_01` dentro de `npc_012`. `Local.dono_npc_id` já
-        existia no dataclass e no schema, só não era usado aqui.
+        cônjuge (R-C03).
+
+        P02 (docs/PLANO_CIDADE_VIVA.md): consulta `mundo.indice.obra_por_dono` (dict
+        `npc_id -> local_id`, O(1)) em vez de varrer todos os locais — era a varredura
+        mais cara do profiler (Seção 1.6), chamada por NPC, por tick. Antes disso, o
+        dono era gravado como texto livre dentro de `descricao` (f"Dono: {id}") e
+        recuperado com `npc.id in descricao` — uma busca por substring que casava
+        `npc_01` dentro de `npc_012`; `Local.dono_npc_id` corrigiu isso, só não era
+        indexado ainda.
         """
-        if not locais: return None
-        donos = {npc.id}
-        if npc.conjuge_id:
-            donos.add(npc.conjuge_id)
-        for l in locais.values():
-            if l.tipo == TipoLocal.CASA.value and l.status == 0 and l.dono_npc_id in donos:
-                return l
-        return None
+        local_id = mundo.indice.obra_por_dono.get(npc.id)
+        if local_id is None and npc.conjuge_id:
+            local_id = mundo.indice.obra_por_dono.get(npc.conjuge_id)
+        return mundo.locais.get(local_id) if local_id else None
 
     @staticmethod
     def obter_data_nascimento_valida(npc: NPC):

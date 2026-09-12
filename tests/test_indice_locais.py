@@ -1,10 +1,10 @@
 """
-Testes de `IndiceDeLocais` — docs/PLANO_CIDADE_VIVA.md P01.
+Testes de `IndiceDeLocais` — docs/PLANO_CIDADE_VIVA.md P01/P02.
 """
 from engine.indice_locais import IndiceDeLocais
 from engine.models import Local, TipoLocal, CategoriaLocal
 
-from tests.mundo_sintetico import casa
+from tests.mundo_sintetico import casa, mundo_de
 
 
 def test_indices_por_cidade_e_papel():
@@ -47,3 +47,38 @@ def test_obra_por_dono():
     indice = IndiceDeLocais({obra.id: obra})
 
     assert indice.obra_por_dono["npc_joao"] == "obra_1"
+
+
+def test_registrar_local_e_desativar_local_via_estado_do_mundo():
+    """P02 — o único caminho de escrita de Local: registrar_local cria/reindexa,
+    desativar_local persiste e tira dos índices de "disponível agora"."""
+    mundo = mundo_de()
+    social = casa("social_1", nome="Taverna Nova", tipo=TipoLocal.SOCIAL.value, cidade_id=1)
+
+    mundo.registrar_local(social)
+    assert social.id in mundo.locais
+    assert mundo.indice.sociais(1) == ["social_1"]
+    assert social in mundo.db.locais.salvos
+
+    social.status = 0
+    mundo.desativar_local(social.id)
+    assert mundo.indice.sociais(1) == []
+    assert social.id in mundo.locais  # continua acessível por id, só sai do índice
+
+
+def test_registrar_local_reindexa_obra_concluida():
+    """P02: quando uma obra conclui (status 0 -> 1), registrar_local de novo tem que
+    tirar o local de obra_por_dono (senão o dono parece ter obra em andamento pra
+    sempre) e passar a indexar como residência ativa."""
+    mundo = mundo_de()
+    obra = casa("obra_1", nome="Obra", tipo=TipoLocal.CASA.value, status=0,
+                categoria=CategoriaLocal.RESIDENCIA.value, dono_npc_id="npc_1", cidade_id=1)
+    mundo.registrar_local(obra)
+    assert mundo.indice.obra_por_dono["npc_1"] == "obra_1"
+    assert mundo.indice.residencias_ativas(1) == []
+
+    obra.status = 1
+    mundo.registrar_local(obra)
+
+    assert "npc_1" not in mundo.indice.obra_por_dono
+    assert mundo.indice.residencias_ativas(1) == ["obra_1"]

@@ -70,9 +70,11 @@ class IndiceDeLocais:
         self._trabalho_por_categoria[cidade_id][local.categoria].append(local_id)
 
     def remover(self, local_id: str) -> None:
-        """P02/T04: local desativado ou removido some de todo índice de papel — só
-        `por_id` e `obra_por_dono` (que indexam por identidade, não por disponibilidade)
-        continuam consultáveis depois (ex.: dono de uma obra concluída)."""
+        """P02: tira o local de todo índice de "disponível agora" — usado tanto por
+        `EstadoDoMundo.desativar_local` (status vira 0 pra valer) quanto por
+        `registrar_local` re-registrando um local que já existia (limpa o estado
+        antigo antes de reindexar do zero, ex.: obra concluída não pode continuar em
+        `obra_por_dono` como se ainda estivesse em construção)."""
         local = self.por_id.get(local_id)
         if local is None:
             return
@@ -85,6 +87,8 @@ class IndiceDeLocais:
         cat_lista = self._trabalho_por_categoria.get(cidade_id, {}).get(local.categoria)
         if cat_lista and local_id in cat_lista:
             cat_lista.remove(local_id)
+        if self.obra_por_dono.get(local.dono_npc_id) == local_id:
+            del self.obra_por_dono[local.dono_npc_id]
 
     # ------------------------------------------------------------------
     # Consultas por papel — todas devolvem lista vazia pra cidade sem local daquele
