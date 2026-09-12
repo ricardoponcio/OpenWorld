@@ -179,6 +179,12 @@ class MetaChave(Enum):
     CIDADE_SIMULADA     = "cidade_simulada"
     CIDADES_ATIVAS      = "cidades_ativas"
     MAPA_TERRENO        = "mapa_terreno"
+    # M01 (docs/PLANO_POPULACAO_E_ESCALA.md): contador incrementado, na MESMA
+    # transação da escrita, toda vez que uma ação do Modo Mestre cria ou destrói um
+    # Local — run_simulation.py lê isto uma vez por tick e chama
+    # `engine.recarregar_locais()` quando muda, em vez de recarregar 24 mil locais
+    # todo tick só pra descobrir que nada mudou.
+    LOCAIS_VERSAO       = "locais_versao"
 
 
 class ComandoMestre(Enum):

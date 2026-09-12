@@ -3,6 +3,19 @@ from engine.core import SimulationEngine
 from engine.mechanics import JobMarket, InfrastructureManager
 from engine.models import MetaChave
 
+
+def sincronizar_locais_se_mudou(engine, ultima_versao_vista: str) -> str:
+    """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): o Modo Mestre roda no processo do
+    Flask e escreve locais direto no SQLite — o processo da simulação só percebe se
+    alguém checar. Um `SELECT` de uma linha por tick é ruído (o mesmo caminho já lê
+    SIMULACAO_PAUSADA/VELOCIDADE todo tick); recarregar 24 mil locais por tick não
+    seria. Só recarrega quando o contador de fato mudou desde a última checagem."""
+    versao_atual = engine.mundo.db.meta.carregar(MetaChave.LOCAIS_VERSAO)
+    if versao_atual != ultima_versao_vista:
+        engine.recarregar_locais()
+        return versao_atual
+    return ultima_versao_vista
+
 def processar_gatilhos_periodicos(engine, market, infra):
     """Gatilhos baseados no relógio do jogo (não em contagem de ticks — ver Frente 4)."""
     hora = engine.mundo.data_simulada.hour
@@ -29,8 +42,16 @@ def start_simulation():
     print(f"🌍 Mundo carregado com {len(engine.mundo.npcs)} habitantes e {len(engine.mundo.locais)} locais.")
     print("Simulação em tempo real 1:1 (1 min de jogo = 1 min real na velocidade 1x).")
 
+    # M01: começa com a versão já carregada no boot — não recarrega à toa no primeiro laço.
+    ultima_versao_locais = engine.mundo.db.meta.carregar(MetaChave.LOCAIS_VERSAO)
+
     try:
         while True:
+            # M01: checado a cada volta do laço (mesmo pausado — o Modo Mestre cria/
+            # destrói local com a simulação parada, pra preparar uma cena antes de
+            # avançar).
+            ultima_versao_locais = sincronizar_locais_se_mudou(engine, ultima_versao_locais)
+
             status_pausa = engine.mundo.db.meta.carregar(MetaChave.SIMULACAO_PAUSADA)
             v_str = engine.mundo.db.meta.carregar(MetaChave.VELOCIDADE)
             velocidade = float(v_str) if v_str else 1.0

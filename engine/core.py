@@ -12,6 +12,7 @@ DESCRIÇÃO:
     (ARQUITETURA.md Seção 7, "Injeção de dependência").
 """
 from .database import DatabaseManager
+from .indice_locais import IndiceDeLocais
 from .logger import WorldLogger
 from .consultas_npc import NPCUtils
 from .config_loader import carregar_config_global
@@ -53,6 +54,17 @@ class SimulationEngine:
             # forem reconstruídos aqui.
             self.mundo._reconstruir_indices_de_npc()
             WorldLogger.debug(f"🔄 Memória sincronizada com o banco de dados ({len(self.mundo.npcs)} NPCs).")
+
+    def recarregar_locais(self):
+        """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): recarrega `mundo.locais` do banco
+        e reconstrói o `IndiceDeLocais` — espelha `recarregar_habitantes()`.
+        Chamado por `run_simulation.py` quando `MetaChave.LOCAIS_VERSAO` mudar (ação
+        do Modo Mestre criou/destruiu um Local). Reconstruir só o dicionário sem
+        reconstruir o índice deixaria os dois discordando, o que é pior do que não
+        recarregar nada."""
+        self.mundo.locais = self.mundo.db.locais.carregar_por_id()
+        self.mundo.indice = IndiceDeLocais(self.mundo.locais)
+        WorldLogger.debug(f"🔄 Locais sincronizados com o banco de dados ({len(self.mundo.locais)} locais).")
 
     def tick(self):
         """

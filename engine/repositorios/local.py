@@ -1,5 +1,5 @@
 import json
-from ..models import Local, CategoriaLocal
+from ..models import Local, CategoriaLocal, MetaChave
 
 
 class RepositorioLocal:
@@ -68,16 +68,31 @@ class RepositorioLocal:
               coordenadas: list, status: int = 1, integridade: int = 100, capacidade: int = 5,
               salario_base: int = 100):
         with self.db.connection() as conn:
-            conn.cursor().execute(
+            cursor = conn.cursor()
+            cursor.execute(
                 "INSERT INTO locais (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (id, nome, tipo, cidade_id, categoria, descricao, json.dumps(coordenadas),
                  status, integridade, capacidade, salario_base)
             )
+            self._incrementar_versao(cursor)
 
     def desativar(self, local_id: str):
         with self.db.connection() as conn:
-            conn.cursor().execute("UPDATE locais SET status = 0, integridade = 0 WHERE id = ?", (local_id,))
+            cursor = conn.cursor()
+            cursor.execute("UPDATE locais SET status = 0, integridade = 0 WHERE id = ?", (local_id,))
+            self._incrementar_versao(cursor)
+
+    @staticmethod
+    def _incrementar_versao(cursor) -> None:
+        """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): incrementa `MetaChave.LOCAIS_VERSAO`
+        na MESMA transação (mesmo cursor/conexão) da escrita do local — é o que
+        `run_simulation.py` usa pra saber, sem recarregar tudo, que precisa chamar
+        `recarregar_locais()`."""
+        cursor.execute(
+            "INSERT INTO mundo_meta (chave, valor) VALUES (?, '1') "
+            "ON CONFLICT(chave) DO UPDATE SET valor = CAST(valor AS INTEGER) + 1",
+            (MetaChave.LOCAIS_VERSAO.value,))
 
     def coordenadas_ocupadas(self) -> set:
         with self.db.connection() as conn:
