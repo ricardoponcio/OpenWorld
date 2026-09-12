@@ -66,17 +66,30 @@ def _lotes_da_faixa(quad_ext, k, ins, classe_frente, faixa_frente_m, rng, indice
     return lotes, idx
 
 
-def _eixo_medio_sem_patio(quad_ext, pair):
+def _eixo_medio_sem_patio(quad_ext, pair, config, banda, lote_fator_cidade):
     """Sem pátio (quadra rasa demais), a 'faixa' vai até o EIXO MÉDIO da quadra em vez
     do pátio. O eixo médio liga os pontos médios das duas arestas PERPENDICULARES ao
     par escolhido — devolve um array de 4 pontos com a mesma forma de `quad_interno`,
-    pra `_lotes_da_faixa` não precisar saber a diferença."""
+    pra `_lotes_da_faixa` não precisar saber a diferença.
+
+    L01 (docs/PLANO_POPULACAO_E_ESCALA.md): pra uma quadra em CUNHA (fina numa ponta,
+    grossa na outra), o eixo médio bruto pode ficar muito mais longe da aresta do que
+    a profundidade de lote configurada — puxa cada ponto de volta em direção à aresta
+    quando isso acontece. Continua PURA (sem `self`): recebe `config`/`banda`/
+    `lote_fator_cidade` só pra calcular o teto, nada de estado."""
     perp = [e for e in range(4) if e not in pair]
     meios = {e: quad.lerp(quad_ext[e], quad_ext[(e + 1) % 4], 0.5) for e in perp}
     eixo = []
     for k in range(4):
         e_anterior = (k - 1) % 4
         eixo.append(meios[e_anterior] if e_anterior in meios else meios[k])
+
+    profundidade_alvo = _profundidade_lote(config, banda, lote_fator_cidade)
+    for k in range(4):
+        canto = quad_ext[k]
+        d = math.dist(canto, eixo[k])
+        if d > profundidade_alvo:
+            eixo[k] = quad.lerp(canto, eixo[k], profundidade_alvo / d)
     return eixo
 
 
@@ -129,11 +142,19 @@ def gerar_lotes_do_quarteirao(quad_ext, classes_aresta, banda, config, lote_fato
     if quad_interno is None:
         k_longo = max(range(4), key=lambda i: math.dist(quad_ext[i], quad_ext[(i + 1) % 4]))
         pair = (k_longo, (k_longo + 2) % 4)
-        eixo_medio = _eixo_medio_sem_patio(quad_ext, pair)
+        eixo_medio = _eixo_medio_sem_patio(quad_ext, pair, config, banda, lote_fator_cidade)
         for k in pair:
             lotes_k, idx = _lotes_da_faixa(quad_ext, k, eixo_medio, classes_aresta[k], faixa_frente, rng, idx)
             lotes.extend(lotes_k)
+        # L01: o teto de profundidade de _eixo_medio_sem_patio pode deixar um miolo
+        # de verdade entre as duas faixas opostas — devolve como pátio legítimo (só
+        # se a área bater o mínimo E o quadrilátero for simples; cada canto é puxado
+        # de forma independente, então em quadra bem torta o miolo pode sair
+        # bowtie — nesse caso é mais seguro tratar como "sem pátio" do que emitir um
+        # polígono inválido, G02).
         patios = []
+        if quad.e_quad_simples(eixo_medio) and quad.area_quad(eixo_medio) > area_min:
+            patios = [eixo_medio]
     else:
         for k in range(4):
             lotes_k, idx = _lotes_da_faixa(quad_ext, k, quad_interno, classes_aresta[k], faixa_frente, rng, idx)

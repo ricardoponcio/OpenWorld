@@ -369,3 +369,27 @@ def test_praca_sem_lote_dentro():
         ly = sum(c[1] for c in coords) / len(coords)
         dist = ((lx - cx) ** 2 + (ly - cy) ** 2) ** 0.5
         assert dist >= raio * 0.99, "lote com centroide dentro da praça"
+
+
+def test_profundidade_de_lote_e_limitada_por_banda():
+    """L01 (docs/PLANO_POPULACAO_E_ESCALA.md): sem pátio (quadra rasa/em cunha), o
+    lote ia até o eixo médio da quadra — numa cunha isso produzia lotes de até 84 m de
+    profundidade contra um alvo de ~22 m (fenelburgo_6_5_l53, 922 m²). Nenhum lote
+    deve ter área muito acima da mediana da própria banda — usa `organica` (o modelo
+    com as quadras mais tortas/em cunha) por banda."""
+    geo = _gerar(MODELOS["organica"])
+    areas_por_banda = {}
+    for f in geo["features"]:
+        if f["properties"]["camada"] != "lote":
+            continue
+        banda = f["properties"]["banda"]
+        areas_por_banda.setdefault(banda, []).append(f["properties"]["area_m2"])
+
+    for banda, areas in areas_por_banda.items():
+        if len(areas) < 4:
+            continue
+        mediana = statistics.median(areas)
+        maior = max(areas)
+        assert maior <= mediana * 3.0, (
+            f"organica banda {banda}: lote de {maior:.0f} m² contra mediana de {mediana:.0f} m² "
+            f"(mais de 3x)")
