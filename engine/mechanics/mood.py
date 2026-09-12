@@ -50,17 +50,16 @@ class NPCMoodManager:
             return HumorNPC.TRISTE.value
         return HumorNPC.NEUTRO.value
 
-    def processar_humor(self, npc: NPC):
-        """Aproxima gradualmente o humor do NPC do humor-alvo calculado a partir
-        do seu bem-estar atual. Chamado uma vez por NPC vivo a cada tick."""
+    def processar_humor(self, npc: NPC, minutos: int = 1):
+        """Aproxima gradualmente o humor do NPC do humor-alvo calculado a partir do
+        seu bem-estar atual. Chamado uma vez por NPC vivo processado (A02, docs/
+        PLANO_POPULACAO_E_ESCALA.md: `minutos` é quantos minutos se passaram desde a
+        última avaliação — cada um é uma tentativa independente de transição, capada
+        na distância até o alvo, já que o humor não pode passar dele)."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         alvo = NPCMoodManager._calcular_humor_alvo(npc, cfg_bio)
 
         if npc.humor == alvo:
-            return
-
-        chance_transicao = cfg_get(cfg_bio, "humor_chance_transicao")
-        if random.random() >= chance_transicao:
             return
 
         # NPC em Pânico/Medo (forçado externamente) não tem posição na escala
@@ -68,13 +67,16 @@ class NPCMoodManager:
         # trazendo-o de volta ao normal assim que a condição é reavaliada.
         escala = [h.value for h in HumorNPC.escala_normal()]
         if npc.humor not in escala:
-            npc.humor = alvo
+            if any(random.random() < cfg_get(cfg_bio, "humor_chance_transicao") for _ in range(minutos)):
+                npc.humor = alvo
             return
 
         indice_atual = escala.index(npc.humor)
         indice_alvo = escala.index(alvo)
+        distancia = abs(indice_alvo - indice_atual)
+        direcao = 1 if indice_alvo > indice_atual else -1
 
-        if indice_alvo > indice_atual:
-            npc.humor = escala[indice_atual + 1]
-        else:
-            npc.humor = escala[indice_atual - 1]
+        chance_transicao = cfg_get(cfg_bio, "humor_chance_transicao")
+        passos = sum(1 for _ in range(min(minutos, distancia)) if random.random() < chance_transicao)
+        if passos:
+            npc.humor = escala[indice_atual + direcao * passos]

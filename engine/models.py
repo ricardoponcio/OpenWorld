@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, List
 from enum import Enum
 
@@ -308,6 +309,13 @@ class NPC:
     # casa (R-C01). Não é persistido (ver DatabaseManager/RepositorioNPC) e não deve
     # ser escrito por nenhum outro módulo.
     num_dependentes: int = 0
+
+    # A02 (docs/PLANO_POPULACAO_E_ESCALA.md): agenda de decisão — `None` significa
+    # "nunca avaliado, processar agora". Como `num_dependentes`, NÃO é persistido: um
+    # `recarregar_habitantes()` ou reinício do processo reseta os dois pra `None`, o
+    # que só custa uma reavaliação a mais no próximo tick, nunca um NPC congelado.
+    proximo_instante_decisao: datetime = None
+    ultima_avaliacao: datetime = None
 
 
     @property

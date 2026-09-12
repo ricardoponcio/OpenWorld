@@ -31,6 +31,7 @@ from .mechanics.kingdom import KingdomManager
 from .mechanics.social import NPCSocialManager
 from .mechanics.events import GlobalEventManager
 from .mechanics.mood import NPCMoodManager
+from .mechanics import agenda
 
 
 class GameLoop:
@@ -55,6 +56,11 @@ class GameLoop:
         # 0, e o retrato sozinho não perceberia isso — daí o segundo atributo abaixo).
         self._assinatura_casas_anterior = None
         self._ultima_lista_de_npcs = None
+
+        # A02 (docs/PLANO_POPULACAO_E_ESCALA.md): quantos NPCs foram efetivamente
+        # processados (metabolismo+decisão+ação) no último tick — não é estado de
+        # simulação, é só um contador pra `bench_avanco.py`/testes lerem.
+        self.decisoes_avaliadas_no_ultimo_tick = 0
 
         self._acoes = NPCActionManager(mundo, config)
         self._reproducao = NPCReproductionManager(mundo, config)
@@ -81,21 +87,47 @@ class GameLoop:
 
         maes_em_parto = []
         npcs_alterados = []
+        decisoes_avaliadas = 0
+        agora = self._mundo.data_simulada
         for npc in self._mundo.npcs:
             if not npc.esta_vivo():
                 continue
 
-            # `minutos=1`: cada tick ainda é um minuto simulado (A02 introduz o salto).
+            # A02: só processa quem está "em dia" — agendado pra agora ou antes, ou
+            # em estado de consequência (nunca pula, ver `agenda.npc_esta_em_dia`).
+            # Todo o resto deste laço, pra este NPC, some do tick inteiro.
+            if not agenda.npc_esta_em_dia(npc, agora, self._cfg_bio):
+                continue
+            decisoes_avaliadas += 1
+
+            # O tempo desde a última vez que ESTE NPC foi processado pode ser maior
+            # que 1 minuto (foi pulado). Os minutos "extras" (tudo menos o último)
+            # são aplicados de uma vez, com a ação que já estava em andamento — só
+            # o ÚLTIMO minuto passa pelo ciclo normal (metabolismo -> decidir ->
+            # agir), exatamente como antes de A02. Isso preserva, minuto a minuto, a
+            # MESMA sequência de hoje; só deixa de repeti-la de verdade pros minutos
+            # em que nada mudaria.
+            minutos_totais = agenda.minutos_desde_ultima_avaliacao(npc, agora)
+            minutos_extras = minutos_totais - 1
+            if minutos_extras > 0:
+                self._aplicar_metabolismo(npc, minutos_extras, maes_em_parto)
+                self._aplicar_efeito_continuo(npc, minutos_extras)
+
             self._aplicar_metabolismo(npc, 1, maes_em_parto)
             self._decidir_e_executar(npc, eventos_globais, npcs_por_casa)
             self._aplicar_consequencias_de_saude(npc)
             npc.normalizar_necessidades()
-            self._humor.processar_humor(npc)
+            self._humor.processar_humor(npc, minutos_totais)
 
             if npc.saude <= 0:
                 self._ciclo_de_vida.processar_morte(npc)
                 continue
+
+            npc.ultima_avaliacao = agora
+            npc.proximo_instante_decisao = agenda.calcular_proximo_instante(npc, agora, self._config)
             npcs_alterados.append(npc)
+
+        self.decisoes_avaliadas_no_ultimo_tick = decisoes_avaliadas
 
         self._remover_falecidos()
         self._processar_partos(maes_em_parto)
@@ -184,6 +216,27 @@ class GameLoop:
         npc.energia -= energia_perda
         npc.fome += fome_ganho
         npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max")) * minutos
+
+    def _aplicar_efeito_continuo(self, npc: NPC, minutos: int):
+        """A02 (docs/PLANO_POPULACAO_E_ESCALA.md): o efeito, por minuto, de CONTINUAR
+        fazendo a ação atual — a parte "linear" (sem estado interno próprio) do que
+        `NPCActionManager.executar_acao` faria se rodasse a cada minuto. Só chamado
+        para as ações em `agenda.ACOES_LOTEAVEIS` (dormir, trabalhar, ocioso): comer
+        (parcelas), construir (integridade até 100%) e cuidar_prole nunca acumulam
+        `minutos_extras` > 0 (ver `agenda.calcular_proximo_instante`), então nunca
+        passam por aqui — o estado interno delas continua sendo conferido a cada
+        minuto de verdade, sem risco de pular por cima de uma transição."""
+        cfg_acoes = cfg_get(self._config, "acoes")
+        if npc.acao_atual == Acao.DORMIR:
+            cfg = cfg_get(cfg_acoes, "dormir")
+            npc.energia += cfg_get(cfg, "energia_ganho") * minutos
+        elif npc.acao_atual == Acao.TRABALHAR:
+            cfg = cfg_get(cfg_acoes, "trabalhar")
+            npc.energia -= cfg_get(cfg, "energia_perda") * minutos
+            npc.dinheiro_total_pc += cfg_get(cfg, "salario_pc") * minutos
+        elif npc.acao_atual == Acao.OCIOSO:
+            cfg = cfg_get(cfg_acoes, "ocioso")
+            npc.social -= cfg_get(cfg, "social_perda") * minutos
 
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual

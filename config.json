@@ -1,5 +1,7 @@
 {
     "salvar_logs_npc_no_banco": false,
+    "_comentario_simulacao_intervalo_maximo_decisao_min": "A02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): teto do salto entre decisões de um NPC. Não abaixe pra 'ficar mais seguro' — a segurança vem do cálculo de cruzamento de limiar em engine/mechanics/agenda.py, não daqui; abaixar só quadruplica o custo do avanço rápido.",
+    "simulacao_intervalo_maximo_decisao_min": 240,
     "metabolismo": {
         "_comentario_1_1": "Frente 4 (2026-09-09): valores divididos por 15 — o tick virou 1 minuto real (era 15). O efeito total por hora de jogo é o mesmo de antes, só que distribuído em passos 15x menores. Ver docs/ROADMAP.md.",
         "energia_base_perda": 0.033333,
