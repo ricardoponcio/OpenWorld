@@ -225,6 +225,9 @@ class Lote:
     x: float = 0.0
     y: float = 0.0
     estado: str = LoteEstado.LIVRE.value
+    # T05: congelado no valor de `estado` na importação (T02) — nunca mais escrito
+    # depois. É a base de comparação do "delta" que o mapa consome sem reabrir GeoJSON.
+    estado_inicial: str = LoteEstado.LIVRE.value
     local_id: str = ""
     dono_npc_id: str = ""
 

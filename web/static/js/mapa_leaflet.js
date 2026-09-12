@@ -212,6 +212,19 @@ function estiloEdificio(feature) {
     };
 }
 
+// T05 (docs/PLANO_CIDADE_VIVA.md): lote livre e lote ocupado precisam se distinguir,
+// senão a cidade parece igual à de antes (D2/T03 preenche só uma fração dela). O valor
+// inicial vem de `feature.properties.estado`, gravado na geometria por T03; depois da
+// importação o BANCO é a verdade (armadilha 2) — `mesclarLotesAlteradosLeaflet` reescreve
+// essa mesma propriedade em cima do GeoJSON já carregado antes do estilo ser aplicado,
+// então uma casa construída/arruinada durante o jogo aparece sem regenerar nada.
+function estiloLote(feature) {
+    const livre = (feature.properties || {}).estado !== 'ocupado';
+    return livre
+        ? { color: '#8a7355', weight: 1, opacity: 0.5, dashArray: '3,3', fillColor: '#8a7355', fillOpacity: 0.08 }
+        : { color: '#6a5acd', weight: 0.5, opacity: 0.35, fillOpacity: 0.06 };
+}
+
 const ESTILO_CAMADA_CIDADE = {
     muralha: { color: '#d4a017', weight: 3, opacity: 0.9 },
     rua: estiloRua,
@@ -220,9 +233,7 @@ const ESTILO_CAMADA_CIDADE = {
     // Q01 (docs/PLANO_CIDADE_VIVA.md): o miolo da quadra que não é lote — horta, poço,
     // quintal comum. Sem contorno próprio (o do quarteirão já marca o limite).
     patio: { color: '#2ecc71', weight: 0, opacity: 0, fillOpacity: 0.18 },
-    // D3 do DIAGNOSTICO_V3: lote nunca tinha estilo porque a camada nunca era registrada.
-    // Mais fino que quarteirao (é o lote individual dentro dele).
-    lote: { color: '#6a5acd', weight: 0.5, opacity: 0.35, fillOpacity: 0.06 },
+    lote: estiloLote,
     edificio: estiloEdificio,
 };
 
@@ -340,6 +351,44 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
     return marker;
 }
 
+// T05 (docs/PLANO_CIDADE_VIVA.md): o GeoJSON de cidade guarda o estado do lote NA
+// IMPORTAÇÃO (T03); a partir daí o BANCO é a verdade (armadilha 2) — uma casa
+// construída/uma ruína durante o jogo nunca apareceria no mapa se o frontend só lesse
+// o arquivo. Busca o delta por cidade visível e reescreve `properties.estado` das
+// features de lote JÁ CARREGADAS, antes delas virarem camada — o estilo (`estiloLote`)
+// não precisa saber que existe um banco por trás.
+function _cidadesVisiveisLeaflet(x0, y0, x1, y1) {
+    const ids = new Set();
+    for (const cont of leafletContinentesCache) {
+        for (const cid of (cont.cidades || [])) {
+            if (cid.cidade_id == null) continue;
+            if (cid.x_global >= x0 && cid.x_global <= x1 && cid.y_global >= y0 && cid.y_global <= y1) {
+                ids.add(cid.cidade_id);
+            }
+        }
+    }
+    return [...ids];
+}
+
+async function mesclarLotesAlteradosLeaflet(loteFeatureCollection, x0, y0, x1, y1) {
+    const idsCidade = _cidadesVisiveisLeaflet(x0, y0, x1, y1);
+    if (idsCidade.length === 0) return;
+
+    const respostas = await Promise.all(idsCidade.map(id =>
+        fetch(`/api/cidade/${id}/lotes_alterados`).then(r => r.ok ? r.json() : []).catch(() => [])
+    ));
+    const estadoPorId = new Map();
+    for (const lista of respostas) {
+        for (const item of lista) estadoPorId.set(item.id, item.estado);
+    }
+    if (estadoPorId.size === 0) return;
+
+    for (const feature of (loteFeatureCollection.features || [])) {
+        const novoEstado = estadoPorId.get((feature.properties || {}).id);
+        if (novoEstado) feature.properties.estado = novoEstado;
+    }
+}
+
 async function carregarFeaturesVisiveisLeaflet() {
     if (!leafletMap || Object.keys(leafletCamadasVetoriais).length === 0) return;
 
@@ -363,6 +412,7 @@ async function carregarFeaturesVisiveisLeaflet() {
         const camadas = CAMADAS_VETORIAIS_DISPONIVEIS.join(',');
         const res = await fetch(`/api/mapa/features?camadas=${camadas}&bbox=${x0},${y0},${x1},${y1}&z=${z}`);
         const data = await res.json();
+        if (data.lote) await mesclarLotesAlteradosLeaflet(data.lote, x0, y0, x1, y1);
         CAMADAS_VETORIAIS_DISPONIVEIS.forEach(nome => {
             const layer = leafletCamadasVetoriais[nome];
             if (!layer || !data[nome]) return;

@@ -2,6 +2,7 @@ from web.rotas.mapa import mapa_bp
 from web.rotas.regiao import regiao_bp
 from web.rotas.tiles import tiles_bp
 from web.rotas.features import features_bp
+from web.rotas.cidade import cidade_bp
 
 
 def registrar_blueprints(app):
@@ -12,3 +13,4 @@ def registrar_blueprints(app):
     app.register_blueprint(regiao_bp)
     app.register_blueprint(tiles_bp)
     app.register_blueprint(features_bp)
+    app.register_blueprint(cidade_bp)

@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS lotes (
     x REAL DEFAULT 0.0,
     y REAL DEFAULT 0.0,
     estado TEXT DEFAULT 'livre',    -- LoteEstado: livre | obra | ocupado
+    -- T05: o valor de `estado` na hora da importação (T02) — congelado, nunca mais
+    -- escrito depois. `estado != estado_inicial` é o delta que o mapa (que lê o
+    -- GeoJSON, não o banco) precisa saber pra redesenhar sem regenerar geometria.
+    estado_inicial TEXT DEFAULT 'livre',
     local_id TEXT DEFAULT '',
     dono_npc_id TEXT DEFAULT '',
     FOREIGN KEY(cidade_id) REFERENCES cidades(id)

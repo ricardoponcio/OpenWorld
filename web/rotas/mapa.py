@@ -4,6 +4,7 @@ from web.helpers import render_npz_map_to_bytes, render_npz_array, obter_manifes
 from web.cache_mapa import MAPA_COMPOSTO_PATH, obter_mapa_do_cache
 from web.janelas import janela_continente, gerar_janela_com_cache
 from web.rotas._erros import registrar_erro_handler
+from web.banco import obter_db
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.math.climate import Bioma
 from cartographer.cities.escala import metros_por_pixel_mundo, tabela_zoom_min
@@ -66,14 +67,22 @@ def api_continentes():
     manifest = obter_manifesto()
     continentes = []
     if manifest:
+        # T05 (docs/PLANO_CIDADE_VIVA.md): o manifesto não guarda o id numérico da
+        # cidade (é atribuído só na importação, RepositorioMundo.salvar_cidade) — o
+        # frontend precisa dele pra pedir /api/cidade/<id>/lotes_alterados da cidade
+        # que está olhando. Uma consulta só (não uma por cidade) monta o mapa nome->id.
+        id_por_nome = {cid.nome: db_id for db_id, cid in obter_db().mundo.carregar_cidades_por_id().items()}
         for c in manifest.get("continentes", []):
+            cidades = []
+            for cid in c.get("cidades", []):
+                cidades.append({**cid, "cidade_id": id_por_nome.get(cid["nome"])})
             continentes.append({
                 "uuid": c["uuid"],
                 "nome": c["nome"],
                 "area_real_km2": c.get("area_real_km2", 0),
                 "biomas_predominantes": c.get("biomas_predominantes", []),
                 "bounding_box": c.get("bounding_box", {}),
-                "cidades": c.get("cidades", []),
+                "cidades": cidades,
                 "gerado": True
             })
 

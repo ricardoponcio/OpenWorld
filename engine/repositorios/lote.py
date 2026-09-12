@@ -18,10 +18,11 @@ class RepositorioLote:
             conn.cursor().executemany(
                 """INSERT OR REPLACE INTO lotes
                    (id, cidade_id, quarteirao_id, bairro, banda, classe_frente, area_m2,
-                    x, y, estado, local_id, dono_npc_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    x, y, estado, estado_inicial, local_id, dono_npc_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [(l.id, l.cidade_id, l.quarteirao_id, l.bairro, l.banda, l.classe_frente,
-                  l.area_m2, l.x, l.y, l.estado, l.local_id, l.dono_npc_id) for l in lotes],
+                  l.area_m2, l.x, l.y, l.estado, l.estado_inicial, l.local_id, l.dono_npc_id)
+                 for l in lotes],
             )
 
     def contar_por_estado(self, cidade_id: int) -> dict:
@@ -85,3 +86,15 @@ class RepositorioLote:
                 "UPDATE lotes SET estado = ?, local_id = '', dono_npc_id = '' "
                 "WHERE id = ? AND estado = ?",
                 (LoteEstado.LIVRE.value, lote_id, LoteEstado.OCUPADO.value))
+
+    def alterados_por_cidade(self, cidade_id: int) -> list:
+        """T05: lotes cujo `estado` já não é mais o que o GeoJSON gravou na importação
+        (`estado_inicial`) — o delta que o mapa (que lê o arquivo, não o banco) precisa
+        pra redesenhar sem regenerar geometria nenhuma."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, estado, local_id FROM lotes "
+                "WHERE cidade_id = ? AND estado != estado_inicial",
+                (cidade_id,))
+            return [dict(row) for row in cursor.fetchall()]

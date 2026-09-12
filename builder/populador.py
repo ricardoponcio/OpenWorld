@@ -117,12 +117,15 @@ def _importar_locais_da_geometria(db, cidade):
     for props, x_mundo, y_mundo in lotes_crus:
         lote_id = props["id"]
         ocupado = lote_id in edificio_ids
+        # T05: estado_inicial é o mesmo valor de estado NESTE instante — congelado, é a
+        # base de comparação do "o que mudou desde que o GeoJSON foi desenhado".
+        estado = LoteEstado.OCUPADO.value if ocupado else LoteEstado.LIVRE.value
         lotes.append(Lote(
             id=lote_id, cidade_id=cidade['db_id'], quarteirao_id=props.get("quarteirao_id", ""),
             bairro=props.get("bairro", ""), banda=props.get("banda", 0),
             classe_frente=props.get("classe_frente", ""), area_m2=props.get("area_m2", 0.0),
             x=round(x_mundo, 6), y=round(y_mundo, 6),
-            estado=LoteEstado.OCUPADO.value if ocupado else LoteEstado.LIVRE.value,
+            estado=estado, estado_inicial=estado,
             local_id=lote_id if ocupado else "",
         ))
     db.lotes.salvar_em_lote(lotes)
