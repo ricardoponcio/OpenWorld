@@ -192,7 +192,7 @@ class NPCReproductionManager:
             resumo_estruturado=resumo_temp
         )
         self._mundo.db.eventos.salvar(evento)
-        WorldLogger.info(f"👶 [PARTO] {resumo_temp}", npc=mae)
+        WorldLogger.evento_mundo(f"👶 [PARTO] {resumo_temp}", npc=mae)
 
         # 5. Batizado Assíncrono via IA rodando em Thread isolada (Estratégia C)
         self._iniciar_batizado_assincrono(DadosBatizado(

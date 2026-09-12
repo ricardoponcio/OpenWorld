@@ -92,7 +92,7 @@ class NPCMarriageManager:
                 casa_obj = casa_alvo # Atualiza para o log abaixo
                 
                 prefixo = "SURPRESA" if surpresa else "PLANEJADO"
-                WorldLogger.info(
+                WorldLogger.evento_mundo(
                     f"🏠 [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} mudaram-se para {casa_alvo.nome} que tinha espaço disponível!",
                     npc=n1
                 )
@@ -101,7 +101,7 @@ class NPCMarriageManager:
                 if self._habitacao.iniciar_obra_para_casal(n1, n2):
                     teve_nova_casa = True
                     prefixo = "SURPRESA" if surpresa else "PLANEJADO"
-                    WorldLogger.info(
+                    WorldLogger.evento_mundo(
                         f"🏗️ [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} iniciaram a "
                         f"construção de sua própria casa por falta de espaço na moradia dos pais!",
                         npc=n1
@@ -151,8 +151,8 @@ class NPCMarriageManager:
         self._mundo.db.npcs.salvar_relacionamento(n1.id, n2.id, n1.relacionamentos[n2.id], VinculoSocial.ALIADO.value)
 
         # Emitir logs oficiais do simulador
-        WorldLogger.info(f"❤️ [UNIÃO] {resumo}", npc=n1)
-        WorldLogger.queue_db_log(n2, "INFO", f"❤️ [UNIÃO] {resumo}")
+        WorldLogger.evento_mundo(f"❤️ [UNIÃO] {resumo}", npc=n1)
+        WorldLogger.queue_db_log(n2, "INFO", f"❤️ [UNIÃO] {resumo}")  # A07: evento_mundo já grava n1; n2 só precisa do registro no banco
 
         return teve_nova_casa
 

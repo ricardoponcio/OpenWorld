@@ -7,9 +7,20 @@ from .config_loader import cfg_get
 
 class WorldLogger:
     _logger = None
-    _log_queue = queue.Queue()
+    # A07 (docs/PLANO_POPULACAO_E_ESCALA.md): teto na fila — um avanço rápido produz
+    # logs muito mais rápido do que a thread consumidora consegue committar (um
+    # commit por linha). Sem teto, isso é vazamento de memória com outro nome, e a
+    # thread engolia toda exceção em silêncio (`except Exception: pass`), então até
+    # aqui isso falhava sem deixar rastro.
+    _MAXSIZE_FILA_LOG = 10000
+    _log_queue = queue.Queue(maxsize=_MAXSIZE_FILA_LOG)
+    _fila_cheia_avisada = False
     _log_thread = None
     _db_path = "database/openworld.db"
+    # A07: suprime info/debug (mantém warning/error e `evento_mundo`) — sem isto,
+    # `_avancar_relogio` sozinho loga um cabeçalho de tick por minuto simulado, e um
+    # avanço de 7 dias são 10.080 linhas só do cabeçalho.
+    _modo_avanco_rapido = False
 
     @staticmethod
     def _log_worker():
@@ -88,7 +99,15 @@ class WorldLogger:
             return
         
         WorldLogger.start_db_logger()
-        WorldLogger._log_queue.put((npc_id, level, msg))
+        try:
+            WorldLogger._log_queue.put_nowait((npc_id, level, msg))
+        except queue.Full:
+            if not WorldLogger._fila_cheia_avisada:
+                WorldLogger._fila_cheia_avisada = True
+                WorldLogger.get_logger().warning(
+                    f"[LOGGER] Fila de log do banco cheia ({WorldLogger._MAXSIZE_FILA_LOG}) — "
+                    "descartando logs excedentes daqui pra frente. O avanço/tick está "
+                    "produzindo log mais rápido do que a thread consegue gravar.")
 
     @staticmethod
     def get_logger():
@@ -128,8 +147,22 @@ class WorldLogger:
         return WorldLogger._logger
 
     @staticmethod
+    def ativar_modo_avanco_rapido() -> None:
+        """A07: suprime `debug`/`info` — usado por `bench_avanco.py` e pelo avanço
+        rápido do Modo Mestre. `evento_mundo`, `warning` e `error` continuam saindo:
+        é o que dá pra acompanhar a história do mundo (nascimento, morte, casamento,
+        obra, expansão) e os problemas de verdade, mesmo com o resto suprimido."""
+        WorldLogger._modo_avanco_rapido = True
+
+    @staticmethod
+    def desativar_modo_avanco_rapido() -> None:
+        WorldLogger._modo_avanco_rapido = False
+
+    @staticmethod
     def debug(msg: str, npc = None):
         """Log detalhado - Apenas no arquivo de log (DEBUG)."""
+        if WorldLogger._modo_avanco_rapido:
+            return
         WorldLogger.get_logger().debug(msg)
         if npc:
             WorldLogger.queue_db_log(npc, "DEBUG", msg)
@@ -137,6 +170,18 @@ class WorldLogger:
     @staticmethod
     def info(msg: str, npc = None):
         """Log geral - Vai para console e arquivo (INFO)."""
+        if WorldLogger._modo_avanco_rapido:
+            return
+        WorldLogger.get_logger().info(msg)
+        if npc:
+            WorldLogger.queue_db_log(npc, "INFO", msg)
+
+    @staticmethod
+    def evento_mundo(msg: str, npc = None):
+        """A07: eventos de mundo que sobrevivem ao modo de avanço rápido —
+        nascimento, morte, casamento, obra concluída, expansão urbana. Use no lugar
+        de `info` exatamente nesses pontos; qualquer outra notificação de rotina
+        continua em `info`/`debug` (suprimíveis)."""
         WorldLogger.get_logger().info(msg)
         if npc:
             WorldLogger.queue_db_log(npc, "INFO", msg)

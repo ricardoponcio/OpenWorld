@@ -85,6 +85,7 @@ class GameLoop:
             (self._habitacao.CADENCIA_HORA_CONFIG, self._habitacao.processar_habitacao),
             (self._urbanismo.CADENCIA_HORA_CONFIG, self._urbanismo.processar_urbanismo),
             (self._reino.CADENCIA_HORA_CONFIG, self._reino.processar_pagamentos_reino),
+            ("eventos_poda_hora", self._podar_eventos_antigos),
         ]
 
     def executar_tick(self):
@@ -279,6 +280,21 @@ class GameLoop:
 
     def _remover_falecidos(self):
         self._mundo.npcs = [n for n in self._mundo.npcs if n.saude > 0]
+
+    def _podar_eventos_antigos(self):
+        """E02 (docs/PLANO_POPULACAO_E_ESCALA.md): varredura diária — apaga da
+        tabela `eventos` (não `eventos_globais`) tudo mais velho que
+        `simulacao.eventos_retencao_dias_simulados` dias simulados. Com 25.000 NPCs
+        são ~245.000 linhas de evento por dia; sem poda a tabela nunca para de
+        crescer, e o Modo Mestre só lê os eventos recentes mesmo."""
+        cfg_sim = cfg_get(self._config, "simulacao")
+        retencao_dias = cfg_get(cfg_sim, "eventos_retencao_dias_simulados")
+        dia_de_corte = RelogioMundo.dia_do_mundo(self._mundo.data_simulada) - retencao_dias
+        if dia_de_corte <= 0:
+            return
+        apagadas = self._mundo.db.eventos.podar_por_idade(dia_de_corte)
+        if apagadas:
+            WorldLogger.info(f"🗑️ [PODA] {apagadas} eventos com mais de {retencao_dias} dias simulados removidos.")
 
     def _processar_partos(self, maes_em_parto: list):
         for mae in maes_em_parto:

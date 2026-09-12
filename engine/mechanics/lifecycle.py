@@ -136,7 +136,7 @@ class NPCLifecycleManager:
             resumo_estruturado=resumo
         )
         self._mundo.db.eventos.salvar(evento)
-        WorldLogger.info(f"💀 [ÓBITO] {resumo}", npc=npc)
+        WorldLogger.evento_mundo(f"💀 [ÓBITO] {resumo}", npc=npc)
         
         # --- FASE GERACIONAL FINANCEIRA: Testamento/Herança ---
         self._heranca.processar_heranca(npc, timestamp_rpg)

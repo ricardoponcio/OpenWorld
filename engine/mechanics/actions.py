@@ -259,5 +259,5 @@ class NPCActionManager:
 
             self._mundo.registrar_local(obra)  # P02: status virou 1 — reindexa (ex.: residencias_ativas)
             self._mundo.db.lotes.concluir(obra.id, obra.id)  # O01: lote passa de 'obra' pra 'ocupado'
-            WorldLogger.info(f"🏡 [MUDANÇA] A família de {dono.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=dono)
+            WorldLogger.evento_mundo(f"🏡 [MUDANÇA] A família de {dono.nome} finalizou a obra e se mudou para a {obra.nome}!", npc=dono)
             npc.acao_atual = Acao.OCIOSO

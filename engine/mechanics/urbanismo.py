@@ -272,7 +272,7 @@ class GerenciadorUrbanismo:
             modificador_afinidade=0, resumo_estruturado=resumo,
         )
         self._mundo.db.eventos.salvar(evento)
-        WorldLogger.info(f"🏘️ [URBANISMO] {resumo}")
+        WorldLogger.evento_mundo(f"🏘️ [URBANISMO] {resumo}")
         return True
 
     @staticmethod
