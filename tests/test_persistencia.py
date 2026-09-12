@@ -59,6 +59,12 @@ def test_npc_nascido_durante_o_tick_sobrevive_a_reabertura_do_banco(tmp_path, mo
     loop = GameLoop(mundo, config)
     loop.executar_tick()  # gravidez_ticks 1 -> 0: dispara o parto neste mesmo tick
 
+    # N04 (docs/PLANO_POPULACAO_E_ESCALA.md): num_dependentes não é persistido (é
+    # recalculado em memória, `_atualizar_dependentes`) — a mãe tem que ganhar o
+    # dependente a mais no MESMO tick do parto, não só no próximo.
+    mae_em_memoria = next(n for n in mundo.npcs if n.id == "npc_mae")
+    assert mae_em_memoria.num_dependentes == 1
+
     # "Reinício do processo": um DatabaseManager novo, apontando pro mesmo arquivo.
     db_reaberto = DatabaseManager(db_path=db_path, pool_size=2)
     npcs_reabertos = {n.id: n for n in db_reaberto.npcs.carregar_todos()}

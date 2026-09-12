@@ -47,6 +47,15 @@ class GameLoop:
         self._cfg_bio = cfg_get(config, "biologia_e_sociedade")
         self._cfg_metabolismo = cfg_get(config, "metabolismo")
 
+        # N04 (docs/PLANO_POPULACAO_E_ESCALA.md): retrato (por casa) usado por
+        # `_atualizar_dependentes` pra saber quais casas mudaram de composição desde o
+        # tick anterior. `None` força um recálculo completo — tanto no primeiro tick
+        # quanto depois de `recarregar_habitantes()` trocar `mundo.npcs` por uma lista
+        # nova (o mesmo NPC recarregado do banco nasce com `num_dependentes` no default
+        # 0, e o retrato sozinho não perceberia isso — daí o segundo atributo abaixo).
+        self._assinatura_casas_anterior = None
+        self._ultima_lista_de_npcs = None
+
         self._acoes = NPCActionManager(mundo, config)
         self._reproducao = NPCReproductionManager(mundo, config)
         self._ciclo_de_vida = NPCLifecycleManager(mundo, config)
@@ -76,7 +85,7 @@ class GameLoop:
             if not npc.esta_vivo():
                 continue
 
-            self._aplicar_metabolismo(npc, maes_em_parto, npcs_por_casa)
+            self._aplicar_metabolismo(npc, maes_em_parto)
             self._decidir_e_executar(npc, eventos_globais, npcs_por_casa)
             self._aplicar_consequencias_de_saude(npc)
             npc.normalizar_necessidades()
@@ -104,6 +113,7 @@ class GameLoop:
         # então nunca é regravado vivo.
         self._mundo.db.npcs.salvar_muitos(npcs_alterados)
         self._social.processar_interacoes()
+        self._atualizar_dependentes()
 
     def _avancar_relogio(self):
         self._mundo.tick_count += 1
@@ -135,9 +145,11 @@ class GameLoop:
         if hora == cfg_get(cfg_bio, "pagamento_reino_hora"):
             self._reino.processar_pagamentos_reino()
 
-    def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list, npcs_por_casa: dict):
+    def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list):
         """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação.
-        Também recalcula `num_dependentes` (campo derivado, ver `models.NPC`)."""
+        `num_dependentes` (campo derivado, ver `models.NPC`) NÃO é recalculado aqui —
+        `_atualizar_dependentes` (N04) cuida disso, uma vez por tick, só pras casas
+        cuja composição de fato mudou."""
         cfg_bio = self._cfg_bio
         meta = self._cfg_metabolismo
         energia_perda = cfg_get(meta, "energia_base_perda")
@@ -157,8 +169,6 @@ class GameLoop:
         npc.energia -= energia_perda
         npc.fome += fome_ganho
         npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max"))
-
-        npc.num_dependentes = NPCUtils.contar_dependentes_na_casa_agrupado(npc, npcs_por_casa)
 
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual
@@ -185,3 +195,30 @@ class GameLoop:
     def _processar_partos(self, maes_em_parto: list):
         for mae in maes_em_parto:
             self._reproducao.processar_parto(mae)
+
+    def _atualizar_dependentes(self):
+        """N04 (docs/PLANO_POPULACAO_E_ESCALA.md): `num_dependentes` só é recalculado
+        para as casas cuja composição mudou desde a última vez que este método rodou —
+        medido em 0,47 s por tick com 25.000 NPCs quando recalculado pra todo mundo.
+
+        Roda no FIM do tick, depois de partos, mortes e (via `processar_interacoes`)
+        casamentos — todas as mutações de composição do tick já aconteceram, então o
+        retrato de agora já reflete o efeito de todas elas (inclusive um parto neste
+        mesmo tick: a mãe ganha o dependente a mais antes deste método terminar)."""
+        if self._mundo.npcs is not self._ultima_lista_de_npcs:
+            # `recarregar_habitantes()` (fora do GameLoop, a cada 5h de jogo) ou um
+            # parto (que recarrega `mundo.npcs` do banco) trocou a lista por objetos
+            # novos, com `num_dependentes` no default 0 — o retrato sozinho não
+            # perceberia isso (o conteúdo relevante pode ser idêntico ao de antes), daí
+            # forçar recálculo total sempre que a lista em si for outro objeto.
+            self._assinatura_casas_anterior = None
+
+        npcs_por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+        assinatura_atual = NPCUtils.assinatura_dependentes_por_casa(npcs_por_casa)
+        anterior = self._assinatura_casas_anterior or {}
+        for casa_id, assinatura in assinatura_atual.items():
+            if anterior.get(casa_id) != assinatura:
+                NPCUtils.recalcular_dependentes_da_casa(npcs_por_casa[casa_id])
+
+        self._assinatura_casas_anterior = assinatura_atual
+        self._ultima_lista_de_npcs = self._mundo.npcs
