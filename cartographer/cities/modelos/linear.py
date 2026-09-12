@@ -47,26 +47,19 @@ class LinearModelo(ModeloCidade):
         theta = self.rng.uniform(0, 2 * math.pi)
         curvatura = cfg_get(self.cfg, "cidade_geo_linear_curvatura")
         comprimento = 2.0 * self.raio_m
-        faixa_largura = cfg_get(self.cfg, "cidade_geo_linear_largura_quadra_m_faixa")
-        comprimento_celula = self.rng.uniform(*faixa_largura)
+        # Q03 (docs/PLANO_CIDADE_VIVA.md): comprimento de célula (ao longo do eixo) e
+        # profundidade de fileira (perpendicular) eram a MESMA chave — duas coisas
+        # diferentes, e usar a mesma faixa pra profundidade dava fileira de até 90m,
+        # sempre caindo no caso "pátio grande demais" de Q01 (gera viela onde bastava
+        # nascer sem pátio, direto). Separadas: a fileira já nasce com a profundidade de
+        # um lote.
+        faixa_comprimento_celula = cfg_get(self.cfg, "cidade_geo_linear_comprimento_celula_m_faixa")
+        comprimento_celula = self.rng.uniform(*faixa_comprimento_celula)
         n_segmentos = max(5, round(comprimento / comprimento_celula))
         faixa_profundidade_k = cfg_get(self.cfg, "cidade_geo_linear_profundidade_faixas")
         k = self.rng.randint(int(faixa_profundidade_k[0]), int(faixa_profundidade_k[1]))
-        profundidades = [self.rng.uniform(*faixa_largura) for _ in range(k)]
-        # F6.3 (aceite): "razão comprimento/largura entre 2,5 e 6,0". Sem isto, uma
-        # cidade pequena com k=3 fileiras de ~90m cada (faixa_largura reaproveitada pra
-        # profundidade) fica quase quadrada — a largura (2 lados × k fileiras) cresce
-        # sem relação nenhuma com o comprimento do eixo. Limita a largura total a uma
-        # fração do comprimento, escalando as fileiras proporcionalmente se preciso.
-        largura_total = 2.0 * sum(profundidades)
-        limite = comprimento * 0.20
-        if largura_total > limite:
-            fator = limite / largura_total
-            # Piso: abaixo de ~25 m a fileira não sobra espaço pro inset da via
-            # principal (8,5 m) + da viela de fundo (6,5 m) — o quad degenera inteiro no
-            # encolhimento e a fileira 0 desaparece da cidade (achado testando
-            # Tormirstead: 0% dos lotes em banda 1, quando o alvo do F6.3 é > 50%).
-            profundidades = [max(p * fator, 25.0) for p in profundidades]
+        faixa_profundidade_fileira = cfg_get(self.cfg, "cidade_geo_linear_profundidade_fileira_m_faixa")
+        profundidades = [self.rng.uniform(*faixa_profundidade_fileira) for _ in range(k)]
         prof_acumulada = [0.0]
         for p in profundidades:
             prof_acumulada.append(prof_acumulada[-1] + p)
