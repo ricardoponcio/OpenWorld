@@ -2013,6 +2013,14 @@ técnico preciso — não os troque por sinônimos.
 
 ## Registro de execução
 
+> ✅ **As quatro decisões pendentes registradas nesta tabela foram respondidas, com
+> medição, em [`PLANO_POPULACAO_E_ESCALA.md`](PLANO_POPULACAO_E_ESCALA.md) (Seção 1).**
+> Resumo: `num_setores` fixo é mesmo a causa raiz das quadras de 150 lotes (Bloco S);
+> os lotes cegos do `organica` têm duas causas concretas e consertáveis, e a tolerância
+> rígida de `audit_cidades.py` estava certa (Bloco L); o RNG derivado por quadra vale a
+> pena e custa uma linha e meia (L03); e a lacuna entre o processo do Modo Mestre e o da
+> simulação se resolve com um contador de versão em `mundo_meta` (Bloco M).
+
 > Anote aqui o que você encontrou e o que ficou diferente do planejado. Uma linha por
 > tarefa concluída, com o número medido quando houver.
 
