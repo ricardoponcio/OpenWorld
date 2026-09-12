@@ -38,6 +38,15 @@ class GameLoop:
         self._mundo = mundo
         self._config = config
 
+        # N03 (docs/PLANO_POPULACAO_E_ESCALA.md): estes dois blocos são lidos por NPC,
+        # todo tick, dentro de `_aplicar_metabolismo`/`_aplicar_consequencias_de_saude`
+        # (1,1 milhão de `cfg_get` por tick medido com 25.000 NPCs). Atributo de
+        # instância, montado uma vez aqui — nunca global de módulo nem singleton
+        # (ARQUITETURA.md Seção 7: a config é injetada por construtor, e os testes
+        # contam com isso pra montar mundos com config diferente).
+        self._cfg_bio = cfg_get(config, "biologia_e_sociedade")
+        self._cfg_metabolismo = cfg_get(config, "metabolismo")
+
         self._acoes = NPCActionManager(mundo, config)
         self._reproducao = NPCReproductionManager(mundo, config)
         self._ciclo_de_vida = NPCLifecycleManager(mundo, config)
@@ -113,7 +122,7 @@ class GameLoop:
         (minuto 0) — concepção noturna, crescimento, expansão urbana, pensões."""
         if self._mundo.data_simulada.minute != 0:
             return
-        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
+        cfg_bio = self._cfg_bio
         hora = self._mundo.data_simulada.hour
 
         if hora == cfg_get(cfg_bio, "concepcao_hora"):
@@ -129,8 +138,8 @@ class GameLoop:
     def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list, npcs_por_casa: dict):
         """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação.
         Também recalcula `num_dependentes` (campo derivado, ver `models.NPC`)."""
-        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
-        meta = cfg_get(self._config, "metabolismo")
+        cfg_bio = self._cfg_bio
+        meta = self._cfg_metabolismo
         energia_perda = cfg_get(meta, "energia_base_perda")
         fome_ganho = random.uniform(cfg_get(meta, "fome_base_ganho_min"), cfg_get(meta, "fome_base_ganho_max"))
 
@@ -162,7 +171,7 @@ class GameLoop:
         self._acoes.executar_acao(npc, npcs_por_casa)
 
     def _aplicar_consequencias_de_saude(self, npc: NPC):
-        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
+        cfg_bio = self._cfg_bio
         if npc.fome > cfg_get(cfg_bio, "inaniacao_fome_limiar"):
             npc.saude -= cfg_get(cfg_bio, "inaniacao_perda_saude")
             WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})", npc=npc)

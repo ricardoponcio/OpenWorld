@@ -32,6 +32,18 @@ class EstagioVida(Enum):
     IDOSO = "idoso"
     MORTO = "morto"
 
+# N03 (docs/PLANO_POPULACAO_E_ESCALA.md): `.value` num membro de Enum é um acesso de
+# descritor (`__get__`), não uma leitura de atributo simples — medido em 9,1 milhões de
+# chamadas por tick com 3.000 NPCs (1,23 s), maior item isolado do perfil depois do
+# quadrático de casamento. `NPC.is_adulto`/`is_idoso`/`esta_vivo`/`eh_dependente` são
+# chamados por NPC, várias vezes por tick: resolver o valor uma vez na importação e
+# comparar contra a constante evita repetir o descritor a cada chamada.
+_ESTAGIO_VIDA_BEBE = EstagioVida.BEBE.value
+_ESTAGIO_VIDA_CRIANCA = EstagioVida.CRIANCA.value
+_ESTAGIO_VIDA_ADULTO = EstagioVida.ADULTO.value
+_ESTAGIO_VIDA_IDOSO = EstagioVida.IDOSO.value
+_ESTAGIO_VIDA_MORTO = EstagioVida.MORTO.value
+
 PROFISSAO_DEPENDENTE = "dependente"
 
 class EstadoCivil(Enum):
@@ -316,16 +328,16 @@ class NPC:
         return ", ".join(parts)
 
     def is_adulto(self) -> bool:
-        return self.estagio_vida == EstagioVida.ADULTO.value
+        return self.estagio_vida == _ESTAGIO_VIDA_ADULTO
 
     def is_idoso(self) -> bool:
-        return self.estagio_vida == EstagioVida.IDOSO.value
+        return self.estagio_vida == _ESTAGIO_VIDA_IDOSO
 
     def pode_procriar(self) -> bool:
         return self.is_adulto() and self.saude > 0
 
     def esta_vivo(self) -> bool:
-        return self.saude > 0 and self.estagio_vida != EstagioVida.MORTO.value
+        return self.saude > 0 and self.estagio_vida != _ESTAGIO_VIDA_MORTO
 
     def eh_dependente(self) -> bool:
         """Bebê, criança ou adulto marcado como dependente — não trabalha, não
@@ -333,7 +345,7 @@ class NPC:
         desta unificação, a mesma expressão estava copiada em 6 lugares, e em
         movement.py a cópia já tinha divergido (só olhava 'bebe', não 'crianca')."""
         return (self.profissao == PROFISSAO_DEPENDENTE
-                or self.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value))
+                or self.estagio_vida in (_ESTAGIO_VIDA_BEBE, _ESTAGIO_VIDA_CRIANCA))
 
     def normalizar_necessidades(self) -> None:
         """Prende energia/fome/social/saúde na faixa válida (R-B09). Ponto único de
