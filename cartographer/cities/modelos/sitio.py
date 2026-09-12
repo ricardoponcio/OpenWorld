@@ -56,14 +56,19 @@ class SitioCidade:
     y_mundo: float
     metros_por_px: float
 
-    # geografia/clima, da janela 64x64 amostrada em medir() (Seção 4.2)
+    # geografia/clima, da janela amostrada em medir() (Seção 4.2)
     altitude_media: float
     temperatura_media: float
     umidade_media: float
     bioma_dominante: int
-    terreno: Optional[np.ndarray]  # canal 0 da janela, 64x64
+    terreno: Optional[np.ndarray]  # canal 0 da janela, 128x128
     grad_x: Optional[np.ndarray]
     grad_y: Optional[np.ndarray]
+    # G06 (armadilha 4, docs/PLANO_CIDADE_VIVA.md): meia-largura REAL da janela de
+    # terreno, em metros — maior que raio_m (cidade_geo_janela_terreno_fator), pra dar
+    # margem pro Bloco X ler terreno fora da muralha sem cair no np.clip silencioso que
+    # devolvia a célula da borda pra qualquer ponto fora da cidade original.
+    raio_janela_m: float
 
     # água (hoje sempre longe — Seção 4.3/4.7; entra agora pro futuro não exigir refatoração)
     distancia_agua_m: float
@@ -84,17 +89,19 @@ class SitioCidade:
         faixa_raio = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(
             tamanho, [500.0, 500.0])
         raio_provisorio = random.Random(seed).uniform(*faixa_raio)
+        fator_janela = cfg_get(config, "cidade_geo_janela_terreno_fator")
+        raio_janela_m = raio_provisorio * fator_janela
 
         terreno = grad_x = grad_y = None
         altitude_media = temperatura_media = umidade_media = 0.0
         bioma_dominante = 0
         cartografo = obter_cartografo()
         if cartografo is not None:
-            lado_px = 2.0 * raio_provisorio / metros_por_px
+            lado_px = 2.0 * raio_janela_m / metros_por_px
             janela = cartografo.gerar_janela(
                 x_mundo - lado_px / 2, y_mundo - lado_px / 2,
                 x_mundo + lado_px / 2, y_mundo + lado_px / 2,
-                64, 64,
+                128, 128,
                 oitavas_extra=cfg_get(config, "tile_oitavas_max") - cfg_get(config, "ruido_macro_oitavas"),
             )
             terreno = janela[:, :, 0]
@@ -119,6 +126,42 @@ class SitioCidade:
             x_mundo=x_mundo, y_mundo=y_mundo, metros_por_px=metros_por_px,
             altitude_media=altitude_media, temperatura_media=temperatura_media,
             umidade_media=umidade_media, bioma_dominante=bioma_dominante,
-            terreno=terreno, grad_x=grad_x, grad_y=grad_y,
+            terreno=terreno, grad_x=grad_x, grad_y=grad_y, raio_janela_m=raio_janela_m,
             distancia_agua_m=distancia_agua_m, direcao_agua_rad=direcao_agua_rad,
         )
+
+    # ------------------------------------------------------------------
+    # G06: o sítio é o dono do terreno — nem modelo nem gerador precisam saber como a
+    # grade é indexada (ARQUITETURA.md P1). Substitui os dois `_indice_terreno`
+    # idênticos que existiam em radial.py e generate_city_geometry.py.
+    # ------------------------------------------------------------------
+    def _indice(self, x_m: float, y_m: float):
+        """`None` quando o ponto cai FORA da janela amostrada — o chamador decide (nunca
+        0 silencioso, nunca a célula da borda). Antes disto era `np.clip`, que fazia toda
+        checagem de terreno fora da cidade original dar a mesma resposta (armadilha 4)."""
+        if self.terreno is None:
+            return None
+        n = self.terreno.shape[0]
+        lado_m = 2.0 * self.raio_janela_m
+        fx = (x_m + self.raio_janela_m) / lado_m
+        fy = (y_m + self.raio_janela_m) / lado_m
+        if not (0.0 <= fx <= 1.0 and 0.0 <= fy <= 1.0):
+            return None
+        ix = min(int(fx * n), n - 1)
+        iy = min(int(fy * n), n - 1)
+        return iy, ix
+
+    def altitude_em(self, x_m: float, y_m: float) -> Optional[float]:
+        indice = self._indice(x_m, y_m)
+        if indice is None:
+            return None
+        iy, ix = indice
+        return float(self.terreno[iy, ix])
+
+    def declividade_em(self, x_m: float, y_m: float) -> Optional[float]:
+        indice = self._indice(x_m, y_m)
+        if indice is None:
+            return None
+        iy, ix = indice
+        m_por_celula = (2.0 * self.raio_janela_m) / self.terreno.shape[0]
+        return float(math.hypot(self.grad_x[iy, ix], self.grad_y[iy, ix]) / m_por_celula)

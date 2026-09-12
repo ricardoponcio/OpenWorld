@@ -6,8 +6,6 @@ reembalada em `Malha`/`Quadra`/`Rua`.
 """
 import math
 
-import numpy as np
-
 from config import cfg_get
 from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono
 
@@ -64,25 +62,14 @@ class RadialModelo(ModeloCidade):
         self.via_largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
 
     # ------------------------------------------------------------------
-    # Leitura de terreno local — mesma lógica de GeradorCidade._declividade_local, mas
-    # lendo `self.sitio.terreno`/`raio_m` do próprio modelo (F4.2: o modelo não sabe de
-    # `GeradorCidade`, só do `SitioCidade`).
+    # Leitura de terreno local — G06: delega a `SitioCidade`, o único dono da grade
+    # (ARQUITETURA.md P1). Usada aqui só em heurística de posicionamento (praça,
+    # portão) dentro do raio original, nunca perto da borda da janela — `None` (ponto
+    # fora da janela) cai pra 0.0, "sem preferência", o que é seguro nestes dois usos.
     # ------------------------------------------------------------------
-    def _indice_terreno(self, x_m, y_m):
-        n = self.sitio.terreno.shape[0]
-        lado_m = 2.0 * self.raio_m
-        fx = (x_m + self.raio_m) / lado_m
-        fy = (y_m + self.raio_m) / lado_m
-        ix = int(np.clip(fx * n, 0, n - 1))
-        iy = int(np.clip(fy * n, 0, n - 1))
-        return iy, ix
-
     def _declividade_local(self, x_m, y_m):
-        if self.sitio.terreno is None:
-            return 0.0
-        iy, ix = self._indice_terreno(x_m, y_m)
-        m_por_celula = (2.0 * self.raio_m) / self.sitio.terreno.shape[0]
-        return float(math.hypot(self.sitio.grad_x[iy, ix], self.sitio.grad_y[iy, ix]) / m_por_celula)
+        declividade = self.sitio.declividade_em(x_m, y_m)
+        return 0.0 if declividade is None else declividade
 
     @staticmethod
     def _polar(raio, angulo):

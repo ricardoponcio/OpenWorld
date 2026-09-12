@@ -32,7 +32,6 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
-import numpy as np
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.escala import zoom_min_por_camada
 from cartographer.cities.modelos import SitioCidade, MODELOS, escolher_modelo
@@ -96,12 +95,6 @@ class GeradorCidade:
 
         self.zoom_min_camada = zoom_min_por_camada(self.cfg, self.raio_m)
 
-        # D2/Caminho B: terreno já amostrado uma vez por `SitioCidade.medir()` — nenhum
-        # modelo nem o gerador chamam `obter_cartografo()` diretamente.
-        self.terreno = sitio.terreno
-        self._grad_x = sitio.grad_x
-        self._grad_y = sitio.grad_y
-
         self.features = []
 
     # ------------------------------------------------------------------
@@ -116,35 +109,6 @@ class GeradorCidade:
         o Leaflet plota direto sem transformar nada no frontend."""
         x_mundo, y_mundo = self._mundo(x_m, y_m)
         return [round(x_mundo, 6), round(-y_mundo, 6)]
-
-    # ------------------------------------------------------------------
-    # D2/Caminho B (DIAGNOSTICO_V3 Seção 13.5 Passo 5): leitura do terreno local, sobre
-    # a grade 64x64 amostrada por `SitioCidade.medir()`. Coordenadas de entrada são metros
-    # locais (mesma origem no centro da cidade usada pelo resto da geometria).
-    # ------------------------------------------------------------------
-    def _indice_terreno(self, x_m, y_m):
-        n = self.terreno.shape[0]
-        lado_m = 2.0 * self.raio_m
-        fx = (x_m + self.raio_m) / lado_m
-        fy = (y_m + self.raio_m) / lado_m
-        ix = int(np.clip(fx * n, 0, n - 1))
-        iy = int(np.clip(fy * n, 0, n - 1))
-        return iy, ix
-
-    def _altitude_local(self, x_m, y_m):
-        if self.terreno is None:
-            return None
-        iy, ix = self._indice_terreno(x_m, y_m)
-        return float(self.terreno[iy, ix])
-
-    def _declividade_local(self, x_m, y_m):
-        """Magnitude do gradiente de altitude no ponto, em unidade de altitude por metro
-        — usado pra rejeitar lote íngreme demais (edifício)."""
-        if self.terreno is None:
-            return 0.0
-        iy, ix = self._indice_terreno(x_m, y_m)
-        m_por_celula = (2.0 * self.raio_m) / self.terreno.shape[0]
-        return float(math.hypot(self._grad_x[iy, ix], self._grad_y[iy, ix]) / m_por_celula)
 
     def _add_feature(self, geom_type, coords_m, camada, props=None):
         if geom_type == "Point":
@@ -492,8 +456,14 @@ class GeradorCidade:
             cx = sum(p[0] for p in lote) / len(lote)
             cy = sum(p[1] for p in lote) / len(lote)
 
-            if self.terreno is not None and self._declividade_local(cx, cy) > self._declividade_max:
-                continue  # lote íngreme demais — chão vazio, edifício nenhum
+            if self.sitio.terreno is not None:
+                # G06: None (ponto fora da janela de terreno amostrada) é tratado como
+                # "não sei, rejeite o lote" — nunca como 0/plano. Não deveria acontecer
+                # aqui (todo lote está dentro de raio_m, bem dentro da janela ampliada),
+                # mas se acontecer é sinal de bug, não motivo pra construir às cegas.
+                declividade = self.sitio.declividade_em(cx, cy)
+                if declividade is None or declividade > self._declividade_max:
+                    continue  # lote íngreme demais (ou fora da janela) — chão vazio
 
             footprint = self._footprint_edificio(lote)
             if footprint is None:
@@ -514,7 +484,7 @@ class GeradorCidade:
             nome_completo = (f"{nome_tipo} de {self.nome}" if nome_tipo != "Residência"
                               else f"Residência {idx_edificio:03d} — {quadra.bairro}")
 
-            altitude_local = self._altitude_local(cx, cy)
+            altitude_local = self.sitio.altitude_em(cx, cy)
             self._add_feature("Polygon", footprint + [footprint[0]], "edificio", {
                 "id": slug_id,
                 "nome": nome_completo,

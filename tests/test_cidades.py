@@ -227,6 +227,20 @@ def test_rua_coincide_com_aresta_de_quadra():
                     f"da rua mais próxima (limite {limite:.1f} m)")
 
 
+def test_sitio_declividade_em_fora_da_janela():
+    """G06 — armadilha 4: `declividade_em` devolve None pra um ponto fora da janela
+    amostrada (antes: np.clip lia a célula da borda, silenciosamente), e um valor
+    normal (não None) pra um ponto dentro dela — inclusive além do raio_m original,
+    porque a janela agora tem margem (cidade_geo_janela_terreno_fator)."""
+    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    if sitio.terreno is None:
+        return  # sem cartógrafo disponível neste ambiente — nada a checar
+    fator_janela = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_janela_terreno_fator")
+    raio_m = sitio.raio_janela_m / fator_janela
+    assert sitio.declividade_em(raio_m * 4, 0.0) is None
+    assert sitio.declividade_em(raio_m * 1.5, 0.0) is not None
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()
