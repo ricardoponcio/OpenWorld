@@ -30,9 +30,18 @@ class RadialModelo(ModeloCidade):
             sitio.tamanho, [500.0, 500.0])
         self.raio_m = self.rng.uniform(*faixa_raio)
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)
+        # G05: num_aneis deixa de ser sorteado independente do raio — o vão entre anéis
+        # (raio_m / (num_aneis+1)) É a profundidade da quadra (Anexo 3 do
+        # docs/PLANO_CIDADE_VIVA.md), e sorteá-los à parte fazia o vão variar de 82 a
+        # 169 m entre cidades do mesmo tamanho, produzindo até 209 lotes numa quadra só.
+        # A faixa por tamanho vira LIMITE (piso/teto), não mais fonte do sorteio.
+        # ⚠️ Isto remove um `self.rng.randint` da sequência — todas as cidades mudam
+        # (esperado, armadilha 1; nenhum sorteio-fantasma pra compensar).
         faixa_aneis = cfg_get(config, "cidade_geo_num_aneis_faixa_por_tamanho").get(
             sitio.tamanho, [2, 2])
-        self.num_aneis = self.rng.randint(int(faixa_aneis[0]), int(faixa_aneis[1]))
+        vao_alvo = cfg_get(config, "cidade_geo_vao_anel_alvo_m")
+        aneis_ideais = round(self.raio_m / vao_alvo) - 1
+        self.num_aneis = max(int(faixa_aneis[0]), min(int(faixa_aneis[1]), aneis_ideais))
         self.irreg = cfg_get(config, "cidade_geo_irregularidade_via")
         # G01: fração do vão entre anéis que a perturbação pode ocupar, saturada no
         # limite estrutural — nunca no valor bruto do config (que um game designer
