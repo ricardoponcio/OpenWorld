@@ -140,18 +140,18 @@ class GeradorCidade(DistribuicaoMixin):
         self._lotes = []  # lista de _LoteEmitido
         vielas_pendentes = []
         for quadra in malha.quadras:
-            distancias = [self._distancia_faixa_dominio(c) for c in quadra.classes_aresta]
-            quad_urbanizavel = quad.encolher_quad(quadra.vertices, distancias)
-            if quad_urbanizavel is None or quad.area_quad(quad_urbanizavel) < self.quadra_area_minima:
+            preparo = lotes.preparar_quadra(
+                quadra.vertices, quadra.classes_aresta, quadra.banda, self.cfg,
+                self.modelo.lote_fator_cidade, self.rng, self.quadra_area_minima,
+                self._distancia_faixa_dominio)
+            if preparo is None:
                 continue  # quadra degenerada, ou pequena demais pra urbanizar
+            quad_urbanizavel, lotes_info, patios, vielas, _ = preparo
 
             quarteirao_id_str = self._quarteirao_id_str(quadra.id)
             self._add_feature("Polygon", quad_urbanizavel + [quad_urbanizavel[0]], "quarteirao",
                               {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str})
 
-            lotes_info, patios, vielas, _ = lotes.gerar_lotes_do_quarteirao(
-                quad_urbanizavel, quadra.classes_aresta, quadra.banda, self.cfg,
-                self.modelo.lote_fator_cidade, self.rng)
             vielas_pendentes.extend(vielas)
 
             for patio in patios:

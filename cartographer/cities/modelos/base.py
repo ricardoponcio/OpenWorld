@@ -43,6 +43,62 @@ def pontos_ao_longo_do_poligono(poligono, espacamento):
     return pontos
 
 
+def distancia_faixa_dominio(config, classe):
+    """Meia-largura da via + recuo — a distância que `quad.encolher_quad` insere entre o
+    quarteirão bruto e a faixa de domínio da rua. Era duplicado, idêntico, em
+    `gerador.py` e em `linear.py`; extraído aqui pra `cartographer/cities/expansao.py`
+    (X02, docs/PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo."""
+    largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
+    largura = largura_por_classe.get(classe, largura_por_classe.get("secundaria", 5.0))
+    return largura / 2.0 + cfg_get(config, "cidade_geo_recuo_rua_m")
+
+
+def gerar_fileiras_de_quadras(eixo_pontos, profundidade_m, comprimento_celula_m, classe_frente,
+                               classe_fundo, classe_lateral, banda, bairro, id_prefix):
+    """Dada uma polilinha de eixo (mão única, sem repetir o primeiro ponto no fim),
+    produz UMA fileira de quadras retangulares de cada lado, cortada a cada
+    ~`comprimento_celula_m` ao longo do eixo, e as ruas transversais nos cortes
+    intermediários — a estrutura de `LinearModelo` (F6) com uma única fileira (`k=1`),
+    extraída pra ser reusada por `cartographer/cities/expansao.py` (X02, docs/
+    PLANO_CIDADE_VIVA.md): o arrabalde é exatamente "casas dos dois lados de uma rua",
+    fora do muro.
+
+    `id_prefix` é uma tupla; o id de cada quadra é `id_prefix + (segmento, corte, lado)`.
+    Devolve `(quadras, ruas_transversais)` — nenhum dos dois é emitido feature aqui
+    (quem emite é `GeradorCidade`/`expansao.py`, cada um com seu próprio slug/zoom)."""
+    quadras = []
+    ruas_transversais = []
+    n_segmentos = len(eixo_pontos) - 1
+    corte_global = 0
+    for i in range(n_segmentos):
+        p0, p1 = eixo_pontos[i], eixo_pontos[i + 1]
+        dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+        comprimento = math.hypot(dx, dy)
+        if comprimento <= 0:
+            continue
+        nx, ny = -dy / comprimento, dx / comprimento
+        n_celulas = max(1, round(comprimento / comprimento_celula_m))
+        for c in range(n_celulas):
+            t0, t1 = c / n_celulas, (c + 1) / n_celulas
+            q0 = (p0[0] + dx * t0, p0[1] + dy * t0)
+            q1 = (p0[0] + dx * t1, p0[1] + dy * t1)
+            for lado in (1, -1):
+                v2 = (q1[0] + lado * nx * profundidade_m, q1[1] + lado * ny * profundidade_m)
+                v3 = (q0[0] + lado * nx * profundidade_m, q0[1] + lado * ny * profundidade_m)
+                classes_aresta = [classe_frente, classe_lateral, classe_fundo, classe_lateral]
+                quadras.append(Quadra(vertices=[q0, q1, v2, v3], classes_aresta=classes_aresta,
+                                       banda=banda, bairro=bairro,
+                                       id=id_prefix + (i, c, lado)))
+            ultimo_corte_do_eixo = (i == n_segmentos - 1 and c == n_celulas - 1)
+            if not ultimo_corte_do_eixo:
+                transversal = [(q1[0] + lado_ * nx * profundidade_m, q1[1] + lado_ * ny * profundidade_m)
+                               for lado_ in (1, -1)]
+                ruas_transversais.append(Rua(pontos=transversal, classe_via=classe_lateral,
+                                              tipo_via="transversal", indice=corte_global))
+                corte_global += 1
+    return quadras, ruas_transversais
+
+
 def envolver_poligono(poligono, folga):
     """Infla um polígono radialmente em torno do próprio centroide, garantindo que todo
     vértice original fique DENTRO do resultado com ao menos `folga` de sobra. Usado pela

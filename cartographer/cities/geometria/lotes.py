@@ -141,3 +141,24 @@ def gerar_lotes_do_quarteirao(quad_ext, classes_aresta, banda, config, lote_fato
         patios = [quad_interno]
 
     return lotes, patios, [], idx
+
+
+def preparar_quadra(quad_bruto, classes_aresta, banda, config, lote_fator_cidade, rng,
+                     quadra_area_minima, distancia_faixa_dominio_fn, indice_inicial=0):
+    """Inset pela faixa de domínio + subdivisão em lotes — o mesmo par de passos que
+    `GeradorCidade._gerar_quarteiroes_e_lotes` aplica a toda quadra de uma cidade nova.
+    Extraído (X02, docs/PLANO_CIDADE_VIVA.md) pra `cartographer/cities/expansao.py`
+    reusar sem ter uma segunda implementação de subdivisão de quadra — o arrabalde não
+    pode divergir da cidade original.
+
+    Devolve `None` se a quadra encolhida for degenerada ou pequena demais (mesmo
+    critério de `gerador.py`), senão `(quad_urbanizavel, lotes_info, patios, vielas,
+    indice_final)`."""
+    distancias = [distancia_faixa_dominio_fn(c) for c in classes_aresta]
+    quad_urbanizavel = quad.encolher_quad(quad_bruto, distancias)
+    if quad_urbanizavel is None or quad.area_quad(quad_urbanizavel) < quadra_area_minima:
+        return None
+    lotes_info, patios, vielas, indice_final = gerar_lotes_do_quarteirao(
+        quad_urbanizavel, classes_aresta, banda, config, lote_fator_cidade, rng,
+        indice_inicial=indice_inicial)
+    return quad_urbanizavel, lotes_info, patios, vielas, indice_final
