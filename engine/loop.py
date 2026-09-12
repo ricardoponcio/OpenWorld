@@ -85,7 +85,8 @@ class GameLoop:
             if not npc.esta_vivo():
                 continue
 
-            self._aplicar_metabolismo(npc, maes_em_parto)
+            # `minutos=1`: cada tick ainda é um minuto simulado (A02 introduz o salto).
+            self._aplicar_metabolismo(npc, 1, maes_em_parto)
             self._decidir_e_executar(npc, eventos_globais, npcs_por_casa)
             self._aplicar_consequencias_de_saude(npc)
             npc.normalizar_necessidades()
@@ -145,15 +146,26 @@ class GameLoop:
         if hora == cfg_get(cfg_bio, "pagamento_reino_hora"):
             self._reino.processar_pagamentos_reino()
 
-    def _aplicar_metabolismo(self, npc: NPC, maes_em_parto: list):
-        """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação.
+    def _aplicar_metabolismo(self, npc: NPC, minutos: int, maes_em_parto: list):
+        """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação —
+        função do TEMPO DECORRIDO (`minutos`), não do passo (A01, docs/
+        PLANO_POPULACAO_E_ESCALA.md). É exato pra energia/fome/social: a taxa não
+        depende do valor atual, então multiplicar por `minutos` e grampear no fim
+        (`normalizar_necessidades`) dá o mesmo resultado que dar `minutos` passos de um
+        minuto (armadilha 11) — hoje `minutos` é sempre 1 (a agenda de decisões, A02,
+        ainda não existe), mas a função já está pronta pra receber saltos maiores.
+
+        O sorteio de fome/social é UM sorteio multiplicado por `minutos`, não `minutos`
+        sorteios — reduz a variância de propósito (um salto de 8h não soma 480 ruídos
+        independentes), em troca de custar O(1) por salto em vez de O(minutos).
+
         `num_dependentes` (campo derivado, ver `models.NPC`) NÃO é recalculado aqui —
         `_atualizar_dependentes` (N04) cuida disso, uma vez por tick, só pras casas
         cuja composição de fato mudou."""
         cfg_bio = self._cfg_bio
         meta = self._cfg_metabolismo
-        energia_perda = cfg_get(meta, "energia_base_perda")
-        fome_ganho = random.uniform(cfg_get(meta, "fome_base_ganho_min"), cfg_get(meta, "fome_base_ganho_max"))
+        energia_perda = cfg_get(meta, "energia_base_perda") * minutos
+        fome_ganho = random.uniform(cfg_get(meta, "fome_base_ganho_min"), cfg_get(meta, "fome_base_ganho_max")) * minutos
 
         if npc.acao_atual == Acao.DORMIR:
             fome_ganho *= cfg_get(meta, "multiplicador_fome_dormindo")
@@ -162,13 +174,16 @@ class GameLoop:
         if npc.genero == Genero.FEMININO.value and npc.gravidez_ticks > 0:
             energia_perda *= cfg_get(cfg_bio, "gravidez_multiplicador_perda_energia")
             fome_ganho *= cfg_get(cfg_bio, "gravidez_multiplicador_ganho_fome")
-            npc.gravidez_ticks -= 1
-            if npc.gravidez_ticks == 0:
+            # Cruzamento, não igualdade exata (armadilha 11): um salto de `minutos`
+            # pode passar direto por cima de zero em vez de cair exatamente nele.
+            gravidez_antes = npc.gravidez_ticks
+            npc.gravidez_ticks = max(0, npc.gravidez_ticks - minutos)
+            if gravidez_antes > 0 and npc.gravidez_ticks == 0:
                 maes_em_parto.append(npc)
 
         npc.energia -= energia_perda
         npc.fome += fome_ganho
-        npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max"))
+        npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max")) * minutos
 
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual
