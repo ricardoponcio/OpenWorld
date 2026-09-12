@@ -115,6 +115,13 @@ def rodar_matriz_sintetica(n_ticks: int):
         (1500, 10000, 15),
         (1500, 15000, 15),
         (3000, 15000, 15),
+        # N05 (docs/PLANO_POPULACAO_E_ESCALA.md): cenários de escala grande, rumo ao
+        # alvo de 25.000 NPCs (D7) — os menores acima já cabiam de sobra antes do
+        # Bloco N; estes são os que de fato testam o teto.
+        (6000, 30000, 15),
+        (12000, 40000, 15),
+        (25000, 60000, 15),
+        (25000, 60000, 40),
     ]
     print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)")
     print(f"{'npcs':>6}  {'locais':>6}  {'cidades':>7}   {'ms/tick':>8}   veredito")
