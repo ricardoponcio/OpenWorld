@@ -25,7 +25,10 @@ import concurrent.futures
 from datetime import timedelta
 
 from engine.database import DatabaseManager
-from engine.models import Local, NPC, EstadoCivil, CategoriaLocal, ProfissaoID, VinculoSocial, Genero, EstagioVida, MetaChave
+from engine.models import (
+    Local, NPC, EstadoCivil, CategoriaLocal, ProfissaoID, VinculoSocial, Genero, EstagioVida,
+    MetaChave, Lote, LoteEstado,
+)
 from engine.tempo import RelogioMundo
 from engine.mechanics.market import JobMarket
 from engine.ai import AIGeneratorClient, AIFallbacks
@@ -38,12 +41,34 @@ MANIFEST_PATH = "database/world_manifest.json"
 CIDADES_GEOJSON_DIR = "database/cidades"
 
 
+def _centroide_mundo(geom):
+    """[lng, lat] = [x_mundo, -y_mundo] (Seção 2.3 do docs/PLANO_CIDADE_VIVA.md) — desfaz
+    de volta pra pixel de mundo. Um Polygon (edifício, lote — E4/Q01) usa o centroide do
+    anel externo; um Point (GeoJSON antigo em disco, ou o paliativo abaixo, que ainda
+    produz ponto) usa a coordenada direto. Extraído pra não copiar a mesma conta pra
+    edifício e pra lote (T02)."""
+    if geom["type"] == "Point":
+        lng, lat = geom["coordinates"]
+    else:
+        anel_externo = geom["coordinates"][0]
+        pontos = anel_externo[:-1] if len(anel_externo) > 1 and anel_externo[0] == anel_externo[-1] else anel_externo
+        lng = sum(p[0] for p in pontos) / len(pontos)
+        lat = sum(p[1] for p in pontos) / len(pontos)
+    return lng, -lat
+
+
 def _importar_locais_da_geometria(db, cidade):
     """
     Fase 4.5 (P2.2): importa os edifícios do GeoJSON gerado por
     `cartographer/cities/generate_city_geometry.py` como `Local` — substitui de vez o
     paliativo da Fase 2.1/2.2 (sortear ponto aleatório num raio ao redor do
     pixel-âncora) pela geometria real da cidade (ruas, quarteirões, lotes, muralha).
+
+    T02 (docs/PLANO_CIDADE_VIVA.md): na mesma passada, importa também os LOTES (camada
+    "lote", Q01) como `Lote` — o terreno que ainda não tem edifício em cima entra como
+    'livre', pronto pra Bloco O reservar. `estado` inicial é 'ocupado' quando existe um
+    edifício com o MESMO id (armadilha 3: o edifício É o lote onde está, mesmo id) —
+    um `set` de ids, não busca geométrica.
 
     Retorna a lista de ids de `Local` com categoria "residencia" (housing de NPC), ou
     `None` se a cidade não tem geometria gerada — o chamador decide o fallback.
@@ -56,48 +81,54 @@ def _importar_locais_da_geometria(db, cidade):
     with open(caminho, "r", encoding="utf-8") as f:
         geojson = json.load(f)
 
+    locais = []
+    edificio_ids = set()
     casas_ids = []
-    total = 0
+    lotes_crus = []  # (props, x_mundo, y_mundo) — vira Lote só depois de fechar edificio_ids
+
     for feat in geojson.get("features", []):
         props = feat.get("properties", {})
-        if props.get("camada") != "edificio":
-            continue
+        camada = props.get("camada")
+        if camada == "edificio":
+            x_mundo, y_mundo = _centroide_mundo(feat["geometry"])
+            locais.append(Local(
+                id=props["id"],
+                nome=props["nome"],
+                tipo=props.get("tipo_local", "Edifício"),
+                cidade_id=cidade['db_id'],
+                categoria=props.get("categoria", "generic"),
+                descricao=f"{props.get('tipo_local', 'Edifício')} em {cidade['nome']} ({props.get('bairro', '')}).",
+                coordenadas=[round(x_mundo, 6), round(y_mundo, 6)],
+                capacidade=props.get("capacidade", 5),
+                salario_base=props.get("salario_base", 0),
+                tipo_local=props.get("tipo_local", ""),
+                bairro=props.get("bairro", ""),
+                dono_npc_id=props.get("dono_npc_id", ""),
+            ))
+            edificio_ids.add(props["id"])
+            if props.get("categoria") == CategoriaLocal.RESIDENCIA.value:
+                casas_ids.append(props["id"])
+        elif camada == "lote":
+            lotes_crus.append((props, *_centroide_mundo(feat["geometry"])))
 
-        # E4 (ESPEC_TECIDO_URBANO.md Seção 6): `edificio` virou Polygon (footprint dentro
-        # do lote, Seção 5.3) — o Local usa o centroide do anel externo. Mantém
-        # compatibilidade com Point (GeoJSON antigo em disco, ou o paliativo abaixo, que
-        # continua produzindo ponto) — desfaz [lng,lat] = [x_mundo, -y_mundo] (Seção 2.3)
-        # de volta pra pixel de mundo, ponto a ponto se for polígono.
-        geom = feat["geometry"]
-        if geom["type"] == "Point":
-            lng, lat = geom["coordinates"]
-        else:
-            anel_externo = geom["coordinates"][0]
-            pontos = anel_externo[:-1] if len(anel_externo) > 1 and anel_externo[0] == anel_externo[-1] else anel_externo
-            lng = sum(p[0] for p in pontos) / len(pontos)
-            lat = sum(p[1] for p in pontos) / len(pontos)
-        x_mundo, y_mundo = lng, -lat
+    db.locais.salvar_em_lote(locais)
 
-        loc = Local(
-            id=props["id"],
-            nome=props["nome"],
-            tipo=props.get("tipo_local", "Edifício"),
-            cidade_id=cidade['db_id'],
-            categoria=props.get("categoria", "generic"),
-            descricao=f"{props.get('tipo_local', 'Edifício')} em {cidade['nome']} ({props.get('bairro', '')}).",
-            coordenadas=[round(x_mundo, 6), round(y_mundo, 6)],
-            capacidade=props.get("capacidade", 5),
-            salario_base=props.get("salario_base", 0),
-            tipo_local=props.get("tipo_local", ""),
-            bairro=props.get("bairro", ""),
-            dono_npc_id=props.get("dono_npc_id", ""),
-        )
-        db.locais.salvar(loc)
-        total += 1
-        if props.get("categoria") == CategoriaLocal.RESIDENCIA.value:
-            casas_ids.append(props["id"])
+    lotes = []
+    for props, x_mundo, y_mundo in lotes_crus:
+        lote_id = props["id"]
+        ocupado = lote_id in edificio_ids
+        lotes.append(Lote(
+            id=lote_id, cidade_id=cidade['db_id'], quarteirao_id=props.get("quarteirao_id", ""),
+            bairro=props.get("bairro", ""), banda=props.get("banda", 0),
+            classe_frente=props.get("classe_frente", ""), area_m2=props.get("area_m2", 0.0),
+            x=round(x_mundo, 6), y=round(y_mundo, 6),
+            estado=LoteEstado.OCUPADO.value if ocupado else LoteEstado.LIVRE.value,
+            local_id=lote_id if ocupado else "",
+        ))
+    db.lotes.salvar_em_lote(lotes)
 
-    print(f"  🏙️  {cidade['nome']} -> {total} edifício(s) importados da geometria ({len(casas_ids)} residências)")
+    print(f"  🏙️  {cidade['nome']} -> {len(locais)} edifício(s) importados da geometria "
+          f"({len(casas_ids)} residências), {len(lotes)} lote(s)")
     return casas_ids
 
 

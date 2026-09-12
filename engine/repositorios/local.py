@@ -42,6 +42,22 @@ class RepositorioLocal:
                 local.capacidade, local.salario_base, local.tipo_local, local.bairro, local.dono_npc_id
             ))
 
+    def salvar_em_lote(self, locais: list) -> None:
+        """T02 (docs/PLANO_CIDADE_VIVA.md): importação inicial de uma cidade inteira —
+        uma transação só, em vez de um commit por edifício (24.423 locais viravam
+        24.423 commits num reset)."""
+        if not locais:
+            return
+        with self.db.connection() as conn:
+            conn.cursor().executemany(
+                '''INSERT OR REPLACE INTO locais
+                   (id, nome, tipo, cidade_id, categoria, descricao, coordenadas, status, integridade, capacidade, salario_base, tipo_local, bairro, dono_npc_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                [(l.id, l.nome, l.tipo, l.cidade_id, l.categoria, l.descricao,
+                  json.dumps(l.coordenadas), l.status, l.integridade,
+                  l.capacidade, l.salario_base, l.tipo_local, l.bairro, l.dono_npc_id)
+                 for l in locais])
+
     def existe(self, local_id: str) -> bool:
         with self.db.connection() as conn:
             cursor = conn.cursor()
