@@ -391,7 +391,7 @@ class PopuladorDeMundo:
             novos.append(npc)
             print(f"  ✅ Gerado: {nome} ({genero}) | Cidade: {cidade_id} | Idade: {idade_inicial_anos} anos | Cargo IA: {profissao}")
 
-        self.db.npcs.salvar_muitos(novos)
+        self.db.npcs.salvar_completo(novos)
         self.npcs_gerados.extend(novos)
 
     def _npcs_por_cidade(self) -> dict:
@@ -440,7 +440,7 @@ class PopuladorDeMundo:
                 self.db.npcs.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
                 print(f"  ❤️  CASAL FORMADO: {m.nome} e {f.nome} morando na {casa_comum} (Afinidade: {af})!")
 
-        self.db.npcs.salvar_muitos(alterados)
+        self.db.npcs.salvar_completo(alterados)
 
     def _estabelecer_lacos_sociais(self) -> None:
         """P07: laço social só entre habitantes da MESMA cidade — por cidade ativa,
@@ -473,7 +473,7 @@ class PopuladorDeMundo:
                     vinculo = (VinculoSocial.AMIGO if af >= amigo_vinculo_limiar else VinculoSocial.CONHECIDO).value
                     self.db.npcs.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
 
-        self.db.npcs.salvar_muitos(list(alterados_por_id.values()))
+        self.db.npcs.salvar_completo(list(alterados_por_id.values()))
 
     def _inicializar_mercado_de_trabalho(self) -> None:
         print("\n💼 Inicializando mercado de trabalho e preenchendo vagas...")

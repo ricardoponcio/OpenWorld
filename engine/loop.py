@@ -81,11 +81,18 @@ class GameLoop:
         self._remover_falecidos()
         self._processar_partos(maes_em_parto)
         # P05 (docs/PLANO_CIDADE_VIVA.md): UMA transação pro tick inteiro, não um
-        # commit por NPC (750 NPCs = 750 commits; o profiler mediu 7 ms só em commit
-        # com 20 NPCs). Depois de partos/mortes de propósito: `processar_parto` pode
-        # ter mutado mãe/pai (que já estão em `npcs_alterados`, por referência) — salvar
-        # depois pega o estado mais recente, não uma foto de antes do parto. NPC morto
-        # nunca entra na lista (o `continue` acima pula), então nunca é regravado vivo.
+        # commit por NPC. N02 (docs/PLANO_POPULACAO_E_ESCALA.md): `salvar_muitos` só
+        # regrava as colunas que mudam todo minuto (energia, fome, social, saude,
+        # humor, acao_atual, localizacao_atual_id) — as colunas frias (relacionamentos,
+        # genealogia etc.) já foram gravadas por `salvar_completo` no ponto do evento
+        # que as mudou (parto, morte, casamento...). Depois de partos/mortes de
+        # propósito: `processar_parto` pode ter mutado mãe/pai (que já estão em
+        # `npcs_alterados`, por referência) — salvar depois pega o estado mais
+        # recente, não uma foto de antes do parto. O recém-nascido em si NÃO está em
+        # `npcs_alterados` (não existia no início do laço) e já foi gravado por inteiro
+        # dentro de `processar_parto`, então este `UPDATE` nunca o alcança achando uma
+        # linha inexistente. NPC morto nunca entra na lista (o `continue` acima pula),
+        # então nunca é regravado vivo.
         self._mundo.db.npcs.salvar_muitos(npcs_alterados)
         self._social.processar_interacoes()
 

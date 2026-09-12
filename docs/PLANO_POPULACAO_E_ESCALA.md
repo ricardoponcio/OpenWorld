@@ -2124,7 +2124,7 @@ não o tome de novo.
 | Tarefa | Data | Observação / número medido |
 |---|---|---|
 | N01 | 2026-09-12 | `processar_coabitacao` (marriage.py) passou a iterar `n1.relacionamentos` em vez de todos os solteiros da cidade, com a ordem embaralhada por RNG a cada chamada. Nenhuma regra de elegibilidade mudou. `bench_tick.py --ticks 3`: cenário `3000/15000/15` caiu para 55,4 ms — pré-N01 o cenário próximo `3000/20000/15` estava em ~591 ms (parada obrigatória nº 2 satisfeita, mesma ordem de grandeza). Suíte: 92 passed, 2 xfailed, sem alteração nos testes de casamento. |
-| N02 | | |
+| N02 | 2026-09-12 | `RepositorioNPC.salvar_muitos` virou `UPDATE` estreito (7 colunas quentes); o `INSERT OR REPLACE` de sempre virou `salvar_completo`, chamado nos pontos de mudança fria (reprodução, ciclo de vida, decadência, casamento, urbanismo, finanças — todos já chamavam `.salvar()` num NPC só, e continuam; só `builder/populador.py` (3 chamadas em lote) e o novo `salvar_completo` em lote precisaram trocar de nome). W03 escrito antes: `tests/test_persistencia.py` roda um tick de verdade contra SQLite temporário, com parto no meio, reabre o banco noutro `DatabaseManager` e confirma que mãe/pai/bebê sobrevivem com os campos certos — e passou de primeira contra a implementação nova. `tests/test_repositorio_npc.py` reescrito: prova que `salvar_muitos` não toca coluna fria e que um `UPDATE` numa linha inexistente não cria nada (a armadilha documentada). Suíte: 96 passed, 2 xfailed. |
 | N03 | | |
 | N04 | | |
 | N05 | | |
@@ -2152,4 +2152,4 @@ não o tome de novo.
 | R04 | | |
 | W01 | | |
 | W02 | | |
-| W03 | | |
+| W03 | 2026-09-12 | Escrito ANTES de N02, como o plano pediu — `tests/test_persistencia.py`. Cobriu o risco mais caro do bloco antes de introduzir o `UPDATE` estreito. |

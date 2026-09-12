@@ -76,11 +76,19 @@ class RepositorioNPC:
                 npc.gravidez_ticks
             ))
 
-    def salvar_muitos(self, npcs: list) -> None:
-        """P05 (docs/PLANO_CIDADE_VIVA.md): uma transação pra TODOS os NPCs alterados
-        no tick, não um commit por NPC — `DatabaseManager.connection()` commita na
-        saída do `with`, e `GameLoop` chamava `salvar(npc)` um de cada vez (750 NPCs =
-        750 commits por tick; o profiler mediu 7 ms só em commit com 20 NPCs)."""
+    # Colunas que mudam a cada minuto simulado, para todo NPC vivo — o que
+    # `salvar_muitos` (a escrita de fim de tick) de fato precisa regravar.
+    _COLUNAS_QUENTES = ("energia", "fome", "social", "saude", "humor", "acao_atual",
+                        "localizacao_atual_id")
+
+    def salvar_completo(self, npcs: list) -> None:
+        """N02 (docs/PLANO_POPULACAO_E_ESCALA.md): a linha INTEIRA, numa transação só —
+        o que `salvar_muitos` fazia antes desta tarefa (P05). Para as colunas FRIAS,
+        que só mudam num evento de verdade: nascimento, morte, casamento, mudança de
+        casa, contratação, crescimento de estágio de vida. Chame este método NESSES
+        pontos, nunca no corpo do tick — é também o único caminho correto para um NPC
+        que ainda não existe no banco (`salvar_muitos`, por ser `UPDATE`, não cria
+        linha: ver o aviso no docstring dele)."""
         if not npcs:
             return
         with self.db.connection() as conn:
@@ -97,6 +105,31 @@ class RepositorioNPC:
                   npc.data_nascimento, npc.estado_civil, npc.conjuge_id, npc.pai_id, npc.mae_id,
                   json.dumps(npc.genealogia), json.dumps(npc.relacionamentos), json.dumps(npc.memoria_eventos),
                   npc.gravidez_ticks)
+                 for npc in npcs])
+
+    def salvar_muitos(self, npcs: list) -> None:
+        """N02 (docs/PLANO_POPULACAO_E_ESCALA.md): escrita de FIM DE TICK — um `UPDATE`
+        estreito, só das colunas que mudam todo minuto simulado (`_COLUNAS_QUENTES`).
+        Medido com 25.000 NPCs/150 relações cada: 944 ms com o `INSERT OR REPLACE` da
+        linha inteira (o que hoje é `salvar_completo`), 84% disso só serializando
+        `relacionamentos`/`genealogia`/`memoria_eventos` que não mudaram; 40,6 ms neste
+        `UPDATE` estreito. `relacionamentos` já tem tabela própria
+        (`salvar_relacionamento`) — a coluna JSON em `npcs` é cópia.
+
+        ⚠️ Isto é um `UPDATE`, não um `INSERT OR REPLACE`: numa linha que ainda não
+        existe ele NÃO FALHA, só não faz nada — o NPC viveria o tick inteiro em
+        memória e sumiria no próximo carregamento, em silêncio. Todo NPC novo (parto,
+        Modo Mestre) tem que passar por `salvar_completo` ANTES de entrar em
+        `mundo.npcs`; é isso que garante que, quando o laço do tick chegar aqui, a
+        linha já existe."""
+        if not npcs:
+            return
+        with self.db.connection() as conn:
+            conn.cursor().executemany(
+                '''UPDATE npcs SET energia = ?, fome = ?, social = ?, saude = ?, humor = ?,
+                   acao_atual = ?, localizacao_atual_id = ? WHERE id = ?''',
+                [(npc.energia, npc.fome, npc.social, npc.saude, npc.humor,
+                  npc.acao_atual.value, npc.localizacao_atual_id, npc.id)
                  for npc in npcs])
 
     def renomear(self, npc_id: str, novo_nome: str):
