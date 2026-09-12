@@ -184,6 +184,10 @@
     },
     "geracao_populacao": {
         "_comentario": "Parâmetros do povoamento inicial (builder/populate.py). Migrado de literais soltos na Frente 1 (2026-09-09).",
+        "_comentario_p07": "docs/PLANO_CIDADE_VIVA.md P07/D1 (2026-09-12): população configurável, em TODAS as cidades (não só a de spawn). npcs_por_cidade é a base (cidade 'medio'); npcs_por_cidade_por_tamanho multiplica pra dar à capital a sensação de capital. cidades_ativas aceita 'todas' (literal, não None — a intenção fica escrita) ou uma lista de nomes.",
+        "npcs_por_cidade": 50,
+        "npcs_por_cidade_por_tamanho": {"pequeno": 0.6, "medio": 1.0, "grande": 1.6},
+        "cidades_ativas": "todas",
         "casas_minimo": 5,
         "casas_divisor_por_npc": 2,
         "proporcao_adultos": 0.85,

@@ -187,48 +187,74 @@ class PopuladorDeMundo:
         self.limiar_morte = cfg_get(config, "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
 
         self.cidades_salvas = []
-        self.cidade_spawn = None
-        self.casas_ids = []
-        self.todos_locais_spawn = []
+        self.cidades_ativas = []
+        self.cidade_foco = None
+        self.casas_por_cidade = {}
+        self.locais_trabalho_por_cidade = {}
         self.npcs_gerados = []
 
-    def executar(self, num_npcs: int) -> None:
+    def executar(self, num_npcs: int = None) -> None:
+        """`num_npcs`, quando informado, SUBSTITUI `npcs_por_cidade` do config como a
+        base per-cidade (ainda escalada por `npcs_por_cidade_por_tamanho`) — é o que
+        permite `--npcs 5` num reset rápido de teste sem editar o config.json."""
         print(f"🏗️  Iniciando Povoamento Dinâmico de Mundo (Tema: {self.tema})")
+        base_npcs = num_npcs if num_npcs is not None else cfg_get(self.cfg_pop, "npcs_por_cidade")
 
         self._importar_cartografia()
         if not self.cidades_salvas:
             return
 
-        self._eleger_cidade_spawn()
+        self._eleger_cidades_ativas()
         self._importar_geometria_das_cidades()
         self._coletar_locais_de_trabalho()
 
-        dnas = self._gerar_dnas_em_paralelo(num_npcs)
+        dnas = self._gerar_dnas_em_paralelo(base_npcs)
         self._criar_npcs(dnas)
-        self._formar_casais_iniciais(num_npcs)
+        self._formar_casais_iniciais(base_npcs)
         self._estabelecer_lacos_sociais()
         self._inicializar_mercado_de_trabalho()
 
         print("\n✨ POVOAMENTO COM IA CONCLUÍDO COM SUCESSO!")
-        print(f"🏰 Cidade '{self.cidade_spawn['nome']}' ativa com {len(self.npcs_gerados)} habitantes prontos para simular.")
+        print(f"🏰 {len(self.cidades_ativas)} cidade(s) ativa(s), {len(self.npcs_gerados)} "
+              f"habitante(s) no total prontos para simular.")
 
     # ------------------------------------------------------------------
     def _importar_cartografia(self) -> None:
         self.cidades_salvas = CartographyImporter.import_manifest(self.db, MANIFEST_PATH)
 
-    def _eleger_cidade_spawn(self) -> None:
-        """Única cidade com NPCs simulados por enquanto (a simulação de agentes
-        continua single-city até a Fase 9)."""
-        self.cidade_spawn = self.cidades_salvas[0]
-        print(f"🏰 Cidade Principal Selecionada: {self.cidade_spawn['nome']} (ID: {self.cidade_spawn['db_id']})")
-        self.db.meta.salvar(MetaChave.CIDADE_SIMULADA, str(self.cidade_spawn['db_id']))
-        # Fase 2.2 (P1.5): registra quais cidades têm simulação ativa — hoje só a spawn,
-        # mas a Fase 9 pode ativar mais de uma sem precisar inventar essa chave do zero.
-        self.db.meta.salvar(MetaChave.CIDADES_ATIVAS, json.dumps([self.cidade_spawn['db_id']]))
+    def _eleger_cidades_ativas(self) -> None:
+        """P07 (docs/PLANO_CIDADE_VIVA.md, D1): população em TODAS as cidades ativas,
+        não só a de spawn — `cidades_ativas` no config aceita 'todas' (literal, não
+        `None`, pra intenção ficar escrita) ou uma lista de nomes.
+
+        A PRIMEIRA da lista continua sendo a cidade em FOCO do dashboard/Modo Mestre
+        (`MetaChave.CIDADE_SIMULADA`) — não é a mesma coisa que "todas com simulação
+        ativa" (`MetaChave.CIDADES_ATIVAS`, que agora leva TODOS os ids, não só um)."""
+        filtro = cfg_get(self.cfg_pop, "cidades_ativas")
+        if filtro == "todas":
+            self.cidades_ativas = list(self.cidades_salvas)
+        else:
+            nomes = set(filtro)
+            self.cidades_ativas = [c for c in self.cidades_salvas if c['nome'] in nomes]
+            if not self.cidades_ativas:
+                WorldLogger.warning(
+                    f"[POPULATE] Nenhuma cidade do manifesto bate com cidades_ativas={filtro!r} "
+                    f"— usando todas as {len(self.cidades_salvas)} cidades.")
+                self.cidades_ativas = list(self.cidades_salvas)
+
+        self.cidade_foco = self.cidades_ativas[0]
+        print(f"🏰 Cidades ativas ({len(self.cidades_ativas)}): "
+              f"{', '.join(c['nome'] for c in self.cidades_ativas)}")
+        print(f"🔎 Cidade em foco (dashboard/Modo Mestre): {self.cidade_foco['nome']} "
+              f"(ID: {self.cidade_foco['db_id']})")
+        self.db.meta.salvar(MetaChave.CIDADE_SIMULADA, str(self.cidade_foco['db_id']))
+        self.db.meta.salvar(MetaChave.CIDADES_ATIVAS,
+                            json.dumps([c['db_id'] for c in self.cidades_ativas]))
 
     def _importar_geometria_das_cidades(self) -> None:
-        """Fase 4.5 (P2.2): importa os edifícios da geometria REAL de cada cidade como
-        `Local`. Cidade sem geometria gerada cai no paliativo de espalhamento em raio."""
+        """Fase 4.5 (P2.2): importa os edifícios da geometria REAL de cada cidade do
+        MANIFESTO (não só as ativas — o mapa mostra todas) como `Local`. Cidade sem
+        geometria gerada cai no paliativo de espalhamento em raio."""
         print(f"🏙️  Importando geometria de {len(self.cidades_salvas)} cidade(s) do manifesto...")
         for cid in self.cidades_salvas:
             resultado = _importar_locais_da_geometria(self.db, cid)
@@ -239,42 +265,64 @@ class PopuladorDeMundo:
                     f"Usando paliativo temporário pra não travar o povoamento."
                 )
                 resultado = _importar_locais_paliativo(self.db, cid, self.raio_locais, self.nivel_mar, self.cfg_urbano)
-            if cid is self.cidade_spawn:
-                self.casas_ids = resultado
-
-        if not self.casas_ids:
-            WorldLogger.warning(f"[POPULATE] '{self.cidade_spawn['nome']}' não tem nenhuma residência — NPCs ficarão sem casa.")
+            self.casas_por_cidade[cid['db_id']] = resultado
+            if not resultado:
+                WorldLogger.warning(f"[POPULATE] '{cid['nome']}' não tem nenhuma residência — NPCs dela ficarão sem casa.")
 
     def _coletar_locais_de_trabalho(self) -> None:
         """Candidatos a "local de trabalho" pra dar contexto de flavor à IA de DNA do
-        NPC. Exclui categorias sociais (o NPC não "trabalha" na praça)."""
-        self.todos_locais_spawn = [
-            l for l in self.db.locais.carregar_por_id().values()
-            if l.cidade_id == self.cidade_spawn['db_id']
-            and l.categoria not in (CategoriaLocal.TAVERNA.value, CategoriaLocal.PUBLICO.value, CategoriaLocal.RESIDENCIA.value)
-        ]
-        if not self.todos_locais_spawn:
-            self.todos_locais_spawn = [Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)]
+        NPC, por cidade ATIVA. Exclui categorias sociais (o NPC não "trabalha" na
+        praça)."""
+        locais_por_id = self.db.locais.carregar_por_id()
+        for cid in self.cidades_ativas:
+            candidatos = [
+                l for l in locais_por_id.values()
+                if l.cidade_id == cid['db_id']
+                and l.categoria not in (CategoriaLocal.TAVERNA.value, CategoriaLocal.PUBLICO.value, CategoriaLocal.RESIDENCIA.value)
+            ]
+            if not candidatos:
+                candidatos = [Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)]
+            self.locais_trabalho_por_cidade[cid['db_id']] = candidatos
 
-    def _gerar_dnas_em_paralelo(self, num_npcs: int) -> list:
-        print(f"👥 Povoando cidade com {num_npcs} habitantes usando IA (Workers: {self.ia_max_thread})...")
-        nomes_gerados = []
+    def _populacao_da_cidade(self, cidade: dict, base_npcs: int) -> int:
+        """P07/D1: multiplicador por tamanho (a capital parece capital) sobre a base
+        configurada (`npcs_por_cidade`, ou o override de `--npcs`)."""
+        multiplicadores = cfg_get(self.cfg_pop, "npcs_por_cidade_por_tamanho")
+        fator = multiplicadores.get(cidade.get('tamanho', 'medio'), 1.0)
+        return max(1, round(base_npcs * fator))
 
+    def _gerar_dnas_em_paralelo(self, base_npcs: int) -> list:
+        """P07: itera TODAS as cidades ativas, cada uma com sua própria população
+        (`_populacao_da_cidade`). Custo de IA: só a cidade em FOCO recebe geração de
+        DNA por IA de verdade — as outras usam fallback procedural direto, sem
+        nenhuma chamada de IA (de 20 pra 750 NPCs seriam 750 chamadas; sem isto o
+        custo aparece na fatura, não numa decisão consciente)."""
         npc_params = []
-        for i in range(num_npcs):
-            genero_alvo = Genero.MASCULINO.value if i % 2 == 0 else Genero.FEMININO.value
-            casa = random.choice(self.casas_ids) if self.casas_ids else ""
-            loc_trabalho = random.choice(self.todos_locais_spawn)
-            npc_params.append((i, genero_alvo, loc_trabalho, casa))
+        for cid in self.cidades_ativas:
+            cidade_id = cid['db_id']
+            n = self._populacao_da_cidade(cid, base_npcs)
+            casas = self.casas_por_cidade.get(cidade_id) or []
+            locais_trabalho = self.locais_trabalho_por_cidade.get(cidade_id) or []
+            for i in range(n):
+                genero_alvo = Genero.MASCULINO.value if i % 2 == 0 else Genero.FEMININO.value
+                casa = random.choice(casas) if casas else ""
+                loc_trabalho = random.choice(locais_trabalho) if locais_trabalho else \
+                    Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)
+                npc_params.append((cidade_id, i, genero_alvo, loc_trabalho, casa))
+
+        print(f"👥 Povoando {len(self.cidades_ativas)} cidade(s) com {len(npc_params)} "
+              f"habitante(s) no total (IA: Workers {self.ia_max_thread}, só na cidade em foco)...")
+        nomes_gerados = []
+        foco_id = self.cidade_foco['db_id']
 
         def gerar_um_npc(params):
-            idx, genero, loc, casa = params
+            cidade_id, idx, genero, loc, casa = params
             dna = None
-            if self.usar_ia:
+            if self.usar_ia and cidade_id == foco_id:
                 try:
                     dna = AIGeneratorClient.gerar_dna_npc(self.tema, loc.nome, loc.tipo, genero, nomes_gerados)
                 except Exception as e:
-                    print(f"⚠️ Falha na geração IA para NPC {idx}: {e}. Ativando Fallback.")
+                    print(f"⚠️ Falha na geração IA para NPC {cidade_id}/{idx}: {e}. Ativando Fallback.")
             return (params, dna)
 
         if self.usar_ia and self.ia_max_thread > 1:
@@ -286,8 +334,11 @@ class PopuladorDeMundo:
         return resultados
 
     def _criar_npcs(self, resultados: list) -> None:
+        """P05: acumula e grava em UMA transação (executemany) em vez de um commit
+        por NPC — com centenas de NPCs em várias cidades, isso deixou de ser barato."""
+        novos = []
         for params, dna in resultados:
-            idx, genero_alvo, loc_trabalho, casa = params
+            cidade_id, idx, genero_alvo, loc_trabalho, casa = params
 
             if dna:
                 nome = dna.get('nome', f"Habitante {idx}")
@@ -319,11 +370,13 @@ class PopuladorDeMundo:
             dt_nasc = RelogioMundo.EPOCA - timedelta(days=idade_inicial_dias)
 
             npc = NPC(
-                id=f"npc_{idx:03d}",
+                # P07/armadilha 3: id namespaced por cidade — f"npc_{idx:03d}" sozinho
+                # colidiria entre cidades (cada uma reinicia idx em 0).
+                id=f"npc_{cidade_id:02d}_{idx:03d}",
                 nome=nome,
                 profissao=profissao,
                 profissao_id=ProfissaoID.OCIOSO.value,
-                cidade_id=self.cidade_spawn['db_id'],
+                cidade_id=cidade_id,
                 casa_id=casa,
                 local_trabalho_id="",
                 localizacao_atual_id=casa,
@@ -335,62 +388,92 @@ class PopuladorDeMundo:
                 personalidade=personalidade,
                 background=background
             )
-            self.db.npcs.salvar(npc)
-            self.npcs_gerados.append(npc)
-            print(f"  ✅ Gerado: {nome} ({genero}) | Idade: {idade_inicial_anos} anos | Cargo IA: {profissao}")
+            novos.append(npc)
+            print(f"  ✅ Gerado: {nome} ({genero}) | Cidade: {cidade_id} | Idade: {idade_inicial_anos} anos | Cargo IA: {profissao}")
 
-    def _formar_casais_iniciais(self, num_npcs: int) -> None:
-        print("\n❤️  Estabelecendo casais iniciais casados e coabitantes na vila...")
-        adultos_m = [n for n in self.npcs_gerados if n.genero == Genero.MASCULINO.value and n.estagio_vida == EstagioVida.ADULTO.value]
-        adultos_f = [n for n in self.npcs_gerados if n.genero == Genero.FEMININO.value and n.estagio_vida == EstagioVida.ADULTO.value]
+        self.db.npcs.salvar_muitos(novos)
+        self.npcs_gerados.extend(novos)
 
-        num_casais = min(len(adultos_m), len(adultos_f), num_npcs // cfg_get(self.cfg_pop, "casal_divisor_por_npc"))
-        for idx in range(num_casais):
-            m, f = adultos_m[idx], adultos_f[idx]
+    def _npcs_por_cidade(self) -> dict:
+        agrupado = {}
+        for n in self.npcs_gerados:
+            agrupado.setdefault(n.cidade_id, []).append(n)
+        return agrupado
 
-            casa_comum = m.casa_id or f.casa_id or self.casas_ids[0]
-            m.casa_id = f.casa_id = casa_comum
-            m.localizacao_atual_id = f.localizacao_atual_id = casa_comum
+    def _formar_casais_iniciais(self, base_npcs: int) -> None:
+        """P07: casais só entre habitantes da MESMA cidade — roda por cidade ativa, não
+        sobre a população global (casamento entre cidades diferentes não faz sentido,
+        mesmo raciocínio de P04)."""
+        print("\n❤️  Estabelecendo casais iniciais casados e coabitantes nas cidades...")
+        npcs_por_cidade = self._npcs_por_cidade()
+        alterados = []
 
-            m.estado_civil = f.estado_civil = EstadoCivil.CASADO.value
-            m.conjuge_id, f.conjuge_id = f.id, m.id
+        for cid in self.cidades_ativas:
+            cidade_id = cid['db_id']
+            habitantes = npcs_por_cidade.get(cidade_id, [])
+            adultos_m = [n for n in habitantes if n.genero == Genero.MASCULINO.value and n.estagio_vida == EstagioVida.ADULTO.value]
+            adultos_f = [n for n in habitantes if n.genero == Genero.FEMININO.value and n.estagio_vida == EstagioVida.ADULTO.value]
+            casas_cidade = self.casas_por_cidade.get(cidade_id) or [""]
 
-            sobrenome_m = m.nome.split()[-1] if len(m.nome.split()) > 1 else ""
-            if sobrenome_m and sobrenome_m not in f.nome:
-                f.nome = f"{f.nome} {sobrenome_m}"
+            n_populacao = self._populacao_da_cidade(cid, base_npcs)
+            num_casais = min(len(adultos_m), len(adultos_f),
+                             n_populacao // cfg_get(self.cfg_pop, "casal_divisor_por_npc"))
+            for idx in range(num_casais):
+                m, f = adultos_m[idx], adultos_f[idx]
 
-            af = random.randint(cfg_get(self.cfg_pop, "casal_afinidade_min"), cfg_get(self.cfg_pop, "casal_afinidade_max"))
-            m.relacionamentos[f.id] = af
-            f.relacionamentos[m.id] = af
+                casa_comum = m.casa_id or f.casa_id or casas_cidade[0]
+                m.casa_id = f.casa_id = casa_comum
+                m.localizacao_atual_id = f.localizacao_atual_id = casa_comum
 
-            self.db.npcs.salvar(m)
-            self.db.npcs.salvar(f)
-            self.db.npcs.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
-            print(f"  ❤️  CASAL FORMADO: {m.nome} e {f.nome} morando na {casa_comum} (Afinidade: {af})!")
+                m.estado_civil = f.estado_civil = EstadoCivil.CASADO.value
+                m.conjuge_id, f.conjuge_id = f.id, m.id
+
+                sobrenome_m = m.nome.split()[-1] if len(m.nome.split()) > 1 else ""
+                if sobrenome_m and sobrenome_m not in f.nome:
+                    f.nome = f"{f.nome} {sobrenome_m}"
+
+                af = random.randint(cfg_get(self.cfg_pop, "casal_afinidade_min"), cfg_get(self.cfg_pop, "casal_afinidade_max"))
+                m.relacionamentos[f.id] = af
+                f.relacionamentos[m.id] = af
+
+                alterados.extend((m, f))
+                self.db.npcs.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
+                print(f"  ❤️  CASAL FORMADO: {m.nome} e {f.nome} morando na {casa_comum} (Afinidade: {af})!")
+
+        self.db.npcs.salvar_muitos(alterados)
 
     def _estabelecer_lacos_sociais(self) -> None:
+        """P07: laço social só entre habitantes da MESMA cidade — por cidade ativa,
+        não O(N²) sobre a população global (que não faz sentido: um NPC não conhece
+        alguém que nunca viu, do outro lado do mundo)."""
         print("\n💞 Estabelecendo laços sociais e amizades prévias na comunidade...")
         amigos_min, amigos_max = cfg_get(self.cfg_pop, "amigos_min"), cfg_get(self.cfg_pop, "amigos_max")
         amigo_af_min, amigo_af_max = cfg_get(self.cfg_pop, "amigo_afinidade_min"), cfg_get(self.cfg_pop, "amigo_afinidade_max")
         amigo_vinculo_limiar = cfg_get(self.cfg_pop, "amigo_vinculo_limiar")
 
-        for npc_a in self.npcs_gerados:
-            qtd_amigos = random.randint(amigos_min, min(amigos_max, len(self.npcs_gerados) - 1))
-            alvos = random.sample([n for n in self.npcs_gerados if n.id != npc_a.id], k=qtd_amigos)
-
-            for npc_b in alvos:
-                if npc_b.id in npc_a.relacionamentos:
+        alterados_por_id = {}
+        for habitantes in self._npcs_por_cidade().values():
+            for npc_a in habitantes:
+                candidatos = [n for n in habitantes if n.id != npc_a.id]
+                if not candidatos:
                     continue
+                qtd_amigos = random.randint(amigos_min, min(amigos_max, len(candidatos)))
+                alvos = random.sample(candidatos, k=qtd_amigos)
 
-                af = random.randint(amigo_af_min, amigo_af_max)
-                npc_a.relacionamentos[npc_b.id] = af
-                npc_b.relacionamentos[npc_a.id] = af
+                for npc_b in alvos:
+                    if npc_b.id in npc_a.relacionamentos:
+                        continue
 
-                self.db.npcs.salvar(npc_a)
-                self.db.npcs.salvar(npc_b)
+                    af = random.randint(amigo_af_min, amigo_af_max)
+                    npc_a.relacionamentos[npc_b.id] = af
+                    npc_b.relacionamentos[npc_a.id] = af
+                    alterados_por_id[npc_a.id] = npc_a
+                    alterados_por_id[npc_b.id] = npc_b
 
-                vinculo = (VinculoSocial.AMIGO if af >= amigo_vinculo_limiar else VinculoSocial.CONHECIDO).value
-                self.db.npcs.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
+                    vinculo = (VinculoSocial.AMIGO if af >= amigo_vinculo_limiar else VinculoSocial.CONHECIDO).value
+                    self.db.npcs.salvar_relacionamento(npc_a.id, npc_b.id, af, vinculo)
+
+        self.db.npcs.salvar_muitos(list(alterados_por_id.values()))
 
     def _inicializar_mercado_de_trabalho(self) -> None:
         print("\n💼 Inicializando mercado de trabalho e preenchendo vagas...")
