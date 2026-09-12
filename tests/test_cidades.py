@@ -100,6 +100,24 @@ def test_teto_de_notaveis_por_quarteirao():
             f"modelo {nome}: {pior} notáveis num único quarteirão (teto combinado {teto_combinado})")
 
 
+def test_aneis_nao_cruzam():
+    """G01 — docs/PLANO_CIDADE_VIVA.md Seção 1.1: em radial e organica, o raio de cada
+    vértice tem que crescer estritamente por setor (nenhum anel cruza o vizinho), em
+    200 seeds por combinação de modelo x tamanho. Antes de G01 a chance de cruzamento
+    chegava a 82,5% (radial, 6 anéis) e 100% (organica)."""
+    for nome_modelo in ("radial", "organica"):
+        for tamanho in ("medio", "grande"):
+            for seed_i in range(200):
+                cidade = {"nome": f"TesteAneis{nome_modelo}{tamanho}{seed_i}",
+                          "tamanho": tamanho, "tipo": "residencial",
+                          "x_global": 100 + seed_i, "y_global": 100 + seed_i}
+                sitio = SitioCidade.medir(cidade, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+                rng = random.Random(sitio.seed)
+                modelo = MODELOS[nome_modelo](sitio, CARTOGRAPHER_CONFIG, rng)
+                malha = modelo.construir_malha()  # a própria asserção de G01 já falha aqui se cruzar
+                assert malha.quadras
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()

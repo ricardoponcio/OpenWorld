@@ -278,6 +278,8 @@
         "cidade_geo_num_aneis_faixa_por_tamanho": {"pequeno": [2, 3], "medio": [3, 4], "grande": [4, 6]},
         "cidade_geo_setores_por_portao_faixa": [2.5, 4.0],
         "cidade_geo_irregularidade_via": 0.15,
+        "_comentario_anel_perturbacao": "docs/PLANO_CIDADE_VIVA.md G01 (2026-09-12): a perturbação de raio de cada vértice de anel deixa de ser proporcional ao raio do anel (irreg * raios_base[j], que cresce com a banda enquanto o vão entre anéis é constante — 82,5% das cidades radiais de 6 anéis nasciam com anel invertido) e passa a ser um deslocamento ABSOLUTO em metros: amplitude_m = vao * cidade_geo_anel_perturbacao_fracao_vao, onde vao = raio_m / (num_aneis + 1). cidade_geo_irregularidade_via continua valendo só pra silhueta de grade/muralha, nunca mais pra raio de anel.",
+        "cidade_geo_anel_perturbacao_fracao_vao": 0.22,
         "_comentario_lote": "ESPEC_TECIDO_URBANO.md Seção 6/E2 (2026-09-11): substitui cidade_geo_lote_area_alvo_m2, que valia 24000 (2,4 ha!) e deixava 1,8 lote por quadra — o 'ponto numa quadra grande' que o usuario reportou. area_alvo(banda) = cidade_geo_lote_area_base_m2 * (cidade_geo_lote_fator_por_banda ** (banda-1)) * fator_da_cidade, fator_da_cidade sorteado uma vez por cidade em cidade_geo_lote_fator_cidade_faixa (self.rng, determinístico por nome). O alvo cresce com a banda (centro denso, borda folgada). Referencia historica: lote urbano medieval tem 200 a 400 m2.",
         "cidade_geo_lote_area_base_m2": 180,
         "cidade_geo_lote_fator_por_banda": 1.6,

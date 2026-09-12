@@ -11,6 +11,12 @@ import numpy as np
 from config import cfg_get
 from .base import ModeloCidade, Rua, Quadra, Malha
 
+# Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
+# amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
+# segurança contra a soma chegar a 1.0 (que é o anel invertido — Seção 1.1 do
+# docs/PLANO_CIDADE_VIVA.md).
+FRACAO_VAO_MAXIMA_SEGURA = 0.45
+
 
 class RadialModelo(ModeloCidade):
     nome = "radial"
@@ -28,6 +34,11 @@ class RadialModelo(ModeloCidade):
             sitio.tamanho, [2, 2])
         self.num_aneis = self.rng.randint(int(faixa_aneis[0]), int(faixa_aneis[1]))
         self.irreg = cfg_get(config, "cidade_geo_irregularidade_via")
+        # G01: fração do vão entre anéis que a perturbação pode ocupar, saturada no
+        # limite estrutural — nunca no valor bruto do config (que um game designer
+        # poderia, por engano, subir acima do que a geometria aguenta).
+        fracao = cfg_get(config, "cidade_geo_anel_perturbacao_fracao_vao")
+        self.anel_fracao_vao = min(fracao, FRACAO_VAO_MAXIMA_SEGURA)
         faixa_fator_cidade = cfg_get(config, "cidade_geo_lote_fator_cidade_faixa")
         self.lote_fator_cidade = self.rng.uniform(*faixa_fator_cidade)
         faixa_setores_por_portao = cfg_get(config, "cidade_geo_setores_por_portao_faixa")
@@ -99,18 +110,34 @@ class RadialModelo(ModeloCidade):
 
         perturb = self.np_rng.uniform(-1.0, 1.0, size=(self.num_aneis + 1, self.num_setores))
 
+        # G01: deslocamento ABSOLUTO em metros, não proporcional ao raio do anel — o
+        # espaço disponível pra perturbar é o VÃO entre anéis vizinhos (constante),
+        # nunca o raio (que cresce com a banda). Ver docs/PLANO_CIDADE_VIVA.md Seção 1.1.
+        vao = self.raio_m / (self.num_aneis + 1)
+        amplitude_m = vao * self.anel_fracao_vao
+
         vertices = []
         for j in range(self.num_aneis):
             raio_linha = []
             for i in range(self.num_setores):
-                r = raios_base[j] * (1.0 + self.irreg * perturb[j, i])
+                r = raios_base[j] + amplitude_m * perturb[j, i]
                 raio_linha.append(self._polar(r, angulos[i]))
             vertices.append(raio_linha)
         borda = []
         for i in range(self.num_setores):
-            r = self.raio_m * (1.0 + self.irreg * 0.5 * perturb[self.num_aneis, i])
+            r = self.raio_m + amplitude_m * perturb[self.num_aneis, i]
             borda.append(self._polar(r, angulos[i]))
         vertices.append(borda)
+
+        # Invariante, não preferência: com a amplitude saturada em FRACAO_VAO_MAXIMA_SEGURA
+        # isto nunca deveria disparar — se disparar, é a config que subiu
+        # cidade_geo_anel_perturbacao_fracao_vao além do que a saturação intencionalmente
+        # limita (ela só limita a AMPLITUDE, não impede num_aneis de mudar o vão).
+        for i in range(self.num_setores):
+            raios_do_setor = [math.hypot(*vertices[j][i]) for j in range(len(vertices))]
+            assert all(b > a for a, b in zip(raios_do_setor, raios_do_setor[1:])), (
+                f"{self.sitio.nome}: anéis cruzados no setor {i} — "
+                f"cidade_geo_anel_perturbacao_fracao_vao alto demais")
 
         passo = max(1, self.num_setores // self.num_portoes)
 
@@ -143,15 +170,27 @@ class RadialModelo(ModeloCidade):
         raio_banda0 = raios_base[0]
         raio_nucleo_candidato = (math.hypot(*centro_praca) + self.praca_raio +
                                   self._distancia_faixa_dominio("anel"))
-        nucleo_urbanizavel = raio_nucleo_candidato < raio_banda0 * 0.9
+        # G01: o anel do núcleo usa a MESMA amplitude_m que os demais (perturbação
+        # absoluta), então o vão real até raios_base[0] precisa caber as duas
+        # amplitudes somadas — mesmo raciocínio de FRACAO_VAO_MAXIMA_SEGURA, só que
+        # aqui o vão não é `vao` (o núcleo não fica a uma distância nominal fixa de
+        # raios_base[0]): é `raio_banda0 - raio_nucleo_candidato`, que pode ser bem
+        # menor que `vao` se a praça quase toma o núcleo inteiro (Seção 1.1).
+        nucleo_urbanizavel = raio_nucleo_candidato < raio_banda0 - 2 * amplitude_m
         nucleo = None
         raio_nucleo = 0.0
         ruas = []
         if nucleo_urbanizavel:
             raio_nucleo = raio_nucleo_candidato
             perturb_nucleo = self.np_rng.uniform(-1.0, 1.0, size=self.num_setores)
-            nucleo = [self._polar(raio_nucleo * (1.0 + self.irreg * perturb_nucleo[i]), angulos[i])
+            # G01: mesma amplitude absoluta dos demais anéis — o anel do núcleo é vizinho
+            # de raios_base[0] e precisa respeitar o mesmo vão, não o raio (bem menor) do
+            # próprio núcleo.
+            nucleo = [self._polar(raio_nucleo + amplitude_m * perturb_nucleo[i], angulos[i])
                       for i in range(self.num_setores)]
+            for i in range(self.num_setores):
+                assert math.hypot(*nucleo[i]) < math.hypot(*vertices[0][i]), (
+                    f"{self.sitio.nome}: anel do núcleo cruza raios_base[0] no setor {i}")
             ruas.append(Rua(pontos=nucleo + [nucleo[0]], classe_via="anel", tipo_via="anel", indice=-1))
 
         for j, linha in enumerate(vertices):
