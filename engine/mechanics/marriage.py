@@ -168,22 +168,29 @@ class NPCMarriageManager:
         # Filtra apenas NPCs solteiros ativos (vivos), agrupados por CIDADE — casar
         # gente de cidades diferentes nunca fez sentido (P03/P04, docs/
         # PLANO_CIDADE_VIVA.md: mesmo raciocínio de "NPC não atravessa o mundo pra ir
-        # à taverna"), e de quebra reduz o par a par de todos-contra-todos pro par a
-        # par DENTRO de cada cidade — no mundo de 15 cidades isso já é boa parte do
-        # ganho, embora o double loop em si continue O(N²) por cidade.
+        # à taverna").
         solteiros_por_cidade = {}
         for n in self._mundo.npcs:
             if n.esta_vivo() and not NPCUtils.tem_conjuge(n):
                 solteiros_por_cidade.setdefault(n.cidade_id, []).append(n)
 
+        # N01 (docs/PLANO_POPULACAO_E_ESCALA.md): um casamento exige afinidade
+        # acumulada, e afinidade só existe entre quem já se encontrou —
+        # `n1.relacionamentos` já é exatamente esse conjunto, e é pequeno. Percorrê-lo
+        # em vez da cidade inteira troca O(N²) por O(N × conhecidos).
         for solteiros in solteiros_por_cidade.values():
-            for n1 in solteiros:
-                for n2 in solteiros:
-                    if n1.id == n2.id:
+            indice_solteiros = {n.id: n for n in solteiros}
+            ordem = list(solteiros)
+            # O laço termina no primeiro casamento — sem embaralhar, o primeiro
+            # solteiro da lista teria prioridade permanente sobre todos os outros.
+            random.shuffle(ordem)
+            for n1 in ordem:
+                for id_conhecido, afinidade in n1.relacionamentos.items():
+                    n2 = indice_solteiros.get(id_conhecido)
+                    if n2 is None:
                         continue
 
                     # A validação biológica completa e de consanguinidade é delegada à função central
-                    afinidade = n1.relacionamentos.get(n2.id, 0)
                     if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
                         if random.random() < chance_uniao:
                             casa_escolhida = n1.casa_id or n2.casa_id

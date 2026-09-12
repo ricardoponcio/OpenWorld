@@ -2123,7 +2123,7 @@ não o tome de novo.
 
 | Tarefa | Data | Observação / número medido |
 |---|---|---|
-| N01 | | |
+| N01 | 2026-09-12 | `processar_coabitacao` (marriage.py) passou a iterar `n1.relacionamentos` em vez de todos os solteiros da cidade, com a ordem embaralhada por RNG a cada chamada. Nenhuma regra de elegibilidade mudou. `bench_tick.py --ticks 3`: cenário `3000/15000/15` caiu para 55,4 ms — pré-N01 o cenário próximo `3000/20000/15` estava em ~591 ms (parada obrigatória nº 2 satisfeita, mesma ordem de grandeza). Suíte: 92 passed, 2 xfailed, sem alteração nos testes de casamento. |
 | N02 | | |
 | N03 | | |
 | N04 | | |
