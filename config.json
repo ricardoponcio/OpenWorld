@@ -392,9 +392,8 @@
         "cidade_geo_linear_profundidade_faixas": [1, 3],
         "cidade_geo_linear_largura_quadra_m_faixa": [50, 90],
         "cidade_geo_linear_curvatura": 0.12,
-        "_comentario_organica": "F7: traçado 'organica' — radial degradado de propósito (herda de RadialModelo), pra dar a sensação de aldeia crescida sem plano. cidade_geo_organica_fator_irregularidade multiplica cidade_geo_irregularidade_via; cidade_geo_organica_fracao_quadras_vazias é a faixa (sorteada por cidade) de quadras descartadas de propósito.",
+        "_comentario_organica": "F7/G04 (docs/PLANO_CIDADE_VIVA.md): traçado 'organica' — radial degradado de propósito (herda de RadialModelo), pra dar a sensação de aldeia crescida sem plano. cidade_geo_organica_fator_irregularidade multiplica cidade_geo_anel_perturbacao_fracao_vao (saturado em FRACAO_VAO_MAXIMA_SEGURA = 0.45), não mais cidade_geo_irregularidade_via — desde G01 esta última só afeta silhueta de grade/muralha, nunca raio de anel. 'Quadra vazia' deixou de ser um sorteio deste modelo (cidade_geo_organica_fracao_quadras_vazias foi removida): a partir do Bloco T é consequência da ocupação inicial, que vale pra todo modelo — manter os dois seria ter duas fontes pra mesma coisa.",
         "cidade_geo_organica_fator_irregularidade": 2.2,
-        "cidade_geo_organica_fracao_quadras_vazias": [0.05, 0.18],
         "_comentario_selecao_modelo": "F8: 'lista de possibilidades' do pedido do usuário — tipo da cidade -> [[nome_do_modelo, peso], ...], sorteio ponderado (rng derivado da seed, Seção 10 item 1: nunca o rng principal, pra não deslocar raio/anéis de toda cidade). '_default' cobre tipo sem entrada própria. Nome não registrado em MODELOS (ex.: 'portuaria', Seção 4.7) cai em 'radial' sem quebrar a geração.",
         "cidade_geo_modelo_por_tipo": {
             "capital": [["grade", 0.6], ["radial", 0.4]],

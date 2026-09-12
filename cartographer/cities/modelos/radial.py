@@ -103,18 +103,20 @@ class RadialModelo(ModeloCidade):
                 melhor_declive, melhor = declive, (x, y)
         return melhor
 
-    # ------------------------------------------------------------------
-    def construir_malha(self) -> Malha:
-        angulos = [2 * math.pi * i / self.num_setores for i in range(self.num_setores)]
-        raios_base = [self.raio_m * (j + 1) / (self.num_aneis + 1) for j in range(self.num_aneis)]
-
-        perturb = self.np_rng.uniform(-1.0, 1.0, size=(self.num_aneis + 1, self.num_setores))
-
-        # G01: deslocamento ABSOLUTO em metros, não proporcional ao raio do anel — o
-        # espaço disponível pra perturbar é o VÃO entre anéis vizinhos (constante),
-        # nunca o raio (que cresce com a banda). Ver docs/PLANO_CIDADE_VIVA.md Seção 1.1.
+    def _amplitude_anel_m(self):
+        """G01: o VÃO entre anéis vizinhos (constante) é o espaço disponível pra
+        perturbar o raio de um vértice — nunca o raio em si (que cresce com a banda).
+        Ver docs/PLANO_CIDADE_VIVA.md Seção 1.1."""
         vao = self.raio_m / (self.num_aneis + 1)
-        amplitude_m = vao * self.anel_fracao_vao
+        return vao * self.anel_fracao_vao
+
+    # ------------------------------------------------------------------
+    def _grade_de_vertices(self, angulos, raios_base, perturb):
+        """Devolve `vertices[j][i]` — a grade que TANTO as ruas QUANTO as quadras leem.
+        Ponto de extensão pra modelos que deformam a malha (G04, `organica`): deforme
+        AQUI, nunca a lista de ruas depois de pronta (Seção 1.2 do
+        docs/PLANO_CIDADE_VIVA.md) — senão rua e quadra deixam de coincidir."""
+        amplitude_m = self._amplitude_anel_m()
 
         vertices = []
         for j in range(self.num_aneis):
@@ -138,6 +140,16 @@ class RadialModelo(ModeloCidade):
             assert all(b > a for a, b in zip(raios_do_setor, raios_do_setor[1:])), (
                 f"{self.sitio.nome}: anéis cruzados no setor {i} — "
                 f"cidade_geo_anel_perturbacao_fracao_vao alto demais")
+        return vertices
+
+    def construir_malha(self) -> Malha:
+        angulos = [2 * math.pi * i / self.num_setores for i in range(self.num_setores)]
+        raios_base = [self.raio_m * (j + 1) / (self.num_aneis + 1) for j in range(self.num_aneis)]
+
+        perturb = self.np_rng.uniform(-1.0, 1.0, size=(self.num_aneis + 1, self.num_setores))
+        vertices = self._grade_de_vertices(angulos, raios_base, perturb)
+        borda = vertices[-1]
+        amplitude_m = self._amplitude_anel_m()
 
         passo = max(1, self.num_setores // self.num_portoes)
 

@@ -1,14 +1,20 @@
 """
 OrganicaModelo — radial degradado de propósito (F7, ESPEC_DESENHO_CIDADE.md). Herda de
-`RadialModelo` (permitido e esperado, Seção 5.5/F7.1) e aplica quatro degradações sobre a
-malha já pronta: irregularidade maior, anéis que não fecham, quadras faltando, radiais
-tortas. Custo real: ~60 linhas sobre o radial, o melhor retorno por linha do documento.
+`RadialModelo` (permitido e esperado, Seção 5.5/F7.1) e aplica degradações sobre a GRADE
+de vértices (G04, docs/PLANO_CIDADE_VIVA.md Seção 1.2) — nunca sobre a lista de ruas
+depois de pronta: rua e quadra são duas leituras da mesma grade, e só perturbando a
+grade elas continuam coincidindo.
 """
 import math
 
 from config import cfg_get
 from .base import Rua
-from .radial import RadialModelo
+from .radial import RadialModelo, FRACAO_VAO_MAXIMA_SEGURA
+
+# G04/F7.1.4: o deslocamento angular tangencial tem que ser menor que metade do passo
+# angular entre setores, senão dois setores se cruzam (mesmo raciocínio de G01, só que
+# em ângulo em vez de raio).
+PASSO_ANGULAR_FRACAO_MAXIMA = 0.35
 
 
 class OrganicaModelo(RadialModelo):
@@ -16,55 +22,88 @@ class OrganicaModelo(RadialModelo):
 
     def __init__(self, sitio, config, rng):
         super().__init__(sitio, config, rng)
-        # F7.1.1: irregularidade maior — muda só o PARÂMETRO que o radial já usa pra
-        # perturbar vértice (self.irreg), não consome rng nenhum a mais.
+        # F7.1.1/G04: irregularidade maior — depois de G01 o raio do anel não lê mais
+        # `self.irreg` (só a silhueta de grade/muralha lê), então "organica é mais torta
+        # que radial" passa a ser a mesma fração do vão, só que amplificada — sempre
+        # saturada no limite estrutural, nunca no valor bruto do config
+        # (Anexo 2 do docs/PLANO_CIDADE_VIVA.md).
         fator = cfg_get(config, "cidade_geo_organica_fator_irregularidade")
-        self.irreg *= fator
+        self.anel_fracao_vao = min(self.anel_fracao_vao * fator, FRACAO_VAO_MAXIMA_SEGURA)
+
+    def _grade_de_vertices(self, angulos, raios_base, perturb):
+        vertices = super()._grade_de_vertices(angulos, raios_base, perturb)
+        return self._torcer_grade(vertices, angulos)
+
+    def _torcer_grade(self, vertices, angulos):
+        """F7.1.4 — radial torta. Desloca o vértice TANGENCIALMENTE (perpendicular ao
+        raio, ou seja, girando em torno do centro por um ângulo pequeno), por banda,
+        com fase própria por setor. Girar preserva o raio — não pode reintroduzir o
+        cruzamento de anéis que G01 acabou de eliminar (deslocar em linha reta poderia).
+        Como rua e quadra leem esta mesma grade (retornada por `_grade_de_vertices`), as
+        duas tortam juntas e continuam coincidindo (Seção 1.2)."""
+        passo = 2 * math.pi / self.num_setores
+        delta_max = passo * PASSO_ANGULAR_FRACAO_MAXIMA
+        fase_por_anel = self.np_rng.uniform(0, 2 * math.pi, size=len(vertices))
+        torcidos = []
+        for j, linha in enumerate(vertices):
+            nova_linha = []
+            for i, (x, y) in enumerate(linha):
+                raio = math.hypot(x, y)
+                angulo = math.atan2(y, x)
+                delta = delta_max * math.sin(fase_por_anel[j] + i * 1.3)
+                nova_linha.append(self._polar(raio, angulo + delta))
+            torcidos.append(nova_linha)
+        return torcidos
 
     def construir_malha(self):
         malha = super().construir_malha()
 
         # F7.1.2: anéis que não fecham — cada `rua` tipo_via="anel" perde um arco
-        # contíguo de 1 a 3 setores; a rua vira polilinha aberta, não um loop. As
-        # quadras que dependiam daquele trecho continuam existindo (muda a rua, não a
-        # quadra — simplificação aceita: ver o desvio no log de execução).
-        malha.ruas = [self._abrir_anel(r) if r.tipo_via == "anel" else r for r in malha.ruas]
+        # contíguo de 1 a 3 setores; a rua vira polilinha aberta, não um loop. G04: isso
+        # muda SÓ A RUA — a quadra adjacente ao arco aberto passa a não ter frente
+        # naquela aresta, então a `classes_aresta` dela troca de "anel" pra "servico"
+        # (recuo menor, sem fingir que existe via ali).
+        novas_ruas = []
+        aneis_abertos = {}  # indice do anel -> conjunto de setores no vão aberto
+        for r in malha.ruas:
+            if r.tipo_via != "anel":
+                novas_ruas.append(r)
+                continue
+            nova_rua, setores_do_vao = self._abrir_anel(r)
+            novas_ruas.append(nova_rua)
+            if setores_do_vao:
+                aneis_abertos[r.indice] = setores_do_vao
+        malha.ruas = novas_ruas
 
-        # F7.1.4: radiais tortas — deslocamento lateral senoidal de baixa amplitude nos
-        # pontos intermediários de cada radial.
-        malha.ruas = [self._torcer_radial(r) if r.tipo_via == "radial" else r for r in malha.ruas]
-
-        # F7.1.3: quadras faltando — uma fração sorteada da cidade vira chão livre (nem
-        # quarteirão, nem lotes), não um buraco decidido setor a setor.
-        fracao_vazias = self.rng.uniform(*cfg_get(self.cfg, "cidade_geo_organica_fracao_quadras_vazias"))
-        malha.quadras = [q for q in malha.quadras if self.rng.random() >= fracao_vazias]
+        if aneis_abertos:
+            for quadra in malha.quadras:
+                j, i = quadra.id
+                i2 = (i + 1) % self.num_setores
+                # O gap remove o SEGMENTO da rua entre dois setores consecutivos — se
+                # QUALQUER um dos dois extremos da aresta (i ou i2) cai no vão, o
+                # segmento de rua daquele trecho não existe mais, não só quando os dois
+                # caem (achado ao auditar: quadra (1,4) tinha só o setor 5 no vão, não o
+                # 4, e ainda assim ficava sem rua na aresta 4->5).
+                gap_externo = aneis_abertos.get(j, ())
+                if i in gap_externo or i2 in gap_externo:
+                    quadra.classes_aresta[1] = "servico"  # aresta externa (vertices[j])
+                gap_interno = aneis_abertos.get(j - 1, ())
+                if i in gap_interno or i2 in gap_interno:
+                    quadra.classes_aresta[3] = "servico"  # aresta interna (vertices[j-1])
 
         return malha
 
     def _abrir_anel(self, rua):
+        """Devolve (rua_com_vão, setores_do_vão) — `setores_do_vão` é o conjunto de
+        índices de setor removidos, pra quem chama saber quais quadras perderam a
+        frente naquela aresta (ver docstring de `construir_malha`)."""
         linha = rua.pontos[:-1]  # tira o ponto de fechamento duplicado (radial.py fecha o loop)
         n = len(linha)
         if n < 4:
-            return rua  # anel pequeno demais pra abrir sem sumir
+            return rua, set()  # anel pequeno demais pra abrir sem sumir
         gap_len = self.rng.randint(1, min(3, n - 2))
         gap_start = self.rng.randrange(n)
+        setores_do_vao = {(gap_start + k) % n for k in range(gap_len)}
         mantidos = [linha[(gap_start + gap_len + i) % n] for i in range(n - gap_len)]
-        return Rua(pontos=mantidos, classe_via=rua.classe_via, tipo_via=rua.tipo_via, indice=rua.indice)
-
-    def _torcer_radial(self, rua):
-        pontos = rua.pontos
-        n = len(pontos)
-        if n < 3:
-            return rua
-        amplitude = self.raio_m * 0.015
-        fase = self.rng.uniform(0, 2 * math.pi)
-        novos = [pontos[0]]
-        for i in range(1, n - 1):
-            p0, p1 = pontos[i - 1], pontos[i]
-            dx, dy = p1[0] - p0[0], p1[1] - p0[1]
-            comprimento = math.hypot(dx, dy) or 1.0
-            nx, ny = -dy / comprimento, dx / comprimento
-            offset = amplitude * math.sin(fase + i * 1.3)
-            novos.append((p1[0] + nx * offset, p1[1] + ny * offset))
-        novos.append(pontos[-1])
-        return Rua(pontos=novos, classe_via=rua.classe_via, tipo_via=rua.tipo_via, indice=rua.indice)
+        nova_rua = Rua(pontos=mantidos, classe_via=rua.classe_via, tipo_via=rua.tipo_via, indice=rua.indice)
+        return nova_rua, setores_do_vao

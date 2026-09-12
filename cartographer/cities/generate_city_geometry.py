@@ -348,6 +348,8 @@ class GeradorCidade:
 
             area_alvo = self._area_alvo_lote(quadra.banda)
             for lote in self._subdividir_lote(quad_urbanizavel, area_alvo):
+                if not self._e_quad_simples(lote):
+                    continue  # G02: quarteirão côncavo pode gerar um corte que auto-intersecta
                 self._add_feature("Polygon", lote + [lote[0]], "lote",
                                   {"bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str})
                 self._lotes.append((lote, quadra))

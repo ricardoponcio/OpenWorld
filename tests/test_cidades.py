@@ -172,6 +172,61 @@ def test_quadra_dentro_da_muralha():
                     f"modelo {nome}: vértice de quadra fora do contorno da muralha")
 
 
+def _dist_ponto_segmento(p, a, b):
+    ax, ay = a
+    bx, by = b
+    px, py = p
+    dx, dy = bx - ax, by - ay
+    comprimento2 = dx * dx + dy * dy
+    if comprimento2 < 1e-12:
+        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / comprimento2))
+    proj_x, proj_y = ax + t * dx, ay + t * dy
+    return ((px - proj_x) ** 2 + (py - proj_y) ** 2) ** 0.5
+
+
+def _dist_ponto_polilinha(p, pontos):
+    return min(_dist_ponto_segmento(p, pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
+
+
+def test_rua_coincide_com_aresta_de_quadra():
+    """G04 — Seção 1.2: rua e quadra são duas leituras da mesma grade; quem perturba a
+    grade (organica) tem que perturbar as duas juntas. Para toda aresta de quadra que
+    não seja 'servico', o PONTO MÉDIO da aresta tem que estar a menos de
+    largura_da_classe/2 + 1.0 m (tolerância maior que a de produção — o objetivo aqui é
+    provar a COERÊNCIA rua/quadra, não recalibrar recuo) de alguma rua.
+
+    Só radial/organica: são os dois que compartilham a grade perturbada por G01/G04.
+    `grade`/`linear` têm vocabulário próprio (ex.: linear reusa a classe 'anel' só como
+    rótulo de largura pro recuo de fundo de quadra, sem rua física ali — não é o bug de
+    Seção 1.2, que era especificamente radial/organica torcendo a rua sem torcer a
+    quadra)."""
+    larguras = cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_m_por_classe")
+    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    for nome in ("radial", "organica"):
+        cls = MODELOS[nome]
+        rng = random.Random(sitio.seed)
+        modelo = cls(sitio, CARTOGRAPHER_CONFIG, rng)
+        malha = modelo.construir_malha()
+        for quadra in malha.quadras:
+            n = len(quadra.vertices)
+            for k in range(n):
+                classe = quadra.classes_aresta[k]
+                if classe == "servico":
+                    continue
+                p0, p1 = quadra.vertices[k], quadra.vertices[(k + 1) % n]
+                meio = ((p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0)
+                largura = larguras.get(classe, larguras.get("secundaria", 5.0))
+                limite = largura / 2.0 + 1.0
+                menor = min(
+                    (_dist_ponto_polilinha(meio, rua.pontos) for rua in malha.ruas if len(rua.pontos) >= 2),
+                    default=float("inf"),
+                )
+                assert menor <= limite, (
+                    f"modelo {nome}: aresta '{classe}' da quadra {quadra.id} a {menor:.1f} m "
+                    f"da rua mais próxima (limite {limite:.1f} m)")
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()
