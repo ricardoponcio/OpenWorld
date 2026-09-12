@@ -35,11 +35,22 @@ class NPCMovementManager:
         if not local_destino or local_destino.status != 1:
             local_id = npc.casa_id
 
-        # Garante que a casa existe, caso contrário tenta a primeira casa ativa
+        # Garante que a casa existe, caso contrário tenta a primeira casa ativa DA
+        # PRÓPRIA CIDADE (P04, docs/PLANO_CIDADE_VIVA.md): `casas_disponiveis[0]` de
+        # uma lista GLOBAL podia mudar o NPC de cidade silenciosamente — mover alguém
+        # de cidade é decisão de migração, não de fallback. Sem casa na cidade dele,
+        # ele fica onde está (com um warning), não teleporta pro primeiro lar livre
+        # do mundo.
         if local_id not in locais:
-            casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or l.categoria == 'residencia']
+            casas_disponiveis = self._mundo.indice.residencias_ativas(npc.cidade_id)
             if casas_disponiveis:
                 local_id = casas_disponiveis[0]
+            else:
+                WorldLogger.warning(
+                    f"⚠️ [MOVIMENTO] {npc.nome} não tem casa válida na própria cidade "
+                    f"(cidade_id={npc.cidade_id}) — permanecendo em {npc.localizacao_atual_id}.",
+                    npc=npc)
+                return
 
         # Se mudou de localização, atualiza
         if npc.localizacao_atual_id != local_id:

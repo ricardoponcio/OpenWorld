@@ -357,3 +357,35 @@ def test_local_inativo_manda_o_npc_de_volta_para_casa(config):
     NPCMovementManager(mundo, config).mover_para(andarilho, "loc_taverna")
 
     assert andarilho.localizacao_atual_id == "casa_1"
+
+
+def test_mover_para_social_nunca_atravessa_cidade(config):
+    """P04 (docs/PLANO_CIDADE_VIVA.md): dois NPCs em cidades diferentes, cada uma com
+    seu próprio local social — mover_para_social nunca coloca um NPC num local de
+    cidade_id diferente do dele."""
+    social_1 = casa("social_1", nome="Taverna 1", tipo=TipoLocal.SOCIAL.value, cidade_id=1)
+    social_2 = casa("social_2", nome="Taverna 2", tipo=TipoLocal.SOCIAL.value, cidade_id=2)
+    n1 = adulto("n1", "Da Cidade 1", cidade_id=1, casa_id="casa_1", num_dependentes=0)
+    n2 = adulto("n2", "Da Cidade 2", cidade_id=2, casa_id="casa_1", num_dependentes=0)
+    mundo = mundo_de(npcs=[n1, n2], locais=[casa(), social_1, social_2])
+
+    movimento = NPCMovementManager(mundo, config)
+    for _ in range(20):  # a escolha é aleatória — repete pra não passar por sorte
+        movimento.mover_para_social(n1)
+        movimento.mover_para_social(n2)
+        assert n1.localizacao_atual_id in ("casa_1", "social_1")
+        assert n2.localizacao_atual_id in ("casa_1", "social_2")
+
+
+def test_fallback_de_mover_para_nao_muda_npc_de_cidade(config):
+    """P04: a casa do NPC não existe mais (ou nunca existiu) — a rede de segurança só
+    pode escolher uma casa da PRÓPRIA cidade dele, nunca de outra."""
+    andarilho = adulto("npc_1", "Sem Casa", cidade_id=1, casa_id="casa_fantasma",
+                        localizacao_atual_id="casa_fantasma")
+    casa_outra_cidade = casa("casa_2", nome="Casa Cidade 2", cidade_id=2)
+    mundo = mundo_de(npcs=[andarilho], locais=[casa_outra_cidade])
+
+    NPCMovementManager(mundo, config).mover_para(andarilho, "casa_fantasma")
+
+    # Nenhuma casa na cidade 1 — o NPC fica onde estava, não migra pra cidade 2.
+    assert andarilho.localizacao_atual_id == "casa_fantasma"
