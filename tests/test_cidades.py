@@ -118,6 +118,31 @@ def test_aneis_nao_cruzam():
                 assert malha.quadras
 
 
+def test_nenhum_poligono_auto_intersectante():
+    """G02 — Seção 1.1: o inset de quadra só rejeitava área quase zero e orientação
+    invertida; um quad com vértice muito obtuso passava disso e virava gravata-borboleta
+    depois do recuo. Toda feature Polygon emitida (quarteirão e lote) tem que ser simples."""
+    for nome, cls in MODELOS.items():
+        geo = _gerar(cls)
+        for f in geo["features"]:
+            if f["geometry"]["type"] != "Polygon":
+                continue
+            anel = f["geometry"]["coordinates"][0][:-1]
+            assert GeradorCidade._e_quad_simples(anel) if len(anel) == 4 else True, (
+                f"modelo {nome}: polígono {f['properties']['camada']} auto-intersectante")
+
+
+def test_encolher_quad_rejeita_quad_concavo():
+    """G02: `_encolher_quad` devolve None para um quad de entrada já auto-intersectante
+    (bowtie), em vez de tentar encolher e emitir geometria inválida."""
+    sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    rng = random.Random(sitio.seed)
+    modelo = MODELOS["radial"](sitio, CARTOGRAPHER_CONFIG, rng)
+    gerador = GeradorCidade(modelo)
+    bowtie = [(0.0, 0.0), (40.0, 40.0), (40.0, 0.0), (0.0, 40.0)]
+    assert gerador._encolher_quad(bowtie, [3.0] * 4) is None
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()

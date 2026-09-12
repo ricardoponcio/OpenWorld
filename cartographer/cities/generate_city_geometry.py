@@ -214,6 +214,24 @@ class GeradorCidade:
         return abs(cls._area_sinalizada(quad))
 
     @staticmethod
+    def _segmentos_cruzam(a, b, c, d):
+        """Interseção própria de dois segmentos, por teste de orientação. Colinearidade
+        conta como não-cruzamento: o caso degenerado já é pego pelo piso de área."""
+        def orientacao(p, q, r):
+            v = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+            return 0 if abs(v) < 1e-12 else (1 if v > 0 else -1)
+        o1, o2 = orientacao(a, b, c), orientacao(a, b, d)
+        o3, o4 = orientacao(c, d, a), orientacao(c, d, b)
+        return o1 != o2 and o3 != o4
+
+    @classmethod
+    def _e_quad_simples(cls, quad):
+        """Um quadrilátero é simples se os dois pares de arestas OPOSTAS não se cruzam
+        (0-2 e 1-3). Arestas adjacentes sempre se tocam no vértice — não são cruzamento."""
+        return not (cls._segmentos_cruzam(quad[0], quad[1], quad[2], quad[3])
+                    or cls._segmentos_cruzam(quad[1], quad[2], quad[3], quad[0]))
+
+    @staticmethod
     def _interseccao_retas(p1, d1, p2, d2):
         """Interseção de duas retas em forma ponto + t*direção (sistema 2x2). `None` se
         as retas forem paralelas (determinante ~0) — cabe ao chamador decidir o fallback."""
@@ -232,6 +250,8 @@ class GeradorCidade:
         `quad` tem 4 vértices em sentido consistente; `distancias[k]` é o recuo da aresta
         k (de quad[k] para quad[k+1]), em metros. Retorna o quad encolhido, ou None se ele
         degenerar (quadra estreita demais pra caber a rua, ou polígono invertido)."""
+        if len(quad) != 4 or not self._e_quad_simples(quad):
+            return None  # G02: quad de entrada já inválido (bug de modelo) morre aqui
         n = len(quad)
         cx = sum(p[0] for p in quad) / n
         cy = sum(p[1] for p in quad) / n
@@ -270,6 +290,9 @@ class GeradorCidade:
             return None
         if self._area_sinalizada(novo) * orientacao_original <= 0:
             return None
+        if not self._e_quad_simples(novo):
+            return None  # G02: vértice muito obtuso pode manter a área/orientação e
+            # ainda assim virar gravata-borboleta depois do recuo (Seção 1.1/G02).
         return novo
 
     def _distancia_faixa_dominio(self, classe):
