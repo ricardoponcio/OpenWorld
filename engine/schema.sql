@@ -34,6 +34,27 @@ CREATE TABLE IF NOT EXISTS locais (
     dono_npc_id TEXT DEFAULT ''
 );
 
+-- Lotes urbanos (T01, docs/PLANO_CIDADE_VIVA.md): geometria vem do GeoJSON do
+-- cartógrafo, ESTADO vive aqui — armadilha 2: cartographer/ nunca escreve estado de
+-- simulação, engine/ nunca escreve GeoJSON. x/y (não JSON) porque O01 ordena lote
+-- livre mais próximo por distância ao quadrado, sem sqrt, num ORDER BY simples.
+CREATE TABLE IF NOT EXISTS lotes (
+    id TEXT PRIMARY KEY,
+    cidade_id INTEGER,
+    quarteirao_id TEXT,
+    bairro TEXT,
+    banda INTEGER,
+    classe_frente TEXT,
+    area_m2 REAL,
+    x REAL DEFAULT 0.0,
+    y REAL DEFAULT 0.0,
+    estado TEXT DEFAULT 'livre',    -- LoteEstado: livre | obra | ocupado
+    local_id TEXT DEFAULT '',
+    dono_npc_id TEXT DEFAULT '',
+    FOREIGN KEY(cidade_id) REFERENCES cidades(id)
+);
+CREATE INDEX IF NOT EXISTS idx_lotes_cidade_estado ON lotes(cidade_id, estado);
+
 -- Profissões / Funções (Âncora de Dados)
 CREATE TABLE IF NOT EXISTS profissoes (
     id TEXT PRIMARY KEY,

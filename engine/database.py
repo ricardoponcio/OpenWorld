@@ -3,7 +3,7 @@ import os
 import queue
 from contextlib import contextmanager
 from .repositorios import (
-    RepositorioNPC, RepositorioLocal, RepositorioEvento,
+    RepositorioNPC, RepositorioLocal, RepositorioLote, RepositorioEvento,
     RepositorioMeta, RepositorioMestre, RepositorioMundo,
 )
 
@@ -55,6 +55,7 @@ class DatabaseManager:
         self._init_db()
         self.npcs = RepositorioNPC(self)
         self.locais = RepositorioLocal(self)
+        self.lotes = RepositorioLote(self)
         self.eventos = RepositorioEvento(self)
         self.meta = RepositorioMeta(self)
         self.mestre = RepositorioMestre(self)

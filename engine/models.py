@@ -90,6 +90,14 @@ class EstadoInfraestrutura(Enum):
     CRITICO     = "Crítico"      # 25–11
     RUINA       = "Ruína"        # 10–0
 
+class LoteEstado(Enum):
+    """T01 (docs/PLANO_CIDADE_VIVA.md): estado do terreno urbano — a geometria do lote
+    vem do GeoJSON do cartógrafo (imutável), o ESTADO vive só na tabela `lotes`
+    (armadilha 2: `cartographer/` nunca escreve estado de simulação)."""
+    LIVRE = "livre"
+    OBRA = "obra"
+    OCUPADO = "ocupado"
+
 class HumorNPC(Enum):
     """`ordem` é a posição no "termômetro" de humor normal, do pior pro melhor — usado
     por `NPCMoodManager` pra decidir se o próximo passo de transição sobe ou desce um
@@ -192,6 +200,32 @@ class Local:
     # variedade narrativa sem precisar de um `CategoriaLocal` novo por profissão.
     tipo_local: str = ""
     bairro: str = ""
+    dono_npc_id: str = ""
+
+
+@dataclass
+class Lote:
+    """T01 (docs/PLANO_CIDADE_VIVA.md): terreno urbano como entidade de primeira classe.
+    A GEOMETRIA (polígono, área, classe da frente) vem do GeoJSON do cartógrafo — aqui
+    só o suficiente pra engine decidir "que terreno está livre nesta cidade" e onde ele
+    fica. `id` é o mesmo id do lote gravado no GeoJSON (armadilha 3: posicional, estável
+    — nunca um contador de emissão).
+
+    `x`/`y` (não `coordenadas: List[float]` como `Local`) direto — O01 precisa ordenar
+    lotes livres por distância ao quadrado (`(x-?)²+(y-?)²`) sem `sqrt`, e SQLite não
+    tem função de distância; duas colunas REAL fazem isso com um ORDER BY simples,
+    JSON não."""
+    id: str
+    cidade_id: int
+    quarteirao_id: str
+    bairro: str
+    banda: int
+    classe_frente: str
+    area_m2: float
+    x: float = 0.0
+    y: float = 0.0
+    estado: str = LoteEstado.LIVRE.value
+    local_id: str = ""
     dono_npc_id: str = ""
 
 
