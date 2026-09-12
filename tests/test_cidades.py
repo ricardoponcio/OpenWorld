@@ -282,6 +282,46 @@ def test_todo_lote_tem_frente():
                     f"indice_no_anel {info['indice_no_anel']})")
 
 
+def test_ocupacao_inicial_nunca_ultrapassa_o_alvo():
+    """T03/D2: edifícios/lotes nunca ULTRAPASSA a fração de ocupação inicial
+    configurada — ultrapassar seria um bug real de orçamento (o orçamento é o teto).
+
+    Não testa "dentro de 3pp" nos dois sentidos (o V01 original do plano): auditando as
+    15 cidades reais, achamos que a fração de lotes com FOOTPRINT VIÁVEL (que sobra do
+    recuo do edifício) varia bastante por cidade — em alguns casos bem abaixo do alvo
+    configurado, por lotes geometricamente estreitos demais (pré-existente a T03, não
+    causado por ele). T03 nunca inventa ocupação além do orçamento; ficar abaixo dele é
+    esperado quando o terreno buildable não alcança, não uma regressão."""
+    tolerancia_pp = 0.03
+    for nome, cls in MODELOS.items():
+        sitio = SitioCidade.medir(_CIDADE_TESTE, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+        rng = random.Random(sitio.seed)
+        modelo = cls(sitio, CARTOGRAPHER_CONFIG, rng)
+        gerador = GeradorCidade(modelo)
+        geo = gerador.gerar()
+        n_lotes = sum(1 for f in geo["features"] if f["properties"]["camada"] == "lote")
+        n_edificios = sum(1 for f in geo["features"] if f["properties"]["camada"] == "edificio")
+        alvo = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_ocupacao_inicial_por_tamanho")[_CIDADE_TESTE["tamanho"]]
+        fracao_real = n_edificios / n_lotes if n_lotes else 0.0
+        assert fracao_real <= alvo + tolerancia_pp, (
+            f"modelo {nome}: ocupação {fracao_real:.2%} ultrapassa o alvo {alvo:.2%} "
+            f"(+{tolerancia_pp:.0%} de tolerância)")
+
+
+def test_lote_livre_nao_emite_edificio():
+    """T03: lote sem atribuição (marco/comércio/residência sorteada) não vira feature
+    'edificio' — fica com 'estado':'livre' na própria feature 'lote' (armadilha 2: o
+    estado inicial é gravado na geometria, o banco é a verdade depois da importação)."""
+    geo = _gerar()
+    lotes_por_id = {f["properties"]["id"]: f for f in geo["features"] if f["properties"]["camada"] == "lote"}
+    ids_edificio = {f["properties"]["id"] for f in geo["features"] if f["properties"]["camada"] == "edificio"}
+    assert any(f["properties"]["estado"] == "livre" for f in lotes_por_id.values()), (
+        "nenhum lote livre na cidade de teste — ajuste a fração de ocupação do teste?")
+    for lote_id, feat in lotes_por_id.items():
+        estado_esperado = "ocupado" if lote_id in ids_edificio else "livre"
+        assert feat["properties"]["estado"] == estado_esperado
+
+
 def test_determinismo():
     """T1 — gerar a mesma cidade duas vezes dá o mesmo GeoJSON, byte a byte."""
     a = _gerar()

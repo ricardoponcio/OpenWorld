@@ -18,7 +18,9 @@ from .distribuicao import DistribuicaoMixin
 # Q01/armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o que a distribuição de edifícios
 # (distribuicao.py) precisa saber de cada lote emitido. `id` é o id ESTÁVEL do lote
 # (posição na malha, não ordem de emissão) — o edifício que nasce nele reusa o mesmo id.
-_LoteEmitido = namedtuple("_LoteEmitido", ["poligono", "quadra", "id", "classe_frente"])
+# `props` é o dict de properties da própria feature "lote" já emitida — T03 grava o
+# estado inicial ('livre'/'ocupado') nela por referência, sem reabrir/reemitir nada.
+_LoteEmitido = namedtuple("_LoteEmitido", ["poligono", "quadra", "id", "classe_frente", "props"])
 
 
 class GeradorCidade(DistribuicaoMixin):
@@ -73,6 +75,9 @@ class GeradorCidade(DistribuicaoMixin):
         return [round(x_mundo, 6), round(-y_mundo, 6)]
 
     def _add_feature(self, geom_type, coords_m, camada, props=None):
+        """Devolve o dict de `properties` da feature recém-criada — T03 usa isso pra
+        guardar uma referência ao lote e atualizar `estado` depois, sem precisar
+        reabrir/reemitir a feature."""
         if geom_type == "Point":
             coords = self._geojson_coord(*coords_m)
         else:
@@ -83,6 +88,7 @@ class GeradorCidade(DistribuicaoMixin):
         if props:
             p.update(props)
         self.features.append({"type": "Feature", "geometry": {"type": geom_type, "coordinates": coords}, "properties": p})
+        return p
 
     @staticmethod
     def _polar(raio, angulo):
@@ -160,13 +166,18 @@ class GeradorCidade(DistribuicaoMixin):
                 # anel), não de um contador global — estável mesmo se outra quadra for
                 # descartada antes desta.
                 lote_id = f"{self.slug}_{quarteirao_id_str}_l{info['indice_no_anel']:02d}"
-                self._add_feature("Polygon", poligono + [poligono[0]], "lote", {
+                lote_props = self._add_feature("Polygon", poligono + [poligono[0]], "lote", {
                     "bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str,
                     "id": lote_id, "classe_frente": info["classe_frente"], "area_m2": info["area_m2"],
                     "aresta": info["aresta"],
+                    # T03: valor inicial — distribuicao.py vira "ocupado" (por
+                    # referência, mesmo dict) se decidir construir aqui. É o estado
+                    # inicial GRAVADO NA GEOMETRIA (armadilha 2): a partir da importação
+                    # (T02) o banco é a verdade, isto aqui é só o retrato de nascença.
+                    "estado": "livre",
                 })
                 self._lotes.append(_LoteEmitido(poligono=poligono, quadra=quadra, id=lote_id,
-                                                 classe_frente=info["classe_frente"]))
+                                                 classe_frente=info["classe_frente"], props=lote_props))
 
         self._emitir_vielas(vielas_pendentes)
 
