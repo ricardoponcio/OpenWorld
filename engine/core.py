@@ -47,6 +47,11 @@ class SimulationEngine:
         novos_npcs = self.mundo.db.npcs.carregar_todos()
         if novos_npcs:
             self.mundo.npcs = novos_npcs
+            # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): a lista inteira foi trocada por
+            # objetos novos — os índices mantidos (npcs_por_casa/localizacao/cidade)
+            # apontariam pra objetos que não existem mais em `mundo.npcs` se não
+            # forem reconstruídos aqui.
+            self.mundo._reconstruir_indices_de_npc()
             WorldLogger.debug(f"🔄 Memória sincronizada com o banco de dados ({len(self.mundo.npcs)} NPCs).")
 
     def tick(self):

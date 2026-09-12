@@ -165,8 +165,11 @@ class NPCReproductionManager:
         if pai:
             self._mundo.db.npcs.salvar(pai)
             
-        # Recarregar os NPCs do mundo para incluir o novo bebê na memória
-        self._mundo.npcs = self._mundo.db.npcs.carregar_todos()
+        # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): antes disto recarregava TODOS os
+        # NPCs do banco só pra incluir o bebê na memória — O(NPCs) pra acrescentar UM.
+        # `registrar_npc` o adiciona direto (e mantém os três índices coerentes), sem
+        # descartar os objetos de mãe/pai já mutados nesta mesma chamada.
+        self._mundo.registrar_npc(novo_bebe)
         
         # Registrar evento de parto com nome temporário
         pais_str = f"{mae.nome} e {pai.nome}" if pai else mae.nome

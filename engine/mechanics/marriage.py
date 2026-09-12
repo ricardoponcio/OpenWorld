@@ -83,10 +83,10 @@ class NPCMarriageManager:
             if casas_vazias:
                 casa_alvo = random.choice(casas_vazias)
                 
-                n1.casa_id = casa_alvo.id
-                n1.localizacao_atual_id = casa_alvo.id
-                n2.casa_id = casa_alvo.id
-                n2.localizacao_atual_id = casa_alvo.id
+                self._mundo.mudar_casa(n1, casa_alvo.id)
+                self._mundo.mover_npc(n1, casa_alvo.id)
+                self._mundo.mudar_casa(n2, casa_alvo.id)
+                self._mundo.mover_npc(n2, casa_alvo.id)
                 casa_escolhida = casa_alvo.id
                 teve_nova_casa = True
                 casa_obj = casa_alvo # Atualiza para o log abaixo
@@ -109,10 +109,10 @@ class NPCMarriageManager:
 
         if not teve_nova_casa:
             # Se a casa tem espaço (ou se falhou a alocação e não achou vazia), moram juntos na casa escolhida
-            n1.casa_id = casa_escolhida
-            n1.localizacao_atual_id = casa_escolhida
-            n2.casa_id = casa_escolhida
-            n2.localizacao_atual_id = casa_escolhida
+            self._mundo.mudar_casa(n1, casa_escolhida)
+            self._mundo.mover_npc(n1, casa_escolhida)
+            self._mundo.mudar_casa(n2, casa_escolhida)
+            self._mundo.mover_npc(n2, casa_escolhida)
 
         # Salvar NPCs no banco
         self._mundo.db.npcs.salvar(n1)

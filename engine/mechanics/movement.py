@@ -56,7 +56,7 @@ class NPCMovementManager:
         if npc.localizacao_atual_id != local_id:
             nome_local = locais[local_id].nome if local_id in locais else local_id
             WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para {nome_local}.", npc=npc)
-            npc.localizacao_atual_id = local_id
+            self._mundo.mover_npc(npc, local_id)
 
     def mover_para_casa(self, npc: NPC):
         """Move o NPC para sua residência oficial."""
@@ -73,7 +73,7 @@ class NPCMovementManager:
         if npc.localizacao_atual_id != local_id:
             nome_local = locais[local_id].nome if locais and local_id in locais else local_id
             WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para a {nome_local}.", npc=npc)
-            npc.localizacao_atual_id = local_id
+            self._mundo.mover_npc(npc, local_id)
 
     def mover_para_trabalho(self, npc: NPC):
         """Move o NPC para seu local de trabalho se ativo, senão vai para casa e fica ocioso."""

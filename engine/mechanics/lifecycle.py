@@ -138,6 +138,9 @@ class NPCLifecycleManager:
         self._heranca.processar_heranca(npc, timestamp_rpg)
         
         # --- FASE BIOLÓGICA/SOCIAL: Desvinculação ---
+        # A04: sai dos três índices mantidos ANTES de limpar os campos que os
+        # localizavam (remover_npc usa os valores atuais pra achar o bucket certo).
+        self._mundo.remover_npc(npc)
         npc.casa_id = ""
         npc.local_trabalho_id = ""
         npc.localizacao_atual_id = ""

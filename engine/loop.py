@@ -78,12 +78,12 @@ class GameLoop:
         eventos_globais = self._atualizar_eventos_globais()
         self._executar_rotinas_agendadas()
 
-        # P03 (docs/PLANO_CIDADE_VIVA.md): agrupamento calculado UMA VEZ por tick, não
-        # por NPC — `contar_dependentes_na_casa` original era O(NPCs) por chamada,
-        # chamada pra todo NPC vivo, todo tick (O(NPCs²), 562 mil comparações com 750
-        # NPCs). Não vira atributo do GameLoop entre ticks (ficaria velho); é
-        # parâmetro, recalculado aqui.
-        npcs_por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+        # P03 (docs/PLANO_CIDADE_VIVA.md) + A04 (docs/PLANO_POPULACAO_E_ESCALA.md):
+        # antes recalculado do zero aqui, todo tick (17,3 ms com 25.000 NPCs, metade
+        # do "piso" medido em A00). Agora é o índice MANTIDO de `EstadoDoMundo` —
+        # atualizado incrementalmente por `mover_npc`/`mudar_casa`/`registrar_npc`/
+        # `remover_npc`, nunca reconstruído aqui.
+        npcs_por_casa = self._mundo.npcs_por_casa
 
         maes_em_parto = []
         npcs_alterados = []
@@ -240,8 +240,16 @@ class GameLoop:
 
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual
+        casa_antes = npc.casa_id
         NPCBrain.decidir_acao(npc, self._mundo.data_simulada.hour, self._config,
                               self._mundo.locais, eventos_globais, self._mundo.indice)
+
+        if npc.casa_id != casa_antes:
+            # A04: a rede de segurança de `decidir_acao` (casa_id apontando pra um
+            # local que não existe mais) reatribui o campo direto — `NPCBrain` é
+            # estático e não tem `EstadoDoMundo` pra passar por `mudar_casa`. Só
+            # reindexa (o campo já mudou; `reindexar_casa_do_npc` não muda de novo).
+            self._mundo.reindexar_casa_do_npc(npc, casa_antes)
 
         if npc.acao_atual != acao_anterior:
             WorldLogger.debug(f"[NPC] {npc.nome} mudou de {acao_anterior.value} para {npc.acao_atual.value}", npc=npc)
@@ -272,16 +280,18 @@ class GameLoop:
         Roda no FIM do tick, depois de partos, mortes e (via `processar_interacoes`)
         casamentos — todas as mutações de composição do tick já aconteceram, então o
         retrato de agora já reflete o efeito de todas elas (inclusive um parto neste
-        mesmo tick: a mãe ganha o dependente a mais antes deste método terminar)."""
+        mesmo tick: a mãe ganha o dependente a mais antes deste método terminar, via o
+        índice `npcs_por_casa` mantido por `registrar_npc`)."""
         if self._mundo.npcs is not self._ultima_lista_de_npcs:
-            # `recarregar_habitantes()` (fora do GameLoop, a cada 5h de jogo) ou um
-            # parto (que recarrega `mundo.npcs` do banco) trocou a lista por objetos
-            # novos, com `num_dependentes` no default 0 — o retrato sozinho não
-            # perceberia isso (o conteúdo relevante pode ser idêntico ao de antes), daí
-            # forçar recálculo total sempre que a lista em si for outro objeto.
+            # `recarregar_habitantes()` (fora do GameLoop, a cada 5h de jogo) troca
+            # `mundo.npcs` por objetos NOVOS, com `num_dependentes` no default 0 — o
+            # retrato sozinho não perceberia isso (o conteúdo relevante pode ser
+            # idêntico ao de antes), daí forçar recálculo total sempre que a lista em
+            # si for outro objeto (A04 já reconstrói os índices nesse caso; aqui só
+            # falta este campo derivado).
             self._assinatura_casas_anterior = None
 
-        npcs_por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+        npcs_por_casa = self._mundo.npcs_por_casa
         assinatura_atual = NPCUtils.assinatura_dependentes_por_casa(npcs_por_casa)
         anterior = self._assinatura_casas_anterior or {}
         for casa_id, assinatura in assinatura_atual.items():

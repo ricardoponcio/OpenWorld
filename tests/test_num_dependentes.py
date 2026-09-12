@@ -6,10 +6,8 @@ PLANO_POPULACAO_E_ESCALA.md): é escopo de tick, como `npcs_por_casa` (P03). Esc
 antes de considerar a tarefa terminada, como o plano pede para qualquer coisa "onde um
 bug fica escondido por muitos ticks antes de aparecer".
 
-A correção do parto-no-mesmo-tick é validada em `tests/test_persistencia.py` (precisa
-de SQLite de verdade: `processar_parto` recarrega `mundo.npcs` do banco, e o dublê
-`BancoFalso` usado aqui não guarda estado nenhum entre um `salvar` e o `carregar_todos`
-seguinte)."""
+A correção do parto-no-mesmo-tick é validada em `tests/test_persistencia.py`, com
+SQLite de verdade (cobre também a persistência, N02/W03)."""
 from engine.config_loader import carregar_config_global
 from engine.loop import GameLoop
 from engine.models import Genero
@@ -42,9 +40,11 @@ def test_casa_sem_mudanca_mantem_num_dependentes_entre_ticks():
 def test_lista_de_npcs_trocada_forca_recalculo_total():
     """Simula o que `SimulationEngine.recarregar_habitantes()` faz: substitui
     `mundo.npcs` por uma lista de objetos NOVOS (como se tivessem vindo de um
-    `carregar_todos()`), todos com `num_dependentes` no default 0. Mesmo sem nenhuma
-    mudança de composição de verdade, a troca de lista tem que forçar um recálculo —
-    senão o valor fica preso em 0 pra sempre."""
+    `carregar_todos()`), todos com `num_dependentes` no default 0, e reconstrói os
+    índices mantidos (A04) — é o que `recarregar_habitantes()` faz de verdade desde
+    A04, exatamente para evitar o que este teste prova: mesmo sem nenhuma mudança de
+    composição real, a troca de lista tem que forçar um recálculo, senão o valor fica
+    preso em 0 pra sempre."""
     mae = adulto("npc_mae", "Mãe Realocada", genero=Genero.FEMININO.value,
                  data_nascimento="1980-01-01T00:00:00")
     bebe = adulto("npc_bebe", "Bebê Realocado", estagio_vida="bebe",
@@ -61,6 +61,7 @@ def test_lista_de_npcs_trocada_forca_recalculo_total():
     bebe_recarregado = adulto("npc_bebe", "Bebê Realocado", estagio_vida="bebe",
                                data_nascimento="2026-08-01T00:00:00", mae_id="npc_mae")
     mundo.npcs = [mae_recarregada, bebe_recarregado]
+    mundo._reconstruir_indices_de_npc()  # A04: o que recarregar_habitantes() faz
     assert mae_recarregada.num_dependentes == 0
 
     loop.executar_tick()

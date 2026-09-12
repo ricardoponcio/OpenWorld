@@ -34,9 +34,21 @@ class EstadoDoMundo:
     # local por fora de `registrar_local`/`desativar_local` deixa isto desatualizado.
     indice: IndiceDeLocais = field(default=None, repr=False, compare=False)
 
+    # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): agrupamentos de NPC mantidos, no mesmo
+    # espírito do índice de locais acima — construídos uma vez aqui a partir do estado
+    # inicial, e daí em diante atualizados incrementalmente pelos métodos abaixo, nunca
+    # recomputados do zero no laço do tick (era 17,3 ms/tick com 25.000 NPCs).
+    # `NPCUtils.agrupar_por_casa`/`agrupar_npcs_por_localizacao` continuam existindo
+    # pra uso pontual/teste — só o laço do tick para de chamá-las.
+    npcs_por_casa: Dict = field(default=None, repr=False, compare=False)
+    npcs_por_localizacao: Dict = field(default=None, repr=False, compare=False)
+    npcs_por_cidade: Dict = field(default=None, repr=False, compare=False)
+
     def __post_init__(self):
         if self.indice is None:
             self.indice = IndiceDeLocais(self.locais)
+        if self.npcs_por_casa is None:
+            self._reconstruir_indices_de_npc()
 
     # ------------------------------------------------------------------
     # P02 (docs/PLANO_CIDADE_VIVA.md): único caminho de escrita de Local — um índice
@@ -82,9 +94,95 @@ class EstadoDoMundo:
 
     def acordar_cidade(self, cidade_id) -> None:
         """`acordar` pra todo NPC vivo de uma cidade — evento global (clima,
-        economia). Ainda é O(NPCs): sem um índice por cidade mantido (A04, que este
-        plano ainda não implementou nesta sessão) não tem como evitar a varredura.
-        Trocar por uma consulta ao índice é um one-liner quando A04 existir."""
-        for npc in self.npcs:
-            if npc.cidade_id == cidade_id and npc.esta_vivo():
+        economia). Usa o índice mantido (A04): O(NPCs da cidade), não O(NPCs do
+        mundo)."""
+        for npc in self.npcs_por_cidade.get(cidade_id, ()):
+            if npc.esta_vivo():
                 self.acordar(npc)
+
+    # ------------------------------------------------------------------
+    # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): único caminho pra mudar
+    # `casa_id`/`localizacao_atual_id` de um NPC vivo, e pra registrar/remover um NPC
+    # do mundo — mesmo padrão de `registrar_local`/`desativar_local` (P02). Um índice
+    # que alguém esquece de atualizar é pior que nenhum índice: o NPC some do lugar
+    # onde deveria estar, ou aparece em dois, sem erro nenhum (armadilha 12).
+    # ------------------------------------------------------------------
+    def mover_npc(self, npc, local_id: str) -> None:
+        """Único caminho pra mudar `localizacao_atual_id`. NÃO mexe em `casa_id` —
+        chame `mudar_casa` também quando as duas mudarem juntas (ex.: mudança de
+        casa)."""
+        antiga = npc.localizacao_atual_id
+        if antiga == local_id:
+            return
+        self._remover_de_bucket(self.npcs_por_localizacao, antiga, npc)
+        npc.localizacao_atual_id = local_id
+        if local_id:
+            self.npcs_por_localizacao.setdefault(local_id, []).append(npc)
+
+    def mudar_casa(self, npc, casa_id: str) -> None:
+        """Único caminho pra mudar `casa_id`. NÃO mexe em `localizacao_atual_id` —
+        chame `mover_npc` também quando as duas mudarem juntas."""
+        antiga = npc.casa_id
+        if antiga == casa_id:
+            return
+        self._remover_de_bucket(self.npcs_por_casa, antiga, npc)
+        npc.casa_id = casa_id
+        if casa_id:
+            self.npcs_por_casa.setdefault(casa_id, []).append(npc)
+
+    def reindexar_casa_do_npc(self, npc, casa_id_antiga: str) -> None:
+        """`NPCBrain.decidir_acao` tem uma rede de segurança que reatribui `casa_id`
+        direto no NPC quando a casa dele não existe mais — não tem como passar por
+        `mudar_casa` porque `NPCBrain` é estático e não conhece `EstadoDoMundo`. Chame
+        isto logo depois, com o `casa_id` de ANTES da chamada, pra só reindexar (o
+        campo já mudou; não mude de novo)."""
+        self._remover_de_bucket(self.npcs_por_casa, casa_id_antiga, npc)
+        if npc.casa_id:
+            self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
+
+    def registrar_npc(self, npc) -> None:
+        """Um NPC novo (nascimento) entra nos três índices."""
+        self.npcs.append(npc)
+        if npc.casa_id:
+            self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
+        if npc.localizacao_atual_id:
+            self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
+        self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)
+
+    def remover_npc(self, npc) -> None:
+        """Um NPC que morreu sai dos três índices (mas continua em `self.npcs` até
+        `GameLoop._remover_falecidos` filtrar a lista no fim do tick — narrativa e
+        auditoria ainda podem precisar dele até lá)."""
+        self._remover_de_bucket(self.npcs_por_casa, npc.casa_id, npc)
+        self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
+        self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
+
+    @staticmethod
+    def _remover_de_bucket(indice: dict, chave, npc) -> None:
+        """Remove por `npc.id` (chave de negócio), nunca por `==` de dataclass — dois
+        NPCs com os mesmos valores em todo campo comparariam iguais e o `.remove()`
+        certo apagaria o errado."""
+        bucket = indice.get(chave)
+        if not bucket:
+            return
+        for i, n in enumerate(bucket):
+            if n.id == npc.id:
+                del bucket[i]
+                return
+
+    def _reconstruir_indices_de_npc(self) -> None:
+        """(Re)constrói os três índices do zero a partir de `self.npcs` — usado no
+        carregamento inicial, e sempre que alguém substituir `self.npcs` por uma lista
+        inteira nova (`recarregar_habitantes()`) sem passar pelos métodos acima. Só
+        NPCs vivos entram, mesma semântica de `NPCUtils.agrupar_por_casa`."""
+        self.npcs_por_casa = {}
+        self.npcs_por_localizacao = {}
+        self.npcs_por_cidade = {}
+        for npc in self.npcs:
+            if not npc.esta_vivo():
+                continue
+            if npc.casa_id:
+                self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
+            if npc.localizacao_atual_id:
+                self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
+            self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)

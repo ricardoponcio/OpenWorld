@@ -252,8 +252,8 @@ class NPCActionManager:
                         eh_filho_dependente = True
 
                 if eh_proprio or eh_conjuge or eh_filho_dependente:
-                    m.casa_id = obra.id
-                    m.localizacao_atual_id = obra.id
+                    self._mundo.mudar_casa(m, obra.id)
+                    self._mundo.mover_npc(m, obra.id)
                     self._mundo.db.npcs.salvar(m)
                     self._mundo.acordar(m)  # A03: mudou de casa, reavalia agora
 
