@@ -12,7 +12,7 @@ import random
 import pytest
 
 import engine.mechanics.urbanismo as urbanismo_mod
-from engine.mechanics.urbanismo import GerenciadorUrbanismo
+from engine.mechanics.urbanismo import GerenciadorUrbanismo, SpecObra
 from engine.models import Cidade, Lote, LoteEstado, TipoEvento
 
 from cartographer.config import CARTOGRAPHER_CONFIG
@@ -160,7 +160,8 @@ def test_abrir_obra_sem_lote_dispara_avaliacao_imediata(cidade_no_disco):
     npc = adulto("npc_1", "Testador", cidade_id=cidade.id, dinheiro_total_pc=1000.0)
     gerenciador = GerenciadorUrbanismo(mundo, _config_x01())
 
-    resultado = gerenciador.abrir_obra(cidade.id, npc, "taverna", "Taverna", "Taverna Nova", 15)
+    spec = SpecObra(categoria="taverna", tipo_local="Taverna", nome="Taverna Nova", capacidade=15)
+    resultado = gerenciador.abrir_obra(cidade.id, spec, dono_npc=npc)
     assert resultado is None  # sem lote livre nenhum antes da expansão
 
     contagem = mundo.db.lotes.contar_por_estado(cidade.id)

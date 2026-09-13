@@ -15,17 +15,28 @@ MARCADOR_NOVO_LOCAL = "NOVO_LOCAL"
 class ReatribuirNpc(AcaoDeMundo):
     comando = ComandoMestre.REATRIBUIR_NPC
 
-    def aplicar(self, db, contexto: ContextoMestre, acao: AcaoProposta) -> List[str]:
+    def aplicar(self, mundo, contexto: ContextoMestre, acao: AcaoProposta) -> List[str]:
+        npc = self.encontrar_npc(mundo, acao.alvo_id)
+        if npc is None:
+            return [f"⚠️ NPC {acao.alvo_id} não encontrado — nada mudou."]
+
         trabalho_id = self._resolver(acao.dados.get("local_trabalho_id"), contexto)
         casa_id = self._resolver(acao.dados.get("casa_id"), contexto)
 
         resultados = []
-        if trabalho_id and db.locais.existe(trabalho_id):
-            db.npcs.atualizar_local_trabalho(acao.alvo_id, trabalho_id)
+        if trabalho_id and trabalho_id in mundo.locais:
+            npc.local_trabalho_id = trabalho_id
             resultados.append(f"💼 {acao.alvo_id} agora trabalha em {trabalho_id}")
-        if casa_id and db.locais.existe(casa_id):
-            db.npcs.atualizar_casa(acao.alvo_id, casa_id)
+        if casa_id and casa_id in mundo.locais:
+            # F01: a porta de A04 — reindexa `npcs_por_casa`, não só o campo. Sem
+            # isto o NPC continuaria aparecendo (ou faltando) na casa errada em
+            # qualquer consulta que use o índice mantido (armadilha 12).
+            mundo.mudar_casa(npc, casa_id)
             resultados.append(f"🏠 {acao.alvo_id} mudou-se para {casa_id}")
+        if resultados:
+            mundo.db.npcs.salvar(npc)
+            # F03: reatribuir trabalho/casa muda o que o NPC quer — reavalia agora.
+            mundo.acordar(npc)
         return resultados
 
     @staticmethod

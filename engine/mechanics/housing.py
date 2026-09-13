@@ -18,7 +18,7 @@ from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
 from ..mundo import EstadoDoMundo
-from .urbanismo import GerenciadorUrbanismo
+from .urbanismo import GerenciadorUrbanismo, SpecObra
 
 class NPCHousingManager:
     """Expansão urbana: detecta casas superlotadas e inicia obras.
@@ -59,9 +59,11 @@ class NPCHousingManager:
         # `abrir_obra` já dispara `avaliar_expansao` (X01) sozinho quando não há lote
         # livre — nada a fazer aqui além de esperar o próximo gatilho; o casal
         # simplesmente não constrói agora.
-        obra = self._urbanismo.abrir_obra(
-            n1.cidade_id, n1, CategoriaLocal.RESIDENCIA.value, TipoLocal.CASA.value,
-            f"Obra de {sobrenome}", cfg_get(cfg_urbano, "capacidade_padrao_residencia"))
+        spec = SpecObra(
+            categoria=CategoriaLocal.RESIDENCIA.value, tipo_local=TipoLocal.CASA.value,
+            nome=f"Obra de {sobrenome}",
+            capacidade=cfg_get(cfg_urbano, "capacidade_padrao_residencia"))
+        obra = self._urbanismo.abrir_obra(n1.cidade_id, spec, dono_npc=n1)
         return obra is not None
 
     def processar_habitacao(self):

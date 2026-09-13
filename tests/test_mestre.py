@@ -1,118 +1,31 @@
 """
-Testes das ações de mundo do Modo Mestre — docs/PLANO_REFATORACAO.md, R-F03.
+Testes das ações de mundo do Modo Mestre — docs/PLANO_REFATORACAO.md (R-F03) e
+docs/PLANO_AVANCO_E_CALIBRAGEM.md (Bloco F).
 
-O que estes testes protegem: o despacho de comandos deixou de ser um if/elif sobre
-strings cruas vindas do LLM. Os invariantes são (a) um comando que não existe no enum é
-descartado em vez de cair num ramo errado, (b) todo comando registrado responde ao
-contrato, e (c) o marcador NOVO_LOCAL continua ligando CRIAR_LOCAL a REATRIBUIR_NPC na
-mesma lista de ações — é esse encadeamento que permite "cria um quartel e manda o Brom
-trabalhar nele" numa tacada só.
+O que estes testes protegem:
+- (a) um comando que não existe no enum é descartado em vez de cair num ramo errado;
+- (b) todo comando registrado responde ao contrato;
+- (c) o marcador NOVO_LOCAL continua ligando CRIAR_LOCAL a REATRIBUIR_NPC na mesma
+  lista de ações;
+- (d) F01: `MestreManager.aplicar_acoes` (processo do Flask) ENFILEIRA, nunca aplica
+  na hora — só `drenar_e_aplicar` (processo da simulação, com o `EstadoDoMundo` vivo)
+  aplica de verdade;
+- (e) F03: toda ação que muda o que um NPC quer chama `mundo.acordar`;
+- (f) F02: CRIAR_LOCAL nasce sem dono e já pronto, via `abrir_obra` de verdade.
 
-Nenhum banco real: o dublê registra as chamadas, como em tests/test_mecanicas.py.
+Usa o mundo sintético compartilhado (tests/mundo_sintetico.py) — o mesmo `BancoFalso`
+que os outros testes de mecânica usam, não mais dublês inventados só pra este arquivo.
 """
 import pytest
 
 from engine.config_loader import carregar_config_global
-from engine.models import ComandoMestre, HumorNPC, MetaChave
+from engine.models import ComandoMestre, HumorNPC, MetaChave, TipoLocal
 from engine.mechanics.mestre import MestreManager, ACOES, POR_COMANDO
 from engine.mechanics.mestre.acoes import AcaoDeMundo, AcaoProposta
 from engine.mechanics.mestre.acoes.reatribuir_npc import MARCADOR_NOVO_LOCAL
+from engine.mechanics.urbanismo import GerenciadorUrbanismo
 
-
-class LocaisFalso:
-    def __init__(self, existentes=()):
-        self.criados = []
-        self.desativados = []
-        self._existentes = set(existentes)
-
-    def coordenadas_ocupadas(self):
-        return set()
-
-    def criar(self, **campos):
-        self.criados.append(campos)
-        self._existentes.add(campos["id"])
-
-    def existe(self, local_id):
-        return local_id in self._existentes
-
-    def desativar(self, local_id):
-        self.desativados.append(local_id)
-
-
-class _LoteFalso:
-    def __init__(self, id, x, y):
-        self.id = id
-        self.x = x
-        self.y = y
-
-
-class LotesFalso:
-    """M02 (docs/PLANO_POPULACAO_E_ESCALA.md): dublê de `RepositorioLote` — só o
-    suficiente pra `CriarLocal` reservar um lote real em vez de sortear um ponto em
-    terra firme qualquer."""
-
-    def __init__(self, livres=()):
-        self._livres = list(livres)  # [(id, x, y), ...]
-        self._por_id = {lote_id: (x, y) for lote_id, x, y in livres}
-        self.reservados = []
-        self.concluidos = []
-
-    def reservar_livre(self, cidade_id, npc_id, perto_de=None, classe_frente=None):
-        if not self._livres:
-            return None
-        lote_id, x, y = self._livres.pop(0)
-        self.reservados.append(lote_id)
-        return lote_id
-
-    def buscar_por_id(self, lote_id):
-        x, y = self._por_id[lote_id]
-        return _LoteFalso(lote_id, x, y)
-
-    def concluir(self, lote_id, local_id):
-        self.concluidos.append((lote_id, local_id))
-
-
-class NpcsFalso:
-    def __init__(self):
-        self.trabalhos = []
-        self.casas = []
-        self.afetados = []
-
-    def atualizar_local_trabalho(self, npc_id, local_id):
-        self.trabalhos.append((npc_id, local_id))
-
-    def atualizar_casa(self, npc_id, local_id):
-        self.casas.append((npc_id, local_id))
-
-    def ajustar_saude_e_humor(self, npc_id, delta_saude, humor):
-        self.afetados.append((npc_id, delta_saude, humor))
-
-
-class MetaFalso:
-    def __init__(self, cidade_simulada=None):
-        self._cidade_simulada = cidade_simulada
-
-    def carregar(self, chave):
-        if chave == MetaChave.CIDADE_SIMULADA:
-            return self._cidade_simulada
-        return None
-
-
-class MundoFalso:
-    def coordenadas(self, cidade_id):
-        return (100.0, 100.0)
-
-    def carregar_cidades_por_id(self):
-        return {}
-
-
-class BancoFalso:
-    def __init__(self, locais_existentes=(), lotes_livres=(), cidade_simulada=None):
-        self.locais = LocaisFalso(locais_existentes)
-        self.lotes = LotesFalso(lotes_livres)
-        self.npcs = NpcsFalso()
-        self.meta = MetaFalso(cidade_simulada)
-        self.mundo = MundoFalso()
+from tests.mundo_sintetico import adulto, casa, mundo_de
 
 
 @pytest.fixture(scope="module")
@@ -150,107 +63,235 @@ def test_payload_sem_bloco_dados_usa_a_propria_acao():
     assert proposta.alvo_id == "loc_7"
 
 
-def test_acoes_desconhecidas_nao_impedem_as_validas(config):
-    db = BancoFalso(locais_existentes=["loc_1"])
-    resultados = MestreManager(db, config).aplicar_acoes([
-        {"comando": "FAZER_CHOVER_SAPOS"},
-        {"comando": "DESTRUIR_LOCAL", "id": "loc_1"},
+# ----------------------------------------------------------------------
+# F01: aplicar_acoes ENFILEIRA, nunca aplica na hora
+# ----------------------------------------------------------------------
+
+def test_aplicar_acoes_enfileira_em_vez_de_aplicar_na_hora(config):
+    """O processo do Flask não tem o EstadoDoMundo vivo — aplicar_acoes só pode
+    enfileirar. Nenhum NPC/Local é tocado nesta chamada."""
+    npc = adulto("npc_1", "Alguém", saude=50.0)
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+
+    resultados = MestreManager(mundo.db, config).aplicar_acoes([
+        {"comando": "AFETAR_NPC", "id": "npc_1", "dados": {"saude": -10}},
     ])
-    assert db.locais.desativados == ["loc_1"]
+
+    assert len(mundo.db.mestre.enfileiradas) == 1
+    assert npc.saude == 50.0, "nada deveria ter sido aplicado ainda"
     assert len(resultados) == 1
+    assert "enviad" in resultados[0].lower() or "📨" in resultados[0]
 
 
-# ----------------------------------------------------------------------
-# Encadeamento CRIAR_LOCAL -> REATRIBUIR_NPC
-# ----------------------------------------------------------------------
-
-def test_novo_local_liga_a_criacao_a_reatribuicao(config):
-    db = BancoFalso(cidade_simulada="1", lotes_livres=[("lote_1", 10.0, 20.0)])
-    resultados = MestreManager(db, config).aplicar_acoes([
-        {"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel do Norte", "tipo": "Trabalho",
-                                             "categoria": "quartel", "descricao": "..."}},
-        {"comando": "REATRIBUIR_NPC", "id": "npc_1",
-         "dados": {"local_trabalho_id": MARCADOR_NOVO_LOCAL}},
+def test_acoes_desconhecidas_sao_filtradas_antes_de_enfileirar(config):
+    mundo = mundo_de(npcs=[adulto("npc_1", "Alguém")], locais=[casa()])
+    MestreManager(mundo.db, config).aplicar_acoes([
+        {"comando": "FAZER_CHOVER_SAPOS"},
+        {"comando": "AFETAR_NPC", "id": "npc_1", "dados": {"saude": -5}},
     ])
+    assert len(mundo.db.mestre.enfileiradas) == 1
+    assert mundo.db.mestre.enfileiradas[0]["comando"] == "AFETAR_NPC"
 
-    assert len(db.locais.criados) == 1
-    id_criado = db.locais.criados[0]["id"]
-    assert id_criado == "lote_1"  # M02: o id do Local É o id do lote (armadilha 3)
-    assert db.lotes.concluidos == [("lote_1", "lote_1")]
-    assert db.npcs.trabalhos == [("npc_1", id_criado)]
+
+def test_aplicar_acoes_sem_nenhuma_reconhecida_nao_enfileira_nada(config):
+    mundo = mundo_de(npcs=[], locais=[])
+    resultados = MestreManager(mundo.db, config).aplicar_acoes([{"comando": "FAZER_CHOVER_SAPOS"}])
+    assert mundo.db.mestre.enfileiradas == []
+    assert len(resultados) == 1  # aviso de "nenhuma ação reconhecida"
+
+
+# ----------------------------------------------------------------------
+# F01/F03: drenar_e_aplicar — o lado da simulação, com o mundo vivo
+# ----------------------------------------------------------------------
+
+def test_drenar_e_aplicar_esta_vazio_sem_fila(config):
+    mundo = mundo_de(npcs=[], locais=[])
+    assert MestreManager(mundo.db, config).drenar_e_aplicar(mundo) == []
+
+
+def test_afetar_npc_muda_saude_humor_e_acorda(config):
+    from datetime import timedelta
+    npc = adulto("npc_1", "Alguém", saude=50.0, humor=HumorNPC.NEUTRO.value)
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+    # Agenda um salto grande pro futuro pra provar que acordar() FURA esse salto —
+    # sem isto, o NPC já estaria "em dia" por estar em npcs_sem_agenda (default).
+    mundo.agendar_decisao(npc, mundo.data_simulada + timedelta(hours=5))
+
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "AFETAR_NPC", "id": "npc_1", "dados": {"saude": -10, "humor": HumorNPC.PANICO.value}},
+    ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert npc.saude == 40.0
+    assert npc.humor == HumorNPC.PANICO.value
+    assert npc.proximo_instante_decisao == mundo.data_simulada, "F03: precisa acordar"
+    assert len(resultados) == 1
+    assert npc in mundo.db.npcs.salvos
+
+
+def test_afetar_npc_inexistente_nao_quebra_e_avisa(config):
+    mundo = mundo_de(npcs=[], locais=[])
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "AFETAR_NPC", "id": "npc_fantasma", "dados": {"saude": -10}},
+    ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+    assert len(resultados) == 1
+    assert "não encontrado" in resultados[0]
+
+
+def test_humor_invalido_da_ia_vira_neutro(config):
+    npc = adulto("npc_1", "Alguém", saude=50.0)
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "AFETAR_NPC", "id": "npc_1", "dados": {"saude": -10, "humor": "Eufórico"}},
+    ])
+    MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+    assert npc.humor == HumorNPC.NEUTRO.value
+
+
+def test_reatribuir_npc_muda_trabalho_e_casa_reindexando_e_acorda(config):
+    npc = adulto("npc_1", "Alguém", casa_id="casa_1", localizacao_atual_id="casa_1")
+    casa_nova = casa("casa_2")
+    mundo = mundo_de(npcs=[npc], locais=[casa(), casa_nova, casa("loc_trabalho", tipo=TipoLocal.LOJA.value)])
+
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "REATRIBUIR_NPC", "id": "npc_1",
+         "dados": {"local_trabalho_id": "loc_trabalho", "casa_id": "casa_2"}},
+    ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert npc.local_trabalho_id == "loc_trabalho"
+    assert npc.casa_id == "casa_2"
+    assert npc.id in {n.id for n in mundo.npcs_por_casa.get("casa_2", [])}
+    assert npc.id not in {n.id for n in mundo.npcs_por_casa.get("casa_1", [])}
+    assert npc.proximo_instante_decisao == mundo.data_simulada
     assert len(resultados) == 2
 
 
-def test_criar_local_sem_cidade_simulada_nao_cria_nada(config):
-    """M02: sem cidade não há em que lote reservar — nada nasce fora de um lote."""
-    db = BancoFalso(lotes_livres=[("lote_1", 10.0, 20.0)])
-    resultados = MestreManager(db, config).aplicar_acoes([
-        {"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel do Norte"}},
-    ])
+def test_reatribuicao_para_local_inexistente_e_ignorada(config):
+    npc = adulto("npc_1", "Alguém", casa_id="casa_1")
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
 
-    assert db.locais.criados == []
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "REATRIBUIR_NPC", "id": "npc_1",
+         "dados": {"local_trabalho_id": "loc_fantasma"}},
+    ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert npc.local_trabalho_id == ""
+    assert resultados == []
+
+
+def test_destruir_local_desativa_e_acorda_moradores_trabalhadores_e_presentes(config):
+    """F03: quem morava, trabalhava OU só estava lá reavalia agora."""
+    morador = adulto("npc_morador", "Morador", casa_id="loc_alvo", localizacao_atual_id="casa_2")
+    trabalhador = adulto("npc_trab", "Trabalhador", local_trabalho_id="loc_alvo",
+                          casa_id="casa_2", localizacao_atual_id="casa_2")
+    visitante = adulto("npc_visita", "Visitante", localizacao_atual_id="loc_alvo",
+                        casa_id="casa_2")
+    alvo = casa("loc_alvo", status=1, integridade=100)
+    mundo = mundo_de(npcs=[morador, trabalhador, visitante],
+                      locais=[alvo, casa("casa_2")])
+
+    mundo.db.mestre.enfileirar_acoes([{"comando": "DESTRUIR_LOCAL", "id": "loc_alvo"}])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert alvo.status == 0
+    assert alvo.integridade == 0
+    for npc in (morador, trabalhador, visitante):
+        assert npc.proximo_instante_decisao == mundo.data_simulada, f"{npc.id} devia ter acordado"
+    assert len(resultados) == 1
+
+
+def test_destruir_local_inexistente_nao_quebra(config):
+    mundo = mundo_de(npcs=[], locais=[])
+    mundo.db.mestre.enfileirar_acoes([{"comando": "DESTRUIR_LOCAL", "id": "loc_fantasma"}])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+    assert "não encontrado" in resultados[0]
+
+
+# ----------------------------------------------------------------------
+# F02: CRIAR_LOCAL chama abrir_obra de verdade — sem dono, já pronto
+# ----------------------------------------------------------------------
+
+def test_criar_local_reserva_lote_real_nasce_sem_dono_e_pronto(config):
+    mundo = mundo_de(npcs=[], locais=[], cidades=[])
+    mundo.db.meta.salvar(MetaChave.CIDADE_SIMULADA, "1")
+    mundo.db.lotes.adicionar("lote_1", cidade_id=1, x=10.0, y=20.0)
+
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "CRIAR_LOCAL",
+         "dados": {"nome": "Quartel do Norte", "tipo": "Trabalho", "categoria": "quartel"}},
+    ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert "lote_1" in mundo.locais
+    obra = mundo.locais["lote_1"]
+    assert obra.nome == "Quartel do Norte"
+    assert obra.dono_npc_id == "", "F02: edifício do Mestre não tem dono pessoal"
+    assert obra.status == 1 and obra.integridade == 100, "F02: nasce pronto, não em obra"
+    assert mundo.db.lotes.lotes["lote_1"].estado == "ocupado"
+    assert len(resultados) == 1
+
+
+def test_criar_local_sem_cidade_simulada_nao_cria_nada(config):
+    mundo = mundo_de(npcs=[], locais=[])
+    mundo.db.lotes.adicionar("lote_1", cidade_id=1)
+
+    mundo.db.mestre.enfileirar_acoes([{"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel"}}])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
+
+    assert mundo.locais == {}
     assert resultados == []
 
 
 def test_criar_local_sem_lote_livre_dispara_avaliar_expansao(config, monkeypatch):
-    """M02/X01: cidade saturada — a mesma avaliação de auto-expansão da simulação é
-    chamada daqui de fora; sem lote nem depois disso, nada é criado."""
-    from engine.mechanics.mestre.acoes import criar_local as modulo
-
+    """X01: cidade saturada — a mesma avaliação de auto-expansão que a simulação
+    usa é chamada, com o mundo vivo (não mais um EstadoDoMundo de trabalho
+    descartável — F01 apagou esse desvio)."""
     chamadas = []
-    monkeypatch.setattr(modulo, "_avaliar_expansao_fora_do_processo",
-                         lambda db, cidade_id: chamadas.append(cidade_id))
+    monkeypatch.setattr(GerenciadorUrbanismo, "avaliar_expansao",
+                         lambda self, cidade_id: chamadas.append(cidade_id))
 
-    db = BancoFalso(cidade_simulada="1", lotes_livres=())
-    resultados = MestreManager(db, config).aplicar_acoes([
-        {"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel do Norte"}},
-    ])
+    mundo = mundo_de(npcs=[], locais=[])
+    mundo.db.meta.salvar(MetaChave.CIDADE_SIMULADA, "1")
+    # Nenhum lote livre semeado — reservar_livre devolve None de cara.
+
+    mundo.db.mestre.enfileirar_acoes([{"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel"}}])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
 
     assert chamadas == [1]
-    assert db.locais.criados == []
+    assert mundo.locais == {}
     assert len(resultados) == 1  # aviso de "sem lote mesmo após avaliar expansão"
 
 
-def test_marcador_sem_criacao_antes_nao_reatribui_nada(config):
-    db = BancoFalso()
-    resultados = MestreManager(db, config).aplicar_acoes([
+def test_novo_local_liga_a_criacao_a_reatribuicao(config):
+    npc = adulto("npc_1", "Alguém")
+    mundo = mundo_de(npcs=[npc], locais=[])
+    mundo.db.meta.salvar(MetaChave.CIDADE_SIMULADA, "1")
+    mundo.db.lotes.adicionar("lote_1", cidade_id=1, x=10.0, y=20.0)
+
+    mundo.db.mestre.enfileirar_acoes([
+        {"comando": "CRIAR_LOCAL", "dados": {"nome": "Quartel do Norte", "tipo": "Trabalho",
+                                             "categoria": "quartel"}},
         {"comando": "REATRIBUIR_NPC", "id": "npc_1",
          "dados": {"local_trabalho_id": MARCADOR_NOVO_LOCAL}},
     ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
 
-    assert db.npcs.trabalhos == []
-    assert resultados == []
+    assert npc.local_trabalho_id == "lote_1"  # M02: o id do Local É o id do lote
+    assert len(resultados) == 2
 
 
-def test_reatribuicao_para_local_inexistente_e_ignorada(config):
-    db = BancoFalso(locais_existentes=["loc_real"])
-    MestreManager(db, config).aplicar_acoes([
+def test_marcador_sem_criacao_antes_nao_reatribui_nada(config):
+    npc = adulto("npc_1", "Alguém")
+    mundo = mundo_de(npcs=[npc], locais=[])
+
+    mundo.db.mestre.enfileirar_acoes([
         {"comando": "REATRIBUIR_NPC", "id": "npc_1",
-         "dados": {"local_trabalho_id": "loc_fantasma", "casa_id": "loc_real"}},
+         "dados": {"local_trabalho_id": MARCADOR_NOVO_LOCAL}},
     ])
+    resultados = MestreManager(mundo.db, config).drenar_e_aplicar(mundo)
 
-    assert db.npcs.trabalhos == []
-    assert db.npcs.casas == [("npc_1", "loc_real")]
-
-
-# ----------------------------------------------------------------------
-# AFETAR_NPC e a validação do humor vindo do LLM
-# ----------------------------------------------------------------------
-
-def test_humor_invalido_da_ia_vira_neutro(config):
-    db = BancoFalso()
-    MestreManager(db, config).aplicar_acoes([
-        {"comando": "AFETAR_NPC", "id": "npc_1", "dados": {"saude": -10, "humor": "Eufórico"}},
-    ])
-
-    assert db.npcs.afetados == [("npc_1", -10, HumorNPC.NEUTRO.value)]
-
-
-def test_humor_valido_da_ia_e_preservado(config):
-    db = BancoFalso()
-    MestreManager(db, config).aplicar_acoes([
-        {"comando": "AFETAR_NPC", "id": "npc_1",
-         "dados": {"saude": 5, "humor": HumorNPC.PANICO.value}},
-    ])
-
-    assert db.npcs.afetados == [("npc_1", 5, HumorNPC.PANICO.value)]
+    assert npc.local_trabalho_id == ""
+    assert resultados == []

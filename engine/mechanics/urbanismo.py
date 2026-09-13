@@ -24,6 +24,8 @@ import json
 import os
 import random
 import time
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 from ..models import Evento, Local, LoteEstado, Lote, NPC, TipoEvento
 from ..logger import WorldLogger
@@ -37,6 +39,20 @@ from cartographer.cities.geometria.gerador import GeradorCidade
 from cartographer.cities.expansao import gerar_arrabalde, numero_do_proximo_arrabalde
 
 CIDADES_GEOJSON_DIR = "database/cidades"
+
+
+@dataclass
+class SpecObra:
+    """O que `abrir_obra` precisa saber SOBRE O EDIFÍCIO — separado de quem pediu
+    (`dono_npc`) e onde (`cidade_id`) pra não estourar o limite de 5 parâmetros por
+    método (ARQUITETURA.md Seção 4); `abrir_obra` já tinha 8 antes desta tarefa
+    (F02, docs/PLANO_AVANCO_E_CALIBRAGEM.md)."""
+    categoria: str
+    tipo_local: str
+    nome: str
+    capacidade: int
+    salario_base: int = 0
+    preferir_frente: Optional[Tuple[str, ...]] = None
 
 
 class GerenciadorUrbanismo:
@@ -111,9 +127,10 @@ class GerenciadorUrbanismo:
 
         # O03: abrir_obra é o ÚNICO caminho pra um edifício novo nascer durante a
         # simulação — o mesmo que housing.py usa pra casa de casal.
-        novo = self.abrir_obra(
-            cidade_id, empreendedor, categoria, nome_padrao, f"{nome_padrao} de {nome_cidade}",
-            capacidade, salario, preferir_frente=("principal", "anel"))
+        spec = SpecObra(
+            categoria=categoria, tipo_local=nome_padrao, nome=f"{nome_padrao} de {nome_cidade}",
+            capacidade=capacidade, salario_base=salario, preferir_frente=("principal", "anel"))
+        novo = self.abrir_obra(cidade_id, spec, dono_npc=empreendedor)
         if novo is None:
             return
 
@@ -128,34 +145,45 @@ class GerenciadorUrbanismo:
     # ------------------------------------------------------------------
     # O03 — o único caminho pra um edifício nascer durante a simulação
     # ------------------------------------------------------------------
-    def abrir_obra(self, cidade_id, dono_npc: NPC, categoria: str, tipo_local: str, nome: str,
-                    capacidade: int, salario_base: int = 0, preferir_frente=None):
-        """Reserva lote, cria o `Local` em obra (status=0, integridade=0) e devolve
-        ele — ou `None` se não houver terreno (T01: `reservar_livre` já devolve
-        `None` nesse caso, sem exceção; é o sinal de auto-expansão, X01).
+    def abrir_obra(self, cidade_id, spec: SpecObra, dono_npc: Optional[NPC] = None,
+                    pronta: bool = False):
+        """Reserva lote, cria o `Local` e devolve ele — ou `None` se não houver
+        terreno (T01: `reservar_livre` já devolve `None` nesse caso, sem exceção; é
+        o sinal de auto-expansão, X01).
 
         É o ÚNICO caminho pra um edifício novo nascer durante a simulação
         (armadilha 3, docs/PLANO_CIDADE_VIVA.md: o id do Local É o id do lote onde
-        nasce) — `housing.py` (casa de casal) e `urbanismo.py` (comércio por demanda)
-        chamam este método; nenhum dos dois duplica a sequência reservar/criar/marcar.
-        `housing.py` continua dono da POLÍTICA ("qual casal, quando"); aqui é dono só
-        da MECÂNICA ("como um edifício nasce").
+        nasce) — `housing.py` (casa de casal), `urbanismo.py` (comércio por demanda)
+        e, desde F01/F02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md), `CriarLocal` (Modo
+        Mestre) chamam este método; nenhum duplica a sequência reservar/criar/marcar.
 
-        `preferir_frente`: sequência de classes de frente tentadas em ordem antes do
-        fallback "qualquer lote livre" (loja quer frente pra via de movimento; casa
-        não se importa, passa `None`)."""
-        casa_atual = self._mundo.locais.get(dono_npc.casa_id)
-        perto_de = tuple(casa_atual.coordenadas) if casa_atual and casa_atual.coordenadas else None
+        `dono_npc` é OPCIONAL (F02): edifícios INSTITUCIONAIS — quartel, praça,
+        poço, muralha, e qualquer coisa que o Mestre crie sem dar dono — não têm
+        dono pessoal, e não deveriam ter (o texto original do plano de população
+        mandava sempre passar um dono; estava errado sobre isto). Sem dono: reserva
+        QUALQUER lote livre da cidade (`perto_de=None`), e `Local.dono_npc_id` fica
+        vazio.
+
+        `pronta=True` (F02): o edifício nasce PRONTO (status=1, integridade=100),
+        não em obra — é o caso do Mestre; não existe alguém "construindo" um
+        quartel tick a tick. Casal/comércio continuam nascendo em obra (`pronta`
+        default `False`), concluídos quando `NPCActionManager._executar_construir`
+        cruzar 100% de integridade."""
+        perto_de = None
+        if dono_npc is not None:
+            casa_atual = self._mundo.locais.get(dono_npc.casa_id)
+            perto_de = tuple(casa_atual.coordenadas) if casa_atual and casa_atual.coordenadas else None
+        npc_id_reserva = dono_npc.id if dono_npc is not None else ""
 
         lote_id = None
-        for classe in (preferir_frente or ()):
+        for classe in (spec.preferir_frente or ()):
             lote_id = self._mundo.db.lotes.reservar_livre(
-                cidade_id=cidade_id, npc_id=dono_npc.id, perto_de=perto_de, classe_frente=classe)
+                cidade_id=cidade_id, npc_id=npc_id_reserva, perto_de=perto_de, classe_frente=classe)
             if lote_id is not None:
                 break
         if lote_id is None:
             lote_id = self._mundo.db.lotes.reservar_livre(
-                cidade_id=cidade_id, npc_id=dono_npc.id, perto_de=perto_de)
+                cidade_id=cidade_id, npc_id=npc_id_reserva, perto_de=perto_de)
         if lote_id is None:
             # X01 item 3: a cidade saturou entre duas varreduras diárias — não espera
             # até amanhã pra reagir.
@@ -165,20 +193,25 @@ class GerenciadorUrbanismo:
         lote = self._mundo.db.lotes.buscar_por_id(lote_id)
         obra = Local(
             id=lote_id,
-            nome=nome,
-            tipo=tipo_local,
-            categoria=categoria,
+            nome=spec.nome,
+            tipo=spec.tipo_local,
+            categoria=spec.categoria,
             cidade_id=cidade_id,
-            descricao=f"{nome}, em construção.",
-            dono_npc_id=dono_npc.id,
+            descricao=spec.nome if pronta else f"{spec.nome}, em construção.",
+            dono_npc_id=npc_id_reserva,
             coordenadas=[lote.x, lote.y],
-            status=0,
-            integridade=0,
-            capacidade=capacidade,
-            salario_base=salario_base,
+            status=1 if pronta else 0,
+            integridade=100 if pronta else 0,
+            capacidade=spec.capacidade,
+            salario_base=spec.salario_base,
             bairro=lote.bairro,
         )
         self._mundo.registrar_local(obra)
+        if pronta:
+            # O01: um edifício em obra conclui quando `_executar_construir` cruzar
+            # 100% — um que já nasce pronto (Mestre) não passa por lá, então marca
+            # o lote como ocupado (não mais "em obra") já aqui.
+            self._mundo.db.lotes.concluir(lote_id, lote_id)
         return obra
 
     # ------------------------------------------------------------------

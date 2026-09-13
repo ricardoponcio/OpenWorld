@@ -165,3 +165,16 @@ CREATE TABLE IF NOT EXISTS mestre_conversas (
     acoes_propostas TEXT, -- JSON com a lista de ações de mundo propostas pela IA (nullable)
     aplicada INTEGER DEFAULT 0 -- 1 quando o jogador confirmou e as ações foram aplicadas
 );
+
+-- F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): fila de ações de mundo do Modo Mestre.
+-- O Mestre roda no processo do Flask e não tem o EstadoDoMundo vivo da simulação
+-- (ARQUITETURA.md, "regra de processo": só run_simulation.py instancia a engine) —
+-- em vez de escrever direto no banco, enfileira aqui; run_simulation.py drena a
+-- cada volta do laço (mesmo pausado) e aplica com o mundo vivo, exatamente o
+-- padrão que AVANCAR_MINUTOS já usa pra "preparar cena com a simulação parada".
+CREATE TABLE IF NOT EXISTS mestre_acoes_pendentes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payload TEXT NOT NULL, -- JSON: o mesmo dict que AcaoProposta.de_payload espera
+    criada_em TEXT DEFAULT (datetime('now', 'localtime')),
+    aplicada_em TEXT -- NULL enquanto pendente; datetime de quando run_simulation.py aplicou
+);

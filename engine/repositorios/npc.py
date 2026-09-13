@@ -197,20 +197,6 @@ class RepositorioNPC:
             cursor.execute("SELECT id, nome, profissao, local_trabalho_id, casa_id FROM npcs WHERE saude > 0")
             return cursor.fetchall()
 
-    def atualizar_local_trabalho(self, npc_id: str, local_id: str):
-        with self.db.connection() as conn:
-            conn.cursor().execute("UPDATE npcs SET local_trabalho_id = ? WHERE id = ?", (local_id, npc_id))
-
-    def atualizar_casa(self, npc_id: str, casa_id: str):
-        with self.db.connection() as conn:
-            conn.cursor().execute("UPDATE npcs SET casa_id = ? WHERE id = ?", (casa_id, npc_id))
-
-    def ajustar_saude_e_humor(self, npc_id: str, delta_saude, humor: str):
-        with self.db.connection() as conn:
-            conn.cursor().execute(
-                "UPDATE npcs SET saude = MAX(0, MIN(100, saude + ?)), humor = ? WHERE id = ?",
-                (delta_saude, humor, npc_id)
-            )
 
     # ------------------------------------------------------------------
     # Profissões (mercado de trabalho) — tabela `profissoes`, sempre referenciada a

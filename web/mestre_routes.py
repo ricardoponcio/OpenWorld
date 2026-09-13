@@ -28,6 +28,11 @@ def obter_mestre() -> MestreManager:
     return MestreManager(obter_db(), carregar_config_global())
 
 TEMA_PADRAO = "Fantasia Medieval"
+# F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): se uma ação enfileirada há mais tempo do
+# que isto ainda não foi aplicada, run_simulation.py provavelmente não está rodando
+# (ou travou) — mesma condição que /api/mestre/avancar_tempo já expõe por timeout,
+# só que agora sem bloquear a requisição esperando.
+AVISO_FILA_PARADA_SEGUNDOS = 10
 
 
 @mestre_bp.route('/api/mestre/historico')
@@ -81,8 +86,16 @@ def post_mensagem():
 
 @mestre_bp.route('/api/mestre/confirmar_acoes', methods=['POST'])
 def post_confirmar_acoes():
-    """Aplica as ações propostas de uma mensagem do Mestre — só chega aqui depois
-    que o jogador confirmou explicitamente na interface. Nunca é chamado sozinho."""
+    """F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): ENFILEIRA as ações propostas de uma
+    mensagem do Mestre — só chega aqui depois que o jogador confirmou explicitamente
+    na interface. Nunca é chamado sozinho.
+
+    A resposta é assíncrona: `enfileirado: True`, não `aplicado: True` — a ação só
+    é de fato aplicada quando `run_simulation.py` drenar a fila, no próximo tick
+    (ou na próxima volta do laço, se a simulação estiver pausada). Se a fila já
+    tiver algo pendente há tempo demais, `aviso` sinaliza que a simulação pode não
+    estar rodando — sem bloquear esta requisição esperando (ao contrário de
+    `/avancar_tempo`, que já espera por natureza)."""
     try:
         body = request.get_json(force=True) or {}
         conversa_id = body.get('conversa_id')
@@ -100,7 +113,11 @@ def post_confirmar_acoes():
         resultados = obter_mestre().aplicar_acoes(acoes)
         db.mestre.marcar_aplicada(conversa_id)
 
-        return jsonify({"aplicado": True, "resultados": resultados})
+        aviso = None
+        if db.mestre.ha_fila_nao_drenada(AVISO_FILA_PARADA_SEGUNDOS):
+            aviso = "A simulação não parece estar processando a fila — run_simulation.py está rodando?"
+
+        return jsonify({"enfileirado": True, "resultados": resultados, "aviso": aviso})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

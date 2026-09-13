@@ -70,6 +70,17 @@ class RepositorioFalso:
     def carregar_globais_ativos(self):
         return []
 
+    def carregar(self, chave):
+        """Meta: devolve o valor da última `salvar(chave, valor)` — procura de trás
+        pra frente em `self.salvos` (tuplas `(chave, valor)`). `None` se nunca foi
+        salva, mesma semântica do repositório real (F01, docs/
+        PLANO_AVANCO_E_CALIBRAGEM.md: `MestreManager._montar_contexto_de_mundo` lê
+        `MetaChave.CIDADE_SIMULADA` assim)."""
+        for item in reversed(self.salvos):
+            if isinstance(item, tuple) and len(item) == 2 and item[0] == chave:
+                return item[1]
+        return None
+
     def atualizar_ticks_restantes(self, eventos):
         pass
 
@@ -177,6 +188,38 @@ class _EstadosView:
         return lote.estado if lote else default
 
 
+class RepositorioMundoFalso:
+    """Dublê de `RepositorioMundo` — só o que `MestreManager._montar_contexto_de_
+    mundo` lê (F01, docs/PLANO_AVANCO_E_CALIBRAGEM.md)."""
+
+    def coordenadas(self, cidade_id):
+        return (100.0, 100.0)
+
+    def carregar_cidades_por_id(self):
+        return {}
+
+
+class RepositorioMestreFalso:
+    """F01: dublê da fila de ações do Mestre — `enfileirar_acoes` só anota (uso do
+    lado do Flask); `drenar_acoes_pendentes` devolve e ESVAZIA (mesma semântica do
+    repositório real: uma ação só é devolvida uma vez)."""
+
+    def __init__(self):
+        self.enfileiradas = []
+        self._pendentes = []
+
+    def enfileirar_acoes(self, payloads):
+        self.enfileiradas.extend(payloads)
+        self._pendentes.extend(payloads)
+
+    def drenar_acoes_pendentes(self):
+        pendentes, self._pendentes = self._pendentes, []
+        return pendentes
+
+    def ha_fila_nao_drenada(self, segundos):
+        return False
+
+
 class BancoFalso:
     def __init__(self):
         self.npcs = RepositorioFalso()
@@ -184,6 +227,8 @@ class BancoFalso:
         self.lotes = RepositorioLoteFalso()
         self.eventos = RepositorioFalso()
         self.meta = RepositorioFalso()
+        self.mundo = RepositorioMundoFalso()
+        self.mestre = RepositorioMestreFalso()
 
 
 def adulto(npc_id, nome, **campos):

@@ -15,10 +15,16 @@ DESCRIÇÃO:
     Recebe o banco e a config pelo construtor (R-F01/R-F03): os quatro métodos tomavam
     `db` como primeiro argumento, o que é um `self` disfarçado, e `aplicar_acoes` ainda
     chamava `carregar_config_global()` por conta própria no meio da regra.
-"""
+
+    F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `aplicar_acoes` (chamado do processo do
+    Flask) deixou de aplicar na hora — o Modo Mestre não tem o `EstadoDoMundo` vivo
+    da simulação ali (ARQUITETURA.md, "regra de processo") — e passou a ENFILEIRAR
+    (`mestre_acoes_pendentes`). `drenar_e_aplicar` é o lado oposto: só
+    `run_simulation.py` chama, com o mundo vivo, a cada volta do laço."""
 from typing import List
 
 from ...database import DatabaseManager
+from ...mundo import EstadoDoMundo
 from ...models import MetaChave
 from ...config_loader import cfg_get
 from .acoes import POR_COMANDO, AcaoProposta, ContextoMestre
@@ -56,19 +62,39 @@ class MestreManager:
         return self._db.eventos.coletar_apos_rowid(ultimo_rowid)
 
     def aplicar_acoes(self, acoes: list) -> List[str]:
-        """Aplica uma lista de ações de mundo já confirmadas pelo jogador. Retorna uma
-        lista de strings descrevendo o que foi feito (para log/exibição).
+        """F01: ENFILEIRA as ações já confirmadas pelo jogador — não aplica na hora.
+        `run_simulation.py` drena a fila a cada volta do laço, mesmo pausado, e
+        aplica com o `EstadoDoMundo` vivo (`drenar_e_aplicar`). Devolve uma
+        confirmação de envio, não o resultado da aplicação (que só existe depois).
 
-        Comandos que não existem em `ComandoMestre` são descartados em silêncio: a lista
-        vem de um LLM, e um comando inventado não é erro do jogador nem do sistema."""
+        Comandos que não existem em `ComandoMestre` são descartados em silêncio: a
+        lista vem de um LLM, e um comando inventado não é erro do jogador nem do
+        sistema — mas ainda assim precisam ser filtrados ANTES de enfileirar, senão
+        `drenar_e_aplicar` (que roda no laço quente da simulação) teria que validar
+        de novo a cada payload."""
+        payloads_validos = [p for p in acoes if AcaoProposta.de_payload(p) is not None]
+        if not payloads_validos:
+            return ["⚠️ Nenhuma ação reconhecida para enviar."] if acoes else []
+        self._db.mestre.enfileirar_acoes(payloads_validos)
+        return [f"📨 {len(payloads_validos)} ação(ões) enviada(s) — aplicadas no próximo tick da simulação."]
+
+    def drenar_e_aplicar(self, mundo: EstadoDoMundo) -> List[str]:
+        """F01: o lado da SIMULAÇÃO — só `run_simulation.py` chama isto, a cada volta
+        do laço (inclusive pausado, mesmo padrão de `AVANCAR_MINUTOS`). Lê a fila,
+        aplica cada ação com o `mundo` vivo (as classes em `acoes/` ganham
+        `mundo.acordar`/`mundo.mover_npc`/`abrir_obra`, tudo que a simulação já usa),
+        e devolve as descrições pra log."""
+        payloads = self._db.mestre.drenar_acoes_pendentes()
+        if not payloads:
+            return []
         contexto = self._montar_contexto_de_mundo()
 
         resultados = []
-        for payload in acoes:
+        for payload in payloads:
             proposta = AcaoProposta.de_payload(payload)
             if proposta is None:
                 continue
-            resultados.extend(POR_COMANDO[proposta.comando].aplicar(self._db, contexto, proposta))
+            resultados.extend(POR_COMANDO[proposta.comando].aplicar(mundo, contexto, proposta))
         return resultados
 
     def _montar_contexto_de_mundo(self) -> ContextoMestre:
@@ -89,4 +115,5 @@ class MestreManager:
             cy_cidade=cy,
             raio_px=cfg_get(self._config, "geracao_urbana", "locais_raio_px"),
             nivel_mar=cfg_get(self._config, "cartografia", "nivel_mar"),
+            config=self._config,
         )

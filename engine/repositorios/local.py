@@ -58,12 +58,6 @@ class RepositorioLocal:
                   l.capacidade, l.salario_base, l.tipo_local, l.bairro, l.dono_npc_id)
                  for l in locais])
 
-    def existe(self, local_id: str) -> bool:
-        with self.db.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM locais WHERE id = ?", (local_id,))
-            return cursor.fetchone() is not None
-
     def criar(self, id: str, nome: str, tipo: str, cidade_id, categoria: str, descricao: str,
               coordenadas: list, status: int = 1, integridade: int = 100, capacidade: int = 5,
               salario_base: int = 100):

@@ -1,20 +1,36 @@
 import time
 from engine.core import SimulationEngine
+from engine.logger import WorldLogger
 from engine.mechanics import JobMarket, InfrastructureManager
+from engine.mechanics.mestre import MestreManager
 from engine.models import MetaChave
 
 
 def sincronizar_locais_se_mudou(engine, ultima_versao_vista: str) -> str:
-    """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): o Modo Mestre roda no processo do
-    Flask e escreve locais direto no SQLite — o processo da simulação só percebe se
-    alguém checar. Um `SELECT` de uma linha por tick é ruído (o mesmo caminho já lê
-    SIMULACAO_PAUSADA/VELOCIDADE todo tick); recarregar 24 mil locais por tick não
-    seria. Só recarrega quando o contador de fato mudou desde a última checagem."""
+    """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): resolve o caminho "alguém escreveu
+    Local direto no banco, fora deste processo" — hoje isso não acontece mais pelo
+    Modo Mestre (F01, docs/PLANO_AVANCO_E_CALIBRAGEM.md: as ações dele aplicam
+    DENTRO deste processo, via `drenar_acoes_do_mestre`, com o mundo já atualizado
+    na hora), mas o mecanismo continua existindo — é o que o dashboard usaria se um
+    dia escrever Local por fora também. Um `SELECT` de uma linha por tick é ruído (o
+    mesmo caminho já lê SIMULACAO_PAUSADA/VELOCIDADE todo tick); recarregar 24 mil
+    locais por tick não seria. Só recarrega quando o contador de fato mudou desde a
+    última checagem."""
     versao_atual = engine.mundo.db.meta.carregar(MetaChave.LOCAIS_VERSAO)
     if versao_atual != ultima_versao_vista:
         engine.recarregar_locais()
         return versao_atual
     return ultima_versao_vista
+
+
+def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
+    """F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): drena a fila de ações de mundo do
+    Modo Mestre a cada volta do laço — INCLUSIVE pausado (mesmo padrão de
+    `sincronizar_locais_se_mudou`/`AVANCAR_MINUTOS`: o Mestre prepara cena com a
+    simulação parada). Aplica com o `EstadoDoMundo` vivo deste processo — nunca por
+    fora dele, que é exatamente o que esta tarefa existe pra corrigir."""
+    for resultado in mestre.drenar_e_aplicar(engine.mundo):
+        WorldLogger.evento_mundo(f"🎭 [MESTRE] {resultado}")
 
 def processar_gatilhos_periodicos(engine, market, infra):
     """Gatilhos baseados no relógio do jogo (não em contagem de ticks — ver Frente 4)."""
@@ -37,6 +53,7 @@ def start_simulation():
     engine = SimulationEngine()
     market = JobMarket(engine.mundo.db, engine.config)
     infra = InfrastructureManager(engine.mundo, engine.config)
+    mestre = MestreManager(engine.mundo.db, engine.config)
     market.bootstrap_market()
 
     print(f"🌍 Mundo carregado com {len(engine.mundo.npcs)} habitantes e {len(engine.mundo.locais)} locais.")
@@ -47,10 +64,11 @@ def start_simulation():
 
     try:
         while True:
-            # M01: checado a cada volta do laço (mesmo pausado — o Modo Mestre cria/
-            # destrói local com a simulação parada, pra preparar uma cena antes de
-            # avançar).
+            # M01: checado a cada volta do laço (mesmo pausado).
             ultima_versao_locais = sincronizar_locais_se_mudou(engine, ultima_versao_locais)
+            # F01: a fila do Mestre drena a cada volta do laço, mesmo pausado — é
+            # exatamente quando o jogador prepara uma cena antes de avançar o tempo.
+            drenar_acoes_do_mestre(engine, mestre)
 
             status_pausa = engine.mundo.db.meta.carregar(MetaChave.SIMULACAO_PAUSADA)
             v_str = engine.mundo.db.meta.carregar(MetaChave.VELOCIDADE)
