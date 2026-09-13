@@ -85,27 +85,16 @@ class NPCUtils:
     @staticmethod
     def recalcular_dependentes_da_casa(moradores: List[NPC]) -> None:
         """N04 (docs/PLANO_POPULACAO_E_ESCALA.md): atualiza `num_dependentes` de todo
-        morador de UMA casa — chamado só para as casas cuja composição mudou desde a
-        última vez que `GameLoop` checou (`assinatura_dependentes_por_casa`), em vez de
-        para os 25.000 NPCs do mundo todo tick, para um número que quase nunca muda."""
+        morador de UMA casa — chamado só para as casas marcadas sujas
+        (`EstadoDoMundo.casas_sujas`, H02, docs/PLANO_AVANCO_E_CALIBRAGEM.md) desde a
+        última vez que `GameLoop` checou, em vez de para os 25.000 NPCs do mundo todo
+        tick, para um número que quase nunca muda."""
         for morador in moradores:
             morador.num_dependentes = sum(
                 1 for n in moradores
                 if n.id != morador.id and (n.mae_id == morador.id or n.pai_id == morador.id)
                 and n.eh_dependente()
             )
-
-    @staticmethod
-    def assinatura_dependentes_por_casa(npcs_por_casa: Dict[str, List[NPC]]) -> Dict[str, frozenset]:
-        """N04: um retrato de tudo que pode afetar `num_dependentes` numa casa — quem
-        mora lá, quem é filho de quem, e quem conta como dependente agora. Comparar
-        dois retratos (do fim de um tick contra o fim do anterior) diz exatamente quais
-        casas `GameLoop` precisa recalcular, sem instrumentar cada ponto de mutação
-        (parto, morte, crescimento, mudança de casa) um a um."""
-        return {
-            casa_id: frozenset((n.id, n.mae_id, n.pai_id, n.eh_dependente()) for n in moradores)
-            for casa_id, moradores in npcs_por_casa.items()
-        }
 
     @staticmethod
     def is_casa_superlotada(locais: Dict[str, 'Local'], npcs: List[NPC], casa_id: str) -> bool:

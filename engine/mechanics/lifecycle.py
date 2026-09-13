@@ -65,6 +65,13 @@ class NPCLifecycleManager:
                 npc.local_trabalho_id = None
                 npc.profissao_id = 'ocioso'
                 npc.profissao = 'Desempregado'
+                # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): esta é a
+                # transição que muda `NPC.eh_dependente()` (criança dependente vira
+                # adulto independente) SEM passar por `mudar_casa`/`registrar_npc` —
+                # nenhuma porta de EstadoDoMundo veria essa mudança sozinha, então
+                # marca a casa suja aqui, direto, pra `num_dependentes` de quem mais
+                # mora lá ser recalculado no fim do tick.
+                self._mundo.marcar_casa_suja(npc.casa_id)
 
                 resumo = f"Maioridade: {npc.nome} atingiu a maioridade, tornando-se adulto(a) e iniciando sua busca por oportunidades!"
                 WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}", npc=npc)

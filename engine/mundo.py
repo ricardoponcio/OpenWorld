@@ -44,6 +44,17 @@ class EstadoDoMundo:
     npcs_por_localizacao: Dict = field(default=None, repr=False, compare=False)
     npcs_por_cidade: Dict = field(default=None, repr=False, compare=False)
 
+    # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): casas cuja composição
+    # (quem mora lá, quem é dependente de quem) mudou desde a última vez que
+    # `GameLoop._atualizar_dependentes` rodou — substitui a assinatura calculada
+    # sobre TODAS as casas todo tick (N04), que custava ~16% do piso medido com
+    # 25.000 NPCs pra um número que quase nunca muda. `marcar_casa_suja` é a única
+    # porta que escreve aqui; os métodos abaixo (mudar_casa/registrar_npc/
+    # remover_npc/reindexar_casa_do_npc) já chamam sozinhos — quem mais mudar algo
+    # que afete `NPC.eh_dependente()` fora daqui (ex.: crescimento em
+    # `lifecycle.py`) precisa chamar `marcar_casa_suja` também.
+    casas_sujas: set = field(default_factory=set, repr=False, compare=False)
+
     # Achado de A04: sinaliza pra `GameLoop._remover_falecidos` que existe falecido
     # pendente — sem isto, `_remover_falecidos` reconstruiria `self.npcs` (uma lista
     # NOVA) todo tick, mesmo sem morte nenhuma, e a troca de identidade faria
@@ -160,6 +171,8 @@ class EstadoDoMundo:
         npc.casa_id = casa_id
         if casa_id:
             self.npcs_por_casa.setdefault(casa_id, []).append(npc)
+        self.marcar_casa_suja(antiga)
+        self.marcar_casa_suja(casa_id)
 
     def reindexar_casa_do_npc(self, npc, casa_id_antiga: str) -> None:
         """`NPCBrain.decidir_acao` tem uma rede de segurança que reatribui `casa_id`
@@ -170,6 +183,15 @@ class EstadoDoMundo:
         self._remover_de_bucket(self.npcs_por_casa, casa_id_antiga, npc)
         if npc.casa_id:
             self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
+        self.marcar_casa_suja(casa_id_antiga)
+        self.marcar_casa_suja(npc.casa_id)
+
+    def marcar_casa_suja(self, casa_id: str) -> None:
+        """H02: única porta que marca uma casa pra `GameLoop._atualizar_dependentes`
+        recalcular `num_dependentes` dela no fim do tick. No-op pra `casa_id` vazio
+        (NPC sem casa não tem composição pra recalcular)."""
+        if casa_id:
+            self.casas_sujas.add(casa_id)
 
     def registrar_npc(self, npc) -> None:
         """Um NPC novo (nascimento) entra nos três índices e na agenda de decisões
@@ -184,6 +206,7 @@ class EstadoDoMundo:
         if npc.localizacao_atual_id:
             self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
         self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)
+        self.marcar_casa_suja(npc.casa_id)
         self.npcs_sem_agenda[npc.id] = npc
 
     def remover_npc(self, npc) -> None:
@@ -202,6 +225,7 @@ class EstadoDoMundo:
         self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
         self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
         self._remover_da_agenda(npc)
+        self.marcar_casa_suja(npc.casa_id)
         self.ha_falecidos_pendentes = True
 
     # ------------------------------------------------------------------
@@ -285,6 +309,7 @@ class EstadoDoMundo:
         self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
         self._remover_de_bucket(self.npcs_por_casa, npc.casa_id, npc)
         self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
+        self.marcar_casa_suja(npc.casa_id)
 
         npc.cidade_id = cidade_id
         npc.casa_id = ""

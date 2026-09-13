@@ -12,9 +12,8 @@ DESCRIÇÃO:
 """
 import time
 import random
-from ..models import NPC, Evento, TipoEvento, VinculoSocial
+from ..models import NPC, Acao, Evento, TipoEvento, VinculoSocial
 from ..logger import WorldLogger
-from ..consultas_npc import NPCUtils
 from ..config_loader import cfg_get
 from ..tempo import RelogioMundo
 from ..mundo import EstadoDoMundo
@@ -36,29 +35,39 @@ class NPCSocialManager:
         SEM gravar (`_computar_interacao`), e grava eventos/relacionamentos numa
         transação só no final — antes cada interação abria a própria conexão duas
         vezes (evento + relacionamento), ~170 interações/tick com 25.000 NPCs
-        (~340 commits/tick medidos)."""
-        # Utiliza o helper para agrupar NPCs por localização
-        por_local = NPCUtils.agrupar_npcs_por_localizacao(self._mundo.npcs, ignorar_dormindo=True)
+        (~340 commits/tick medidos).
 
+        H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): usa o índice mantido
+        `mundo.npcs_por_localizacao` (A04) em vez de `NPCUtils.
+        agrupar_npcs_por_localizacao(mundo.npcs, ...)`, que reconstruía um dicionário
+        do zero varrendo os 25.000 NPCs todo tick (~12% do piso medido) pra um
+        agrupamento que o índice já mantém incrementalmente. Quem dorme é filtrado
+        DENTRO de cada balde (pequeno) — e só pros locais que já passaram do filtro
+        `len(moradores) >= 2`, que descarta de cara a maioria (casas com 1 morador)
+        sem alocar lista nenhuma pra elas."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         chance_interacao = cfg_get(cfg_bio, "interacao_chance")
 
         eventos = []
         pares_de_relacionamento = []
-        for loc_id, lista in por_local.items():
-            if len(lista) >= 2:
-                if random.random() < chance_interacao:
-                    n1, n2 = random.sample(lista, 2)
-                    if n1.id != n2.id:
-                        evento, par = self._computar_interacao(n1, n2, loc_id)
-                        eventos.append(evento)
-                        pares_de_relacionamento.append(par)
+        for loc_id, moradores in self._mundo.npcs_por_localizacao.items():
+            if len(moradores) < 2:
+                continue
+            acordados = [n for n in moradores if n.acao_atual != Acao.DORMIR]
+            if len(acordados) >= 2 and random.random() < chance_interacao:
+                n1, n2 = random.sample(acordados, 2)
+                if n1.id != n2.id:
+                    evento, par = self._computar_interacao(n1, n2, loc_id)
+                    eventos.append(evento)
+                    pares_de_relacionamento.append(par)
 
         self._mundo.db.eventos.salvar_muitos(eventos)
         self._mundo.db.npcs.salvar_relacionamentos_muitos(pares_de_relacionamento)
 
-        # Processar coabitação entre casais de alta afinidade no final do tick social
-        self._casamento.processar_coabitacao()
+        # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` NÃO é mais
+        # chamada daqui — ganhou cadência diária própria (A06) e é despachada por
+        # `GameLoop._rotinas_diarias`. As duas chamadas coexistindo casariam o dobro
+        # do calibrado (a rotina roda cadenciada E aqui de novo, todo tick).
 
     def processar_interacao_social(self, n1: NPC, n2: NPC, loc_id: str):
         """Uma interação isolada, gravada IMEDIATAMENTE — uso pontual/teste. O laço de

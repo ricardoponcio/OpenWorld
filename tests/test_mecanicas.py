@@ -221,18 +221,57 @@ def test_casamento_usa_a_habitacao_injetada_quando_a_casa_esta_cheia(config):
     assert noivo.estado_civil == EstadoCivil.CASADO.value
 
 
+def test_coabitacao_so_roda_na_cadencia_diaria_nao_a_cada_tick(config, monkeypatch):
+    """H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` deixou de ser
+    chamada de dentro de `NPCSocialManager.processar_interacoes` (a cada tick) e
+    passou a ser despachada por `GameLoop._rotinas_diarias`, uma vez por dia
+    simulado, na hora de `casamento_hora`. Prova as duas metades: NENHUM casamento
+    acontece fora dessa hora (mesmo rodando vários ticks com afinidade e chance
+    máximas), e o casamento acontece exatamente quando o relógio cruza essa hora."""
+    from datetime import datetime
+    from engine.loop import GameLoop
+
+    monkeypatch.setattr("engine.mechanics.marriage.random.random", lambda: 0.0)
+
+    cfg_bio = cfg_get(config, "biologia_e_sociedade")
+    hora_casamento = cfg_get(cfg_bio, "casamento_hora")
+
+    n1 = adulto("npc_1", "Pretendente", genero=Genero.MASCULINO.value, casa_id="casa_1")
+    n2 = adulto("npc_2", "Pretendida", genero=Genero.FEMININO.value, casa_id="casa_2")
+    afinidade = cfg_get(cfg_bio, "concepcao_afinidade_minima") + 10
+    n1.relacionamentos[n2.id] = afinidade
+    n2.relacionamentos[n1.id] = afinidade
+    mundo = mundo_de(npcs=[n1, n2], locais=[casa("casa_1"), casa("casa_2")])
+    # Começa DUAS horas antes da cadência de casamento, minuto 59 — o próximo tick
+    # cruza pro minuto 0 de uma hora que ainda não é `casamento_hora`.
+    mundo.data_simulada = datetime(2026, 1, 1, (hora_casamento - 2) % 24, 59)
+    loop = GameLoop(mundo, config)
+
+    loop.executar_tick()  # cruza pro minuto 0 da hora ANTERIOR a casamento_hora
+    assert not any(n.conjuge_id for n in mundo.npcs), (
+        "casamento não devia acontecer fora da hora configurada")
+
+    for _ in range(60):  # avança até cruzar exatamente hora_casamento, minuto 0
+        loop.executar_tick()
+        if mundo.data_simulada.hour == hora_casamento and mundo.data_simulada.minute == 0:
+            break
+
+    casados = [n for n in mundo.npcs if n.conjuge_id]
+    assert len(casados) == 2, "casamento devia acontecer na cadência diária configurada"
+
+
 # ----------------------------------------------------------------------
 # NPCSocialManager
 # ----------------------------------------------------------------------
 
 class CasamentoDuble:
-    """Deixa a interação social medir só a afinidade, sem romance surpresa no meio."""
+    """Deixa a interação social medir só a afinidade, sem romance surpresa no meio.
+    H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` não é mais
+    chamada por `NPCSocialManager` (ganhou cadência diária própria), então este
+    dublê não precisa mais simulá-la."""
 
     def verificar_elegibilidade_casamento(self, n1, n2, afinidade):
         return False
-
-    def processar_coabitacao(self):
-        pass
 
 
 def test_interacao_social_grava_afinidade_mutua_e_vinculo(config):

@@ -104,6 +104,7 @@
         "parto_afinidade_inicial_pais": 100,
         "crescimento_hora": 4,
         "habitacao_hora": 6,
+        "casamento_hora": 5,
         "pagamento_reino_hora": 8,
         "eventos_poda_hora": 2,
         "crescimento_dias_bebe_para_crianca": 5,
@@ -119,7 +120,8 @@
         "recuperacao_sono_fome_maxima": 20,
         "dormir_ganho_saude": 0.133333,
         "interacao_chance": 0.0452,
-        "casamento_chance_coabitacao": 0.00135,
+        "_comentario_h02": "H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): processar_coabitacao saiu de 'chamada todo tick' (1440x/dia) pra cadência diária (casamento_hora) — ~46% do piso medido de 51,8ms/tick vinha dela varrendo todo solteiro, todo minuto, pra produzir no máximo um casamento no mundo inteiro. casamento_chance_coabitacao foi recalibrada com a mesma probabilidade composta já usada nesta config pra concepcao/interacao (1-(1-p)^n): era 0,00135 por tentativa/tick, virou 0,857 por tentativa/dia (1-(1-0,00135)^1440) — mesma chance ACUMULADA de UM casal elegível se casar num dia. Aproximação: a rotina ainda para no primeiro casamento encontrado (por cidade, na ordem de carregamento), então o valor não é uma garantia estatística exata, só preserva a ordem de grandeza da frequência de casamentos/dia observada antes.",
+        "casamento_chance_coabitacao": 0.857,
         "casamento_chance_romance_fisico": 0.15,
         "interacao_afinidade_ganhos": [-5, 5, 10, 15],
 

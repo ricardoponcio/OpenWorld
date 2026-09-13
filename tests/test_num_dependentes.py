@@ -8,9 +8,11 @@ bug fica escondido por muitos ticks antes de aparecer".
 
 A correção do parto-no-mesmo-tick é validada em `tests/test_persistencia.py`, com
 SQLite de verdade (cobre também a persistência, N02/W03)."""
-from engine.config_loader import carregar_config_global
+from datetime import datetime, timedelta
+
+from engine.config_loader import carregar_config_global, cfg_get
 from engine.loop import GameLoop
-from engine.models import Genero
+from engine.models import EstagioVida, Genero
 
 from tests.mundo_sintetico import adulto, casa, mundo_de
 
@@ -66,3 +68,35 @@ def test_lista_de_npcs_trocada_forca_recalculo_total():
 
     loop.executar_tick()
     assert next(n for n in mundo.npcs if n.id == "npc_mae").num_dependentes == 1
+
+
+def test_crescer_para_adulto_suja_a_casa_sem_passar_pelas_portas_de_mundo():
+    """H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): a única mutação que
+    muda `NPC.eh_dependente()` sem passar por `mudar_casa`/`registrar_npc`/
+    `remover_npc` é o crescimento (criança vira adulto, `NPCLifecycleManager.
+    processar_crescimento`) — se ele esquecesse de marcar a casa suja, o
+    `num_dependentes` da mãe ficaria travado em 1 pra sempre, mesmo com o filho já
+    adulto e morando na mesma casa."""
+    config = _config()
+    cfg_bio = cfg_get(config, "biologia_e_sociedade")
+    hora_crescimento = cfg_get(cfg_bio, "crescimento_hora")
+    dias_para_adulto = cfg_get(cfg_bio, "crescimento_dias_crianca_para_adulto")
+
+    mae = adulto("npc_mae", "Mãe", genero=Genero.FEMININO.value,
+                 data_nascimento="1980-01-01T00:00:00")
+    filho = adulto("npc_filho", "Filho Quase Adulto", estagio_vida=EstagioVida.CRIANCA.value,
+                   mae_id="npc_mae")
+    mundo = mundo_de(npcs=[mae, filho], locais=[casa(capacidade=5)])
+    # Nasceu exatamente `dias_para_adulto` dias atrás, na mesma hora do corte —
+    # o próximo tick que cruzar `hora_crescimento` já processa a maioridade.
+    agora = datetime(2026, 1, 1, hora_crescimento, 0)
+    filho.data_nascimento = (agora - timedelta(days=dias_para_adulto)).isoformat()
+    mundo.data_simulada = agora - timedelta(minutes=1)
+
+    loop = GameLoop(mundo, config)
+    loop.executar_tick()
+
+    filho_atual = next(n for n in mundo.npcs if n.id == "npc_filho")
+    mae_atual = next(n for n in mundo.npcs if n.id == "npc_mae")
+    assert filho_atual.estagio_vida == EstagioVida.ADULTO.value
+    assert mae_atual.num_dependentes == 0

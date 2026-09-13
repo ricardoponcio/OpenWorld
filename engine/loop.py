@@ -28,6 +28,7 @@ from .mechanics.lifecycle import NPCLifecycleManager
 from .mechanics.housing import NPCHousingManager
 from .mechanics.urbanismo import GerenciadorUrbanismo
 from .mechanics.kingdom import KingdomManager
+from .mechanics.marriage import NPCMarriageManager
 from .mechanics.social import NPCSocialManager
 from .mechanics.events import GlobalEventManager
 from .mechanics.mood import NPCMoodManager
@@ -48,13 +49,10 @@ class GameLoop:
         self._cfg_bio = cfg_get(config, "biologia_e_sociedade")
         self._cfg_metabolismo = cfg_get(config, "metabolismo")
 
-        # N04 (docs/PLANO_POPULACAO_E_ESCALA.md): retrato (por casa) usado por
-        # `_atualizar_dependentes` pra saber quais casas mudaram de composição desde o
-        # tick anterior. `None` força um recálculo completo — tanto no primeiro tick
-        # quanto depois de `recarregar_habitantes()` trocar `mundo.npcs` por uma lista
-        # nova (o mesmo NPC recarregado do banco nasce com `num_dependentes` no default
-        # 0, e o retrato sozinho não perceberia isso — daí o segundo atributo abaixo).
-        self._assinatura_casas_anterior = None
+        # N04/H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `_ultima_lista_de_npcs` detecta
+        # quando `recarregar_habitantes()` troca `mundo.npcs` por objetos novos (o NPC
+        # recarregado nasce com `num_dependentes` no default 0, e nenhuma porta marcou
+        # essa troca em `mundo.casas_sujas`) — ver `_atualizar_dependentes`.
         self._ultima_lista_de_npcs = None
 
         # A02 (docs/PLANO_POPULACAO_E_ESCALA.md): quantos NPCs foram efetivamente
@@ -68,7 +66,12 @@ class GameLoop:
         self._urbanismo = GerenciadorUrbanismo(mundo, config)
         self._habitacao = NPCHousingManager(mundo, config, self._urbanismo)
         self._reino = KingdomManager(mundo, config)
-        self._social = NPCSocialManager(mundo, config)
+        # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): construído aqui (não mais só
+        # dentro de `NPCSocialManager`) pra `GameLoop` poder despachar
+        # `processar_coabitacao` pela própria cadência diária dele, em vez de
+        # `NPCSocialManager.processar_interacoes` chamá-lo a cada tick.
+        self._casamento = NPCMarriageManager(mundo, config)
+        self._social = NPCSocialManager(mundo, config, casamento=self._casamento)
         self._eventos_globais = GlobalEventManager(mundo)
         self._humor = NPCMoodManager(config)
 
@@ -85,6 +88,7 @@ class GameLoop:
             (self._habitacao.CADENCIA_HORA_CONFIG, self._habitacao.processar_habitacao),
             (self._urbanismo.CADENCIA_HORA_CONFIG, self._urbanismo.processar_urbanismo),
             (self._reino.CADENCIA_HORA_CONFIG, self._reino.processar_pagamentos_reino),
+            (self._casamento.CADENCIA_HORA_CONFIG, self._casamento.processar_coabitacao),
             ("eventos_poda_hora", self._podar_eventos_antigos),
         ]
 
@@ -329,30 +333,35 @@ class GameLoop:
             self._reproducao.processar_parto(mae)
 
     def _atualizar_dependentes(self):
-        """N04 (docs/PLANO_POPULACAO_E_ESCALA.md): `num_dependentes` só é recalculado
-        para as casas cuja composição mudou desde a última vez que este método rodou —
-        medido em 0,47 s por tick com 25.000 NPCs quando recalculado pra todo mundo.
+        """N04 (docs/PLANO_POPULACAO_E_ESCALA.md) + H02 (docs/
+        PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): `num_dependentes` só é
+        recalculado para as casas marcadas sujas (`mundo.casas_sujas`) desde a
+        última vez que este método rodou — H02 substituiu a assinatura calculada
+        sobre TODAS as casas todo tick (N04: 0,47s/tick com 25.000 NPCs recomputando
+        pra todo mundo; a própria assinatura, mesmo só comparando, ainda custava
+        ~16% do piso) por marcação direta nas portas de `EstadoDoMundo`
+        (mudar_casa/registrar_npc/remover_npc/reindexar_casa_do_npc/mudar_cidade) e
+        em `NPCLifecycleManager.processar_crescimento` (crescer muda
+        `eh_dependente()` sem mudar de casa).
 
-        Roda no FIM do tick, depois de partos, mortes e (via `processar_interacoes`)
-        casamentos — todas as mutações de composição do tick já aconteceram, então o
-        retrato de agora já reflete o efeito de todas elas (inclusive um parto neste
-        mesmo tick: a mãe ganha o dependente a mais antes deste método terminar, via o
-        índice `npcs_por_casa` mantido por `registrar_npc`)."""
+        Roda no FIM do tick, depois de partos, mortes e (via a cadência diária do
+        casamento, H02) coabitação — todas as mutações de composição do tick já
+        marcaram sua casa suja antes daqui."""
         if self._mundo.npcs is not self._ultima_lista_de_npcs:
             # `recarregar_habitantes()` (fora do GameLoop, a cada 5h de jogo) troca
-            # `mundo.npcs` por objetos NOVOS, com `num_dependentes` no default 0 — o
-            # retrato sozinho não perceberia isso (o conteúdo relevante pode ser
-            # idêntico ao de antes), daí forçar recálculo total sempre que a lista em
-            # si for outro objeto (A04 já reconstrói os índices nesse caso; aqui só
-            # falta este campo derivado).
-            self._assinatura_casas_anterior = None
+            # `mundo.npcs` por objetos NOVOS, com `num_dependentes` no default 0 —
+            # nenhuma porta marcou essas casas sujas (a troca não passou por
+            # nenhuma delas), daí forçar todas as casas atuais sujas sempre que a
+            # lista em si for outro objeto (A04 já reconstrói os índices nesse
+            # caso; aqui só falta este campo derivado).
+            self._mundo.casas_sujas.update(self._mundo.npcs_por_casa.keys())
+            self._ultima_lista_de_npcs = self._mundo.npcs
 
-        npcs_por_casa = self._mundo.npcs_por_casa
-        assinatura_atual = NPCUtils.assinatura_dependentes_por_casa(npcs_por_casa)
-        anterior = self._assinatura_casas_anterior or {}
-        for casa_id, assinatura in assinatura_atual.items():
-            if anterior.get(casa_id) != assinatura:
-                NPCUtils.recalcular_dependentes_da_casa(npcs_por_casa[casa_id])
-
-        self._assinatura_casas_anterior = assinatura_atual
-        self._ultima_lista_de_npcs = self._mundo.npcs
+        casas_sujas = self._mundo.casas_sujas
+        if casas_sujas:
+            npcs_por_casa = self._mundo.npcs_por_casa
+            for casa_id in casas_sujas:
+                moradores = npcs_por_casa.get(casa_id)
+                if moradores:
+                    NPCUtils.recalcular_dependentes_da_casa(moradores)
+            casas_sujas.clear()

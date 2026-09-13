@@ -22,7 +22,15 @@ class NPCMarriageManager:
     """Uniões matrimoniais e coabitação. Recebe o mundo e a config, não a engine
     (R-F01). O gerenciador de habitação é colaborador de domínio e entra pelo
     construtor para que um teste possa substituí-lo por um dublê e verificar a união
-    sem disparar obra nenhuma."""
+    sem disparar obra nenhuma.
+
+    H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` (A06)
+    — `processar_coabitacao` deixou de ser chamada a cada tick (de dentro de
+    `NPCSocialManager.processar_interacoes`, ~46% do piso medido) e passou a ser uma
+    rotina diária despachada por `GameLoop`, como as outras cinco mecânicas já são.
+    Casamento planejado não é um evento de minuto."""
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "casamento_hora"
 
     def __init__(self, mundo: EstadoDoMundo, config: dict, habitacao: NPCHousingManager = None):
         self._mundo = mundo

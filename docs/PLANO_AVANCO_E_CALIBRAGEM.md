@@ -797,7 +797,7 @@ a mediana contra o teto de 30, que C01 remove.
 | Tarefa | Data | Observação / número medido |
 |---|---|---|
 | H01 | 2026-09-12 | Agenda virou balde/consequência/sem-agenda em `EstadoDoMundo`; laço de `executar_tick` lê só os "devidos". Invariante testado tick a tick (`test_baldes_somam_a_populacao`). Medido isolado (25.000 NPCs, 1 dia): 189,0s→**177,9s** (131,3→**123,5 ms/tick**), decisões médias 3196,7/tick (ainda alto — H02/H03/H04 atacam o resto). Suíte: 144 passed. |
-| H02 | | |
+| H02 | 2026-09-12 | Três itens: (1) `processar_coabitacao` ganhou cadência diária (`casamento_hora`, config nova) via `_rotinas_diarias` — saiu de `NPCSocialManager.processar_interacoes`; `casamento_chance_coabitacao` recalibrada 0,00135→0,857 (mesma probabilidade composta 1-(1-p)^1440 já usada na config). (2) `social.py` usa `mundo.npcs_por_localizacao` (índice mantido) em vez de `NPCUtils.agrupar_npcs_por_localizacao`, filtrando dormindo só nos locais com ≥2 moradores. (3) `EstadoDoMundo.casas_sujas` (marcado por mudar_casa/registrar_npc/remover_npc/reindexar_casa_do_npc/mudar_cidade, e por `processar_crescimento` na transição criança→adulto, que muda `eh_dependente()` sem mudar de casa) substitui a assinatura calculada sobre TODAS as casas; `NPCUtils.assinatura_dependentes_por_casa` removida (ficou sem chamador). Medido (25.000 NPCs, 1 dia, acumulado com H01): 177,9s→**122,4s** (123,5→**85,0 ms/tick**). Testes novos: `test_crescer_para_adulto_suja_a_casa_sem_passar_pelas_portas_de_mundo`, `test_coabitacao_so_roda_na_cadencia_diaria_nao_a_cada_tick`. Suíte: 146 passed. |
 | H03 | | |
 | H04 | | |
 | H05 | | |
