@@ -2,6 +2,8 @@
     "salvar_logs_npc_no_banco": false,
     "_comentario_simulacao_intervalo_maximo_decisao_min": "A02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): teto do salto entre decisões de um NPC. Não abaixe pra 'ficar mais seguro' — a segurança vem do cálculo de cruzamento de limiar em engine/mechanics/agenda.py, não daqui; abaixar só quadruplica o custo do avanço rápido.",
     "simulacao_intervalo_maximo_decisao_min": 240,
+    "_comentario_simulacao_jitter_fronteira_min": "H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): sem isto, TODA fronteira de relógio (fim do sono obrigatório, início/fim de expediente) agenda o MESMO instante pra todo NPC — dez dos dez maiores picos medidos eram de 25.000 decisões num tick só, entre 06:29-06:37 e às 08:01. O desvio (zlib.crc32(id) % janela) é determinístico por NPC e só ATRASA, nunca antecipa a fronteira — o NPC acorda entre hora:00 e hora:janela, nunca antes.",
+    "simulacao_jitter_fronteira_min": 45,
     "simulacao": {
         "_comentario_eventos_retencao_dias_simulados": "E02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): poda a tabela `eventos` (não `eventos_globais`, que é outra tabela/semântica). Com 25.000 NPCs, ~245.000 linhas nascem por dia simulado; sem poda isso não para de crescer.",
         "eventos_retencao_dias_simulados": 30
@@ -59,6 +61,8 @@
         "gatilho_fome_normal": 40,
         "gatilho_fome_dormindo": 85,
         "fome_urgente_limiar": 70,
+        "_comentario_h03": "H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): gatilho_fome_variacao_pct dá a cada NPC um desvio pequeno e PERMANENTE (determinístico por id, nunca resorteado) nos próprios limiares de decisão de fome (gatilho_fome_normal/dormindo, fome_urgente_limiar) — dessincroniza quem come antes/depois E dá personalidade. NUNCA aplicado a inaniacao_fome_limiar (biologia_e_sociedade): aquele é limiar de CONSEQUÊNCIA, não é lugar pra variação estética.",
+        "gatilho_fome_variacao_pct": 0.05,
         "energia_limiar_desmaio": 10,
         "hora_inicio_trabalho": 8,
         "hora_fim_trabalho": 18,

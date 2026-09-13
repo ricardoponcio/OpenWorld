@@ -16,7 +16,7 @@ DESCRIÇÃO:
 """
 import random
 from datetime import timedelta
-from .models import NPC, Acao, Genero, MetaChave, ESCALA_MAXIMA
+from .models import NPC, Acao, EstagioVida, Genero, MetaChave, ESCALA_MAXIMA
 from .logger import WorldLogger
 from .consultas_npc import NPCUtils
 from .config_loader import cfg_get
@@ -162,7 +162,8 @@ class GameLoop:
             if agenda.em_consequencia(npc, self._cfg_bio):
                 self._mundo.marcar_consequencia(npc)
             else:
-                proximo = agenda.calcular_proximo_instante(npc, agora, self._config)
+                candidatos_extra = self._candidatos_extra_agenda(npc, npcs_por_casa)
+                proximo = agenda.calcular_proximo_instante(npc, agora, self._config, candidatos_extra)
                 self._mundo.agendar_decisao(npc, proximo)
             npcs_alterados.append(npc)
 
@@ -254,14 +255,20 @@ class GameLoop:
         npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max")) * minutos
 
     def _aplicar_efeito_continuo(self, npc: NPC, minutos: int):
-        """A02 (docs/PLANO_POPULACAO_E_ESCALA.md): o efeito, por minuto, de CONTINUAR
-        fazendo a ação atual — a parte "linear" (sem estado interno próprio) do que
-        `NPCActionManager.executar_acao` faria se rodasse a cada minuto. Só chamado
-        para as ações em `agenda.ACOES_LOTEAVEIS` (dormir, trabalhar, ocioso): comer
-        (parcelas), construir (integridade até 100%) e cuidar_prole nunca acumulam
-        `minutos_extras` > 0 (ver `agenda.calcular_proximo_instante`), então nunca
-        passam por aqui — o estado interno delas continua sendo conferido a cada
-        minuto de verdade, sem risco de pular por cima de uma transição."""
+        """A02 (docs/PLANO_POPULACAO_E_ESCALA.md) + H04 (docs/
+        PLANO_AVANCO_E_CALIBRAGEM.md): o efeito, por minuto, de CONTINUAR fazendo a
+        ação atual — a parte "linear" (sem ramificação de estado) do que
+        `NPCActionManager.executar_acao` faria se rodasse a cada minuto. Chamado
+        pra toda ação em `agenda.ACOES_LOTEAVEIS`, e só pra elas — o agendamento
+        (`agenda.calcular_proximo_instante`) já garante que `minutos` nunca ultrapassa
+        a transição de cada uma (integridade a 100%, energia mínima de cuidar_prole,
+        saldo do pagador da refeição), então o `min(100, ...)`/clamp aqui é rede de
+        segurança, não expectativa normal.
+
+        COMER só aplica o ramo de PREÇO CHEIO — nunca o parcial nem o sopão, que
+        dependem do saldo exato do pagador NO MINUTO e continuam exigindo o minuto
+        real (`NPCActionManager._executar_comer`); `minutos_seguros_para_pular_comer`
+        (H04) é quem garante que o bloco nunca ultrapassa o saldo disponível."""
         cfg_acoes = cfg_get(self._config, "acoes")
         if npc.acao_atual == Acao.DORMIR:
             cfg = cfg_get(cfg_acoes, "dormir")
@@ -273,6 +280,44 @@ class GameLoop:
         elif npc.acao_atual == Acao.OCIOSO:
             cfg = cfg_get(cfg_acoes, "ocioso")
             npc.social -= cfg_get(cfg, "social_perda") * minutos
+        elif npc.acao_atual == Acao.CUIDAR_PROLE:
+            npc.energia -= cfg_get(self._cfg_bio, "cuidar_prole_consumo_energia") * minutos
+            ganho_social_filho = cfg_get(self._cfg_bio, "cuidar_prole_ganho_social") * minutos
+            for morador in self._mundo.npcs_por_casa.get(npc.casa_id, ()):
+                if (morador.id != npc.id and (morador.mae_id == npc.id or morador.pai_id == npc.id)
+                        and morador.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value)):
+                    morador.social += ganho_social_filho
+        elif npc.acao_atual == Acao.CONSTRUIR:
+            obra = NPCUtils.obter_obra_do_npc(self._mundo, npc)
+            if obra:
+                cfg = cfg_get(cfg_acoes, "construir")
+                npc.energia -= cfg_get(cfg, "energia_perda") * minutos
+                npc.fome += cfg_get(cfg, "fome_ganho") * minutos
+                obra.integridade = min(100, obra.integridade + cfg_get(cfg, "integridade_ganho_por_tick") * minutos)
+                self._mundo.registrar_local(obra)
+        elif npc.acao_atual == Acao.COMER:
+            pagador, _, _, custo_do_tick, fome_rec_do_tick, energia_ganho_do_tick = (
+                self._acoes.encontrar_pagador_e_parcela(npc, self._mundo.npcs_por_casa))
+            npc.fome -= fome_rec_do_tick * minutos
+            npc.energia += energia_ganho_do_tick * minutos
+            pagador.dinheiro_total_pc -= custo_do_tick * minutos
+
+    def _candidatos_extra_agenda(self, npc: NPC, npcs_por_casa: dict):
+        """H04 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): os candidatos de agenda que
+        dependem de estado FORA do NPC — `agenda.py` continua sem ler `mundo`
+        (R-F01), então quem tem acesso (`GameLoop`) calcula aqui, sempre com
+        `agenda.minutos_ate_cruzar` (nunca uma fórmula própria), e injeta via
+        `candidatos_extra`."""
+        if npc.acao_atual == Acao.CONSTRUIR:
+            obra = NPCUtils.obter_obra_do_npc(self._mundo, npc)
+            if obra is None:
+                return None
+            cfg_construir = cfg_get(cfg_get(self._config, "acoes"), "construir")
+            ganho = cfg_get(cfg_construir, "integridade_ganho_por_tick")
+            return [agenda.minutos_ate_cruzar(obra.integridade, ganho, 100)]
+        if npc.acao_atual == Acao.COMER:
+            return [self._acoes.minutos_seguros_para_pular_comer(npc, npcs_por_casa)]
+        return None
 
     def _decidir_e_executar(self, npc: NPC, eventos_globais: list, npcs_por_casa: dict):
         acao_anterior = npc.acao_atual

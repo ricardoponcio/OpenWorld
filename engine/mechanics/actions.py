@@ -6,6 +6,7 @@ from ..consultas_local import LocationUtils
 from ..config_loader import cfg_get
 from .kingdom import KingdomManager
 from ..mundo import EstadoDoMundo
+from . import agenda
 
 class NPCActionManager:
     """Executa a ação já escolhida pela Utility AI. Recebe o mundo e a config, não a
@@ -64,10 +65,15 @@ class NPCActionManager:
             npc.acao_atual = Acao.OCIOSO
             WorldLogger.debug(f"🥱 {npc.nome} acordou e mudou para Ocioso (Energia: {npc.energia:.1f})", npc=npc)
 
-    def _executar_comer(self, npc: NPC, cfg_acoes: dict, cfg_bio: dict, npcs_por_casa: dict = None):
-        self._movimento.mover_para_restaurante(npc)
-
-        cfg = cfg_get(cfg_acoes, "comer")
+    def encontrar_pagador_e_parcela(self, npc: NPC, npcs_por_casa: dict = None):
+        """Quem paga a refeição de `npc` (o próprio, ou o pai/mãe mais rico da casa se
+        `npc` for dependente) e o custo/ganho POR MINUTO de uma refeição progressiva
+        (`parcelas_refeicao` minutos). Extraído de `_executar_comer` (H04, docs/
+        PLANO_AVANCO_E_CALIBRAGEM.md) pra ser reusado por
+        `GameLoop._candidatos_extra_agenda`/`_aplicar_efeito_continuo`, que precisam
+        da MESMA conta pra saber quantos minutos de COMER dá pra pular com segurança
+        — nunca duplicada, ou as duas versões divergem em silêncio (armadilha 12)."""
+        cfg = cfg_get(cfg_get(self._config, "acoes"), "comer")
         custo_base   = cfg_get(cfg, "custo_pc")
         fome_rec_max = cfg_get(cfg, "fome_perda")
         multiplicador_por_dependente = cfg_get(cfg, "multiplicador_por_dependente")
@@ -100,6 +106,33 @@ class NPCActionManager:
         custo_do_tick = custo_final / parcelas_refeicao
         fome_rec_do_tick = fome_rec_max / parcelas_refeicao
         energia_ganho_do_tick = cfg_get(cfg, "energia_ganho") / parcelas_refeicao
+        return pagador, is_dependent, num_dependentes, custo_do_tick, fome_rec_do_tick, energia_ganho_do_tick
+
+    def minutos_seguros_para_pular_comer(self, npc: NPC, npcs_por_casa: dict = None) -> int:
+        """H04 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): quantos minutos de `Acao.COMER`
+        dá pra PULAR em bloco (`GameLoop._aplicar_efeito_continuo`) com garantia de
+        que, ao longo de todos eles, o pagador teria dinheiro pra preço CHEIO — o
+        menor entre "quantos minutos até a fome cruzar `esta_comendo_fome_minima`" (a
+        refeição para de valer a pena) e "quantos minutos o saldo do pagador
+        sustenta preço cheio". Depois desse número, o minuto real (`_executar_comer`)
+        tem que rodar de verdade — ele decide sozinho entre preço cheio, pagamento
+        parcial e sopão, e essa ramificação NÃO é replicada aqui de propósito (é
+        exatamente o tipo de "estado interno de curta duração" que A02 já apontava
+        como fora de escopo pra generalizar)."""
+        cfg_dec = cfg_get(self._config, "ia_decisao")
+        pagador, _, _, custo_do_tick, fome_rec_do_tick, _ = self.encontrar_pagador_e_parcela(npc, npcs_por_casa)
+
+        minutos_fome = agenda.minutos_ate_cruzar(
+            npc.fome, -fome_rec_do_tick, cfg_get(cfg_dec, "esta_comendo_fome_minima"))
+        minutos_dinheiro = (int(pagador.dinheiro_total_pc // custo_do_tick)
+                            if custo_do_tick > 0 else agenda.INFINITO)
+        return max(0, min(minutos_fome, minutos_dinheiro))
+
+    def _executar_comer(self, npc: NPC, cfg_acoes: dict, cfg_bio: dict, npcs_por_casa: dict = None):
+        self._movimento.mover_para_restaurante(npc)
+
+        (pagador, is_dependent, num_dependentes, custo_do_tick,
+         fome_rec_do_tick, energia_ganho_do_tick) = self.encontrar_pagador_e_parcela(npc, npcs_por_casa)
 
         if pagador.dinheiro_total_pc >= custo_do_tick:
             npc.fome -= fome_rec_do_tick
