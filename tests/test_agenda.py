@@ -8,10 +8,11 @@ reais configurados, não de números inventados.
 from datetime import datetime, timedelta
 
 from engine.config_loader import carregar_config_global, cfg_get
+from engine.loop import GameLoop
 from engine.mechanics import agenda
-from engine.models import Acao, Genero
+from engine.models import Acao, Cidade, EstagioVida, Genero
 
-from tests.mundo_sintetico import adulto
+from tests.mundo_sintetico import adulto, casa, mundo_de
 
 
 def _config():
@@ -95,3 +96,39 @@ def test_energia_desmaio_nao_e_ultrapassada_trabalhando():
     taxa = cfg_get(meta, "energia_base_perda") + cfg_get(cfg_trabalhar, "energia_perda")
     energia_projetada = npc.energia - taxa * minutos
     assert energia_projetada >= limiar - 1e-9
+
+
+def test_baldes_somam_a_populacao():
+    """H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): o invariante que sustenta o bloco
+    inteiro — todo NPC vivo está em EXATAMENTE um lugar da agenda (balde de minuto,
+    conjunto de consequência, ou "sem agenda ainda"). Roda parto (esposa grávida),
+    morte (solteiro com saúde baixa) e o metabolismo normal por 100 ticks, e confere
+    o invariante depois de CADA tick — não só no fim — porque uma violação
+    transitória (um NPC duplicado por um tick só) é exatamente o tipo de bug que só
+    aparece assim."""
+    cidade = Cidade(id=1, continente_uuid="c", nome="Vila Teste", tamanho="pequeno",
+                     tipo="residencial", x_global=0, y_global=0)
+    casa_a = casa("casa_a", capacidade=5)
+    casa_b = casa("casa_b", capacidade=5)
+
+    marido = adulto("npc_marido", "Marido", genero=Genero.MASCULINO.value, casa_id="casa_a",
+                     localizacao_atual_id="casa_a", cidade_id=1)
+    esposa = adulto("npc_esposa", "Esposa", genero=Genero.FEMININO.value, casa_id="casa_a",
+                     localizacao_atual_id="casa_a", cidade_id=1, gravidez_ticks=1)
+    filho = adulto("npc_filho", "Filho", estagio_vida=EstagioVida.CRIANCA.value,
+                   casa_id="casa_a", localizacao_atual_id="casa_a", cidade_id=1,
+                   mae_id="npc_esposa")
+    solteiro = adulto("npc_solteiro", "Solteiro", genero=Genero.MASCULINO.value,
+                      casa_id="casa_b", localizacao_atual_id="casa_b", cidade_id=1,
+                      saude=1)
+
+    mundo = mundo_de(npcs=[marido, esposa, filho, solteiro], locais=[casa_a, casa_b], cidades=[cidade])
+    loop = GameLoop(mundo, _config())
+
+    for i in range(100):
+        loop.executar_tick()
+        vivos = sum(1 for n in mundo.npcs if n.esta_vivo())
+        na_agenda = (sum(len(b) for b in mundo.baldes_decisao.values())
+                     + len(mundo.npcs_em_consequencia)
+                     + len(mundo.npcs_sem_agenda))
+        assert na_agenda == vivos, f"tick {i + 1}: {na_agenda} na agenda contra {vivos} vivos"

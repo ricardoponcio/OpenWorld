@@ -40,11 +40,24 @@ ACOES_LOTEAVEIS = frozenset((Acao.DORMIR, Acao.TRABALHAR, Acao.OCIOSO))
 _INFINITO = float("inf")
 
 
-def npc_esta_em_dia(npc, agora, cfg_bio) -> bool:
+def em_consequencia(npc, cfg_bio) -> bool:
     """Estado de CONSEQUÊNCIA (fome acima do limiar de inanição) nunca pula — é
     reavaliado todo tick até sair dele, mesmo que `proximo_instante_decisao` aponte
-    pro futuro (armadilha 11, classe 2)."""
-    if npc.fome > cfg_get(cfg_bio, "inaniacao_fome_limiar"):
+    pro futuro (armadilha 11, classe 2).
+
+    H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): usada como regra de
+    ENTRADA/SAÍDA do conjunto `EstadoDoMundo.npcs_em_consequencia`
+    (`mundo.marcar_consequencia`) — chamada só pra quem já está sendo processado
+    neste tick, nunca mais varrida sobre os NPCs do mundo inteiro."""
+    return npc.fome > cfg_get(cfg_bio, "inaniacao_fome_limiar")
+
+
+def npc_esta_em_dia(npc, agora, cfg_bio) -> bool:
+    """Predicado puro equivalente ao que a agenda de baldes (H01) mantém — usado nos
+    testes deste módulo e como referência de comportamento; `GameLoop` não chama mais
+    isto pra cada NPC do mundo a cada tick (era exatamente o custo O(NPCs) que H01
+    eliminou)."""
+    if em_consequencia(npc, cfg_bio):
         return True
     if npc.proximo_instante_decisao is None:
         return True

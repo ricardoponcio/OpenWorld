@@ -2116,6 +2116,14 @@ não o tome de novo.
 
 ## Registro de execução
 
+> ✅ **As cinco pendências desta tabela foram respondidas, com medição, em
+> [`PLANO_AVANCO_E_CALIBRAGEM.md`](PLANO_AVANCO_E_CALIBRAGEM.md).** Em resumo: o teto
+> de 30 lotes por quadra era um invariante errado, não um problema de calibragem (uma
+> quadra quadrada de 95 m já dá 34 lotes); D13 não bateu por três causas medidas, e
+> **nenhuma delas é o grafo de relacionamentos** (mediana 0, máximo 14 num dia); e a
+> lacuna do Modo Mestre e o desvio de M02 têm a mesma causa e a mesma solução — o
+> desvio de M02 **estava certo**. R01–R04 ficam destravados por C01/C02 de lá.
+
 > Anote aqui o que você encontrou e o que ficou diferente do planejado. Uma linha por
 > tarefa concluída, com o número medido quando houver. O plano anterior deu certo em
 > grande parte porque este registro foi levado a sério: as quatro pendências que este

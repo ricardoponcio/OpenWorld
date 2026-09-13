@@ -50,6 +50,25 @@ class EstadoDoMundo:
     # `_atualizar_dependentes` recalcular o mundo inteiro por engano.
     ha_falecidos_pendentes: bool = field(default=False, repr=False, compare=False)
 
+    # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): a agenda de decisões
+    # (A02) virou ESTRUTURA DE DADOS, não predicado — `GameLoop` não pergunta mais
+    # "você está em dia?" a cada um dos NPCs vivos, todo tick (isso continuava sendo
+    # O(NPCs), que é exatamente o que a agenda existia pra eliminar). Todo NPC vivo
+    # está em EXATAMENTE um destes três lugares:
+    #   - `baldes_decisao[instante]`: aguardando `instante` chegar;
+    #   - `npcs_em_consequencia[npc.id]`: fome acima do limiar de inanição, reavaliado
+    #     todo tick até sair de lá (armadilha 11, classe 2) — nunca num balde;
+    #   - `npcs_sem_agenda[npc.id]`: `proximo_instante_decisao` ainda é `None` (recém
+    #     carregado do banco, ou recém-nascido) — mesma semântica de antes de H01
+    #     ("nunca avaliado" é sempre em dia), reavaliado todo tick até a primeira vez
+    #     que sair daqui pra um dos dois de cima.
+    # Nunca em dois ao mesmo tempo, nunca em nenhum. `agendar_decisao`/
+    # `marcar_consequencia` (mais abaixo) são as únicas portas que movem um NPC entre
+    # eles; `acordar` também usa `agendar_decisao`, por baixo.
+    baldes_decisao: Dict = field(default=None, repr=False, compare=False)
+    npcs_em_consequencia: Dict = field(default=None, repr=False, compare=False)
+    npcs_sem_agenda: Dict = field(default=None, repr=False, compare=False)
+
     def __post_init__(self):
         if self.indice is None:
             self.indice = IndiceDeLocais(self.locais)
@@ -95,8 +114,14 @@ class EstadoDoMundo:
         `agenda.calcular_proximo_instante` (A02) tivesse computado. Chame sempre que
         algo muda o que o NPC quer por um motivo que NÃO é o próprio metabolismo dele:
         contratação/demissão, fechamento/colapso do local de trabalho, nascimento na
-        casa, casamento, mudança de casa, evento global, ação do Modo Mestre."""
-        npc.proximo_instante_decisao = self.data_simulada
+        casa, casamento, mudança de casa, evento global, ação do Modo Mestre.
+
+        H01: quem já está em `npcs_em_consequencia` já é reavaliado todo tick — mover
+        pra um balde em "agora" seria um efeito colateral (sairia do conjunto que
+        NUNCA pula) sem ganhar nada, então isto vira um no-op nesse caso."""
+        if npc.id in self.npcs_em_consequencia:
+            return
+        self.agendar_decisao(npc, self.data_simulada)
 
     def acordar_cidade(self, cidade_id) -> None:
         """`acordar` pra todo NPC vivo de uma cidade — evento global (clima,
@@ -147,13 +172,19 @@ class EstadoDoMundo:
             self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
 
     def registrar_npc(self, npc) -> None:
-        """Um NPC novo (nascimento) entra nos três índices."""
+        """Um NPC novo (nascimento) entra nos três índices e na agenda de decisões
+        (H01) — sem isto ficaria em nenhum balde e nenhum conjunto, e nunca mais
+        seria reavaliado. `proximo_instante_decisao` nasce `None` (default do
+        dataclass) — mesma semântica de "nunca avaliado ainda" que um NPC recém
+        carregado do banco: entra em `npcs_sem_agenda`, reavaliado já no próximo
+        tick."""
         self.npcs.append(npc)
         if npc.casa_id:
             self.npcs_por_casa.setdefault(npc.casa_id, []).append(npc)
         if npc.localizacao_atual_id:
             self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
         self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)
+        self.npcs_sem_agenda[npc.id] = npc
 
     def remover_npc(self, npc) -> None:
         """Um NPC que morreu sai dos três índices (mas continua em `self.npcs` até
@@ -162,11 +193,58 @@ class EstadoDoMundo:
         pra `GameLoop` saber que precisa filtrar — sem isto ele filtraria (e
         recriaria a lista) todo tick, mesmo nos ~99% em que ninguém morreu (achado de
         A04: recriar `self.npcs` sem necessidade troca a IDENTIDADE do objeto e faz
-        `_atualizar_dependentes` achar que TUDO mudou, e recalcular o mundo inteiro)."""
+        `_atualizar_dependentes` achar que TUDO mudou, e recalcular o mundo inteiro).
+
+        H01: sai também da agenda de decisões — um morto esquecido num balde ou no
+        conjunto de consequência violaria o invariante "soma dos baldes + consequência
+        == população viva" pra sempre (ninguém nunca o remove de lá de novo)."""
         self._remover_de_bucket(self.npcs_por_casa, npc.casa_id, npc)
         self._remover_de_bucket(self.npcs_por_localizacao, npc.localizacao_atual_id, npc)
         self._remover_de_bucket(self.npcs_por_cidade, npc.cidade_id, npc)
+        self._remover_da_agenda(npc)
         self.ha_falecidos_pendentes = True
+
+    # ------------------------------------------------------------------
+    # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): a agenda de decisões (A02) vira
+    # estrutura de dados. `agendar_decisao`/`marcar_consequencia` são as únicas portas
+    # que colocam um NPC num balde ou no conjunto de consequência; `_remover_da_agenda`
+    # é o passo comum de "tire-o de onde estiver primeiro" que as duas usam por baixo
+    # — o mesmo padrão de `mover_npc`/`mudar_casa` (armadilha 12: um índice que alguém
+    # esquece de atualizar é pior que nenhum índice).
+    # ------------------------------------------------------------------
+    def agendar_decisao(self, npc, instante) -> None:
+        """Único caminho pra colocar um NPC num balde de minuto. Remove de onde
+        estiver antes (balde antigo ou conjunto de consequência) — nunca deixa um NPC
+        em dois lugares ao mesmo tempo."""
+        self._remover_da_agenda(npc)
+        npc.proximo_instante_decisao = instante
+        self.baldes_decisao.setdefault(instante, []).append(npc)
+
+    def marcar_consequencia(self, npc) -> None:
+        """Estado de CONSEQUÊNCIA (fome acima do limiar de inanição, armadilha 11
+        classe 2): tira o NPC de qualquer balde e põe no conjunto reavaliado todo
+        tick, até a fome cair — é aqui, e não mais numa varredura de `npc_esta_em_dia`
+        sobre todo `mundo.npcs`, que a garantia de nunca pular passa a viver."""
+        self._remover_da_agenda(npc)
+        self.npcs_em_consequencia[npc.id] = npc
+
+    def _remover_da_agenda(self, npc) -> None:
+        if self.npcs_em_consequencia.pop(npc.id, None) is not None:
+            return
+        if self.npcs_sem_agenda.pop(npc.id, None) is not None:
+            return
+        instante = npc.proximo_instante_decisao
+        if instante is None:
+            return
+        bucket = self.baldes_decisao.get(instante)
+        if not bucket:
+            return
+        for i, n in enumerate(bucket):
+            if n.id == npc.id:
+                del bucket[i]
+                break
+        if not bucket:
+            del self.baldes_decisao[instante]
 
     @staticmethod
     def _remover_de_bucket(indice: dict, chave, npc) -> None:
@@ -216,13 +294,27 @@ class EstadoDoMundo:
         self.npcs_por_cidade.setdefault(cidade_id, []).append(npc)
 
     def _reconstruir_indices_de_npc(self) -> None:
-        """(Re)constrói os três índices do zero a partir de `self.npcs` — usado no
-        carregamento inicial, e sempre que alguém substituir `self.npcs` por uma lista
-        inteira nova (`recarregar_habitantes()`) sem passar pelos métodos acima. Só
-        NPCs vivos entram, mesma semântica de `NPCUtils.agrupar_por_casa`."""
+        """(Re)constrói os três índices e a agenda de decisões (H01) do zero a partir
+        de `self.npcs` — usado no carregamento inicial, e sempre que alguém substituir
+        `self.npcs` por uma lista inteira nova (`recarregar_habitantes()`) sem passar
+        pelos métodos acima. Só NPCs vivos entram, mesma semântica de
+        `NPCUtils.agrupar_por_casa`.
+
+        H01: `proximo_instante_decisao` não é persistido (fica `None` em todo NPC
+        recém-carregado do banco) — nesse caso o NPC entra em `npcs_sem_agenda`, que é
+        exatamente a semântica antiga de `npc_esta_em_dia` (`proximo_instante_decisao
+        is None` => sempre em dia), reavaliado no próximo tick. Um teste pode
+        pré-atribuir o campo antes de montar o mundo (simulando "já estava agendado
+        pra X") — respeita esse valor, colocando o NPC direto no balde certo, em vez
+        de sobrescrevê-lo (isso também evita depender de QUANDO, em relação a
+        `self.data_simulada`, a construção aconteceu — um teste pode mudar o relógio
+        do mundo logo depois de montá-lo)."""
         self.npcs_por_casa = {}
         self.npcs_por_localizacao = {}
         self.npcs_por_cidade = {}
+        self.baldes_decisao = {}
+        self.npcs_em_consequencia = {}
+        self.npcs_sem_agenda = {}
         for npc in self.npcs:
             if not npc.esta_vivo():
                 continue
@@ -231,3 +323,7 @@ class EstadoDoMundo:
             if npc.localizacao_atual_id:
                 self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
             self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)
+            if npc.proximo_instante_decisao is None:
+                self.npcs_sem_agenda[npc.id] = npc
+            else:
+                self.baldes_decisao.setdefault(npc.proximo_instante_decisao, []).append(npc)

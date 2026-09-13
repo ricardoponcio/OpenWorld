@@ -103,16 +103,26 @@ class GameLoop:
 
         maes_em_parto = []
         npcs_alterados = []
-        decisoes_avaliadas = 0
         agora = self._mundo.data_simulada
-        for npc in self._mundo.npcs:
-            if not npc.esta_vivo():
-                continue
 
-            # A02: só processa quem está "em dia" — agendado pra agora ou antes, ou
-            # em estado de consequência (nunca pula, ver `agenda.npc_esta_em_dia`).
-            # Todo o resto deste laço, pra este NPC, some do tick inteiro.
-            if not agenda.npc_esta_em_dia(npc, agora, self._cfg_bio):
+        # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): os "devidos" agora
+        # vêm da agenda de baldes, não de uma varredura de `self._mundo.npcs` inteiro
+        # perguntando "você está em dia?" a cada um — o balde de "agora", mais
+        # qualquer balde deixado pra trás (raro: um `acordar` no meio de um tick, ou
+        # um salto do Mestre), mais o conjunto de consequência (nunca pula, sempre
+        # reavaliado). `.values()` é materializado pela `extend` ANTES de qualquer
+        # mutação (marcar_consequencia/agendar_decisao) acontecer mais abaixo.
+        baldes = self._mundo.baldes_decisao
+        devidos = baldes.pop(agora, [])
+        if baldes:
+            for instante in [k for k in baldes if k <= agora]:
+                devidos.extend(baldes.pop(instante))
+        devidos.extend(self._mundo.npcs_em_consequencia.values())
+        devidos.extend(self._mundo.npcs_sem_agenda.values())
+
+        decisoes_avaliadas = 0
+        for npc in devidos:
+            if not npc.esta_vivo():
                 continue
             decisoes_avaliadas += 1
 
@@ -140,7 +150,16 @@ class GameLoop:
                 continue
 
             npc.ultima_avaliacao = agora
-            npc.proximo_instante_decisao = agenda.calcular_proximo_instante(npc, agora, self._config)
+            # H01: a classificação "nunca pula" (armadilha 11) passa a decidir se o
+            # NPC volta pra um balde ou fica no conjunto de consequência — as duas
+            # portas de `EstadoDoMundo` (nunca atribuição direta em
+            # `proximo_instante_decisao`, senão a agenda desincroniza em silêncio,
+            # mesma armadilha 12 de A04).
+            if agenda.em_consequencia(npc, self._cfg_bio):
+                self._mundo.marcar_consequencia(npc)
+            else:
+                proximo = agenda.calcular_proximo_instante(npc, agora, self._config)
+                self._mundo.agendar_decisao(npc, proximo)
             npcs_alterados.append(npc)
 
         self.decisoes_avaliadas_no_ultimo_tick = decisoes_avaliadas
