@@ -6,7 +6,10 @@
     "simulacao_jitter_fronteira_min": 45,
     "simulacao": {
         "_comentario_eventos_retencao_dias_simulados": "E02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): poda a tabela `eventos` (não `eventos_globais`, que é outra tabela/semântica). Com 25.000 NPCs, ~245.000 linhas nascem por dia simulado; sem poda isso não para de crescer.",
-        "eventos_retencao_dias_simulados": 30
+        "eventos_retencao_dias_simulados": 30,
+        "_comentario_relacionamentos": "H05 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): não é o que trava D13 (medido: mediana de relacionamentos/NPC é 0, máximo 14 num dia) — mas npc.relacionamentos só cresce, nunca decai, e num mundo que roda meses isso vira memória e custo em salvar_completo. relacionamentos_max_por_npc (150) é o número de Dunbar. relacionamentos_decaimento_por_dia anda cada afinidade não-protegida 1 ponto em direção a zero por dia; a entrada some ao chegar em zero. NUNCA descartados/decaídos: cônjuge, pais, filhos, e quem estiver com afinidade >= vinculo_limiar_amigo (vínculo forte). `relacionamentos_poda_hora` (a hora do gatilho diário) mora em `biologia_e_sociedade`, não aqui — é onde `GameLoop._executar_rotinas_agendadas` procura toda chave `*_hora`.",
+        "relacionamentos_max_por_npc": 150,
+        "relacionamentos_decaimento_por_dia": 1
     },
     "metabolismo": {
         "_comentario_1_1": "Frente 4 (2026-09-09): valores divididos por 15 — o tick virou 1 minuto real (era 15). O efeito total por hora de jogo é o mesmo de antes, só que distribuído em passos 15x menores. Ver docs/ROADMAP.md.",
@@ -111,6 +114,7 @@
         "casamento_hora": 5,
         "pagamento_reino_hora": 8,
         "eventos_poda_hora": 2,
+        "relacionamentos_poda_hora": 3,
         "crescimento_dias_bebe_para_crianca": 5,
         "crescimento_dias_crianca_para_adulto": 15,
         "crescimento_dias_adulto_para_idoso": 75,

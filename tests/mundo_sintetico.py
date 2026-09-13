@@ -45,6 +45,12 @@ class RepositorioFalso:
         funcionando sem mudança nos testes que já usam esse padrão."""
         self.salvos.extend(entidades)
 
+    def salvar_completo(self, entidades):
+        """N02/H05: escrita de linha inteira em lote (ex.: `processar_poda_de_
+        relacionamentos`) — mesmo dublê de `salvar_muitos`, nome espelhando o
+        repositório real."""
+        self.salvos.extend(entidades)
+
     def salvar_relacionamento(self, a_id, b_id, afinidade, vinculo):
         self.relacionamentos.append((a_id, b_id, afinidade, vinculo))
 

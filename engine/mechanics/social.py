@@ -21,6 +21,13 @@ from .marriage import NPCMarriageManager
 
 
 class NPCSocialManager:
+    # H05 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): cadência diária (A06) — não é o que
+    # trava D13 (medido: mediana de relacionamentos/NPC é 0, máximo 14 num dia), mas
+    # `npc.relacionamentos` só cresce, nunca decai, e num mundo que roda meses vira
+    # memória e custo em `salvar_completo`.
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG = "relacionamentos_poda_hora"
+
     def __init__(self, mundo: EstadoDoMundo, config: dict, casamento: NPCMarriageManager = None):
         self._mundo = mundo
         self._config = config
@@ -122,6 +129,78 @@ class NPCSocialManager:
                     self._casamento.realizar_casamento(n1, n2, casa_escolhida, surpresa=True)
 
         return evento, (n1.id, n2.id, nova_afinidade, vinculo)
+
+    def processar_poda_de_relacionamentos(self):
+        """H05 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): decai afinidades não protegidas
+        em direção a zero (esquecendo quem não foi reencontrado) e, se ainda assim
+        passar do teto (`relacionamentos_max_por_npc`, número de Dunbar), descarta
+        as mais fracas primeiro. NUNCA descarta/decai cônjuge, pais, filhos, ou quem
+        tiver vínculo forte (`afinidade >= vinculo_limiar_amigo`) — uma pessoa
+        esquece um conhecido de taverna, não a própria irmã."""
+        cfg_sim = cfg_get(self._config, "simulacao")
+        teto = cfg_get(cfg_sim, "relacionamentos_max_por_npc")
+        decaimento = cfg_get(cfg_sim, "relacionamentos_decaimento_por_dia")
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
+        limiar_forte = cfg_get(cfg_bio, "vinculo_limiar_amigo")
+
+        id_para_npc = {n.id: n for n in self._mundo.npcs if n.esta_vivo()}
+        mudados = []
+        for npc in self._mundo.npcs:
+            if not npc.esta_vivo() or not npc.relacionamentos:
+                continue
+            protegidos = self._ids_protegidos(npc, id_para_npc)
+            if self._decair_e_podar(npc, protegidos, limiar_forte, decaimento, teto):
+                mudados.append(npc)
+
+        if mudados:
+            self._mundo.db.npcs.salvar_completo(mudados)
+
+    @staticmethod
+    def _ids_protegidos(npc: NPC, id_para_npc: dict) -> set:
+        """Cônjuge, pais (já estão no próprio NPC) e filhos (só descobertos olhando
+        o `mae_id`/`pai_id` de quem está do outro lado da relação — por isso precisa
+        de `id_para_npc`, não dá pra saber só com o `npc.relacionamentos` dele)."""
+        protegidos = set()
+        for chave in (npc.conjuge_id, npc.mae_id, npc.pai_id):
+            if chave:
+                protegidos.add(chave)
+        for outro_id in npc.relacionamentos:
+            outro = id_para_npc.get(outro_id)
+            if outro and (outro.mae_id == npc.id or outro.pai_id == npc.id):
+                protegidos.add(outro_id)
+        return protegidos
+
+    @staticmethod
+    def _decair_e_podar(npc: NPC, protegidos: set, limiar_forte: float,
+                         decaimento: float, teto: int) -> bool:
+        mudou = False
+        for outro_id in list(npc.relacionamentos):
+            afinidade = npc.relacionamentos[outro_id]
+            if outro_id in protegidos or afinidade >= limiar_forte:
+                continue
+            if afinidade > 0:
+                nova = afinidade - decaimento
+            elif afinidade < 0:
+                nova = afinidade + decaimento
+            else:
+                nova = 0
+            if (afinidade > 0 and nova <= 0) or (afinidade < 0 and nova >= 0) or afinidade == 0:
+                del npc.relacionamentos[outro_id]
+            else:
+                npc.relacionamentos[outro_id] = nova
+            mudou = True
+
+        excedente = len(npc.relacionamentos) - teto
+        if excedente > 0:
+            podaveis = sorted(
+                (oid for oid in npc.relacionamentos
+                 if oid not in protegidos and npc.relacionamentos[oid] < limiar_forte),
+                key=lambda oid: abs(npc.relacionamentos[oid]))
+            for oid in podaveis[:excedente]:
+                del npc.relacionamentos[oid]
+                mudou = True
+
+        return mudou
 
     @staticmethod
     def _classificar_vinculo(afinidade: float, cfg_bio: dict) -> VinculoSocial:

@@ -89,6 +89,7 @@ class GameLoop:
             (self._urbanismo.CADENCIA_HORA_CONFIG, self._urbanismo.processar_urbanismo),
             (self._reino.CADENCIA_HORA_CONFIG, self._reino.processar_pagamentos_reino),
             (self._casamento.CADENCIA_HORA_CONFIG, self._casamento.processar_coabitacao),
+            (self._social.CADENCIA_HORA_CONFIG, self._social.processar_poda_de_relacionamentos),
             ("eventos_poda_hora", self._podar_eventos_antigos),
         ]
 

@@ -298,6 +298,96 @@ def test_vinculo_inimigo_e_alcancavel(config):
 
 
 # ----------------------------------------------------------------------
+# NPCSocialManager.processar_poda_de_relacionamentos (H05, docs/
+# PLANO_AVANCO_E_CALIBRAGEM.md)
+# ----------------------------------------------------------------------
+
+def test_poda_nunca_descarta_familia(config):
+    """H05: cônjuge, pai/mãe e filho sobrevivem à poda e ao decaimento mesmo com
+    afinidade baixa e mesmo estourando o teto — "uma pessoa esquece um conhecido de
+    taverna, não a própria irmã"."""
+    npc = adulto("npc_1", "Alguém", conjuge_id="npc_conjuge",
+                 mae_id="npc_mae", pai_id="npc_pai")
+    conjuge = adulto("npc_conjuge", "Cônjuge")
+    mae = adulto("npc_mae", "Mãe")
+    pai = adulto("npc_pai", "Pai")
+    filho = adulto("npc_filho", "Filho", mae_id="npc_1")
+
+    npc.relacionamentos = {
+        "npc_conjuge": 1, "npc_mae": 1, "npc_pai": 1, "npc_filho": 1,
+    }
+    # Estoura bem o teto com desconhecidos fracos, pra forçar a poda a agir.
+    teto = cfg_get(cfg_get(config, "simulacao"), "relacionamentos_max_por_npc")
+    for i in range(teto + 20):
+        npc.relacionamentos[f"npc_desconhecido_{i}"] = 1
+
+    mundo = mundo_de(npcs=[npc, conjuge, mae, pai, filho], locais=[casa()])
+    social = NPCSocialManager(mundo, config)
+
+    for _ in range(5):  # vários dias de decaimento
+        social.processar_poda_de_relacionamentos()
+
+    for protegido in ("npc_conjuge", "npc_mae", "npc_pai", "npc_filho"):
+        assert protegido in npc.relacionamentos, f"{protegido} não devia ter sido descartado"
+    assert len(npc.relacionamentos) <= teto
+
+
+def test_decaimento_anda_em_direcao_a_zero_e_remove_ao_chegar(config):
+    """H05: afinidade fraca e não protegida decai até sumir — nunca cruza pro lado
+    oposto (não vira negativa por decair demais numa passada)."""
+    cfg_sim = cfg_get(config, "simulacao")
+    decaimento = cfg_get(cfg_sim, "relacionamentos_decaimento_por_dia")
+
+    npc = adulto("npc_1", "Alguém")
+    npc.relacionamentos = {"npc_conhecido": decaimento * 3}
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+    social = NPCSocialManager(mundo, config)
+
+    for _ in range(2):
+        social.processar_poda_de_relacionamentos()
+        assert npc.relacionamentos["npc_conhecido"] >= 0
+
+    for _ in range(5):
+        social.processar_poda_de_relacionamentos()
+
+    assert "npc_conhecido" not in npc.relacionamentos
+
+
+def test_vinculo_forte_nao_decai_nem_e_podado(config):
+    """H05: um amigo de verdade (afinidade >= vinculo_limiar_amigo) não decai e
+    sobrevive à poda mesmo sem ser família."""
+    cfg_bio = cfg_get(config, "biologia_e_sociedade")
+    limiar_forte = cfg_get(cfg_bio, "vinculo_limiar_amigo")
+    teto = cfg_get(cfg_get(config, "simulacao"), "relacionamentos_max_por_npc")
+
+    npc = adulto("npc_1", "Alguém")
+    npc.relacionamentos = {"npc_amigo": limiar_forte}
+    for i in range(teto + 5):
+        npc.relacionamentos[f"npc_desconhecido_{i}"] = 1
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+    social = NPCSocialManager(mundo, config)
+
+    social.processar_poda_de_relacionamentos()
+
+    assert npc.relacionamentos["npc_amigo"] == limiar_forte
+
+
+def test_teto_descarta_os_mais_fracos_primeiro(config):
+    """H05: estourando o teto, quem tem menos afinidade acumulada é descartado
+    antes de quem tem mais (entre os não protegidos)."""
+    teto = cfg_get(cfg_get(config, "simulacao"), "relacionamentos_max_por_npc")
+    npc = adulto("npc_1", "Alguém")
+    npc.relacionamentos = {f"npc_{i}": i + 1 for i in range(teto + 10)}
+    mundo = mundo_de(npcs=[npc], locais=[casa()])
+    social = NPCSocialManager(mundo, config)
+
+    social.processar_poda_de_relacionamentos()
+
+    assert len(npc.relacionamentos) <= teto
+    assert "npc_0" not in npc.relacionamentos, "o mais fraco tinha que ter sido descartado primeiro"
+
+
+# ----------------------------------------------------------------------
 # NPCLifecycleManager e NPCLegacyManager
 # ----------------------------------------------------------------------
 
