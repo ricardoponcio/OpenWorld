@@ -1,5 +1,5 @@
 """
-W03 (docs/PLANO_POPULACAO_E_ESCALA.md): teste de ida e volta contra um SQLite de
+W03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): teste de ida e volta contra um SQLite de
 verdade. N02 é a única tarefa do plano capaz de PERDER DADO — troca a escrita de fim de
 tick por um `UPDATE` estreito, e um `UPDATE` numa linha que não existe não é erro, só
 não faz nada. Escrito antes de N02, não depois: monta um mundo real, roda um tick que
@@ -59,7 +59,7 @@ def test_npc_nascido_durante_o_tick_sobrevive_a_reabertura_do_banco(tmp_path, mo
     loop = GameLoop(mundo, config)
     loop.executar_tick()  # gravidez_ticks 1 -> 0: dispara o parto neste mesmo tick
 
-    # N04 (docs/PLANO_POPULACAO_E_ESCALA.md): num_dependentes não é persistido (é
+    # N04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): num_dependentes não é persistido (é
     # recalculado em memória, `_atualizar_dependentes`) — a mãe tem que ganhar o
     # dependente a mais no MESMO tick do parto, não só no próximo.
     mae_em_memoria = next(n for n in mundo.npcs if n.id == "npc_mae")

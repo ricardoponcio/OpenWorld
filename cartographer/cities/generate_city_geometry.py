@@ -1,8 +1,8 @@
 """
-SHIM DE COMPATIBILIDADE (Q02, docs/PLANO_CIDADE_VIVA.md).
+SHIM DE COMPATIBILIDADE (Q02, docs/12_PLANO_CIDADE_VIVA.md).
 
 A implementação mora em `cartographer/cities/geometria/` (virou pacote: o arquivo tinha
-638 linhas, acima do limite de 400 do ARQUITETURA.md Seção 4). Este arquivo existe só
+638 linhas, acima do limite de 400 do 11_ARQUITETURA.md Seção 4). Este arquivo existe só
 pra quem ainda importa pelo caminho antigo (`tests/test_cidades.py`) e pra continuar
 executável como script:
 

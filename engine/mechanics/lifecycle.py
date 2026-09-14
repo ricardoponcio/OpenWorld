@@ -12,9 +12,9 @@ class NPCLifecycleManager:
     """Transições de estágio de vida e morte. Recebe o mundo e a config, não a engine
     (R-F01). O gerenciador de herança entra pelo construtor — antes era importado
     dentro de `processar_morte` para quebrar um ciclo que não existe mais, e import
-    dentro de função é padrão proibido (ARQUITETURA.md Seção 15, item 7).
+    dentro de função é padrão proibido (11_ARQUITETURA.md Seção 15, item 7).
 
-    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
+    A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
     CADENCIA = "por_dia"
     CADENCIA_HORA_CONFIG = "crescimento_hora"
 
@@ -65,7 +65,7 @@ class NPCLifecycleManager:
                 npc.local_trabalho_id = None
                 npc.profissao_id = 'ocioso'
                 npc.profissao = 'Desempregado'
-                # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): esta é a
+                # H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): esta é a
                 # transição que muda `NPC.eh_dependente()` (criança dependente vira
                 # adulto independente) SEM passar por `mudar_casa`/`registrar_npc` —
                 # nenhuma porta de EstadoDoMundo veria essa mudança sozinha, então

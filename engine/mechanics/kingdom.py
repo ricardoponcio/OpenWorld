@@ -13,7 +13,7 @@ from ..mundo import EstadoDoMundo
 
 
 class KingdomManager:
-    """A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
+    """A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
     mecânica — a hora vem de `biologia_e_sociedade.pagamento_reino_hora`, não de um
     bloco `reino` próprio (histórico, não vale a pena mover só por isto)."""
     CADENCIA = "por_dia"
@@ -22,7 +22,7 @@ class KingdomManager:
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo
         self._config = config
-        # N04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): `dict[cidade_id] -> rações de
+        # N04 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco N): `dict[cidade_id] -> rações de
         # sopão restantes HOJE` — zerado 1x/dia em `processar_pagamentos_reino`,
         # decrementado só dentro de `fornecer_sopao` (que só roda quando um NPC
         # tenta comer sem dinheiro). Nenhuma varredura extra por tick.

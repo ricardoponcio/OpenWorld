@@ -18,7 +18,7 @@ class ContextoDecisao:
     """Tudo que um avaliador pode consultar. Imutável de propósito: nenhum avaliador
     altera o estado do NPC — isso é trabalho de `NPCActionManager`.
 
-    `indice` (P02, docs/PLANO_CIDADE_VIVA.md): mesmo atributo de `EstadoDoMundo`, de
+    `indice` (P02, docs/12_PLANO_CIDADE_VIVA.md): mesmo atributo de `EstadoDoMundo`, de
     propósito — `NPCUtils.obter_obra_do_npc(ctx, npc)` funciona tanto com `ctx` quanto
     com `mundo` sem precisar de um wrapper, porque os dois têm `.indice`/`.locais`."""
     npc: NPC

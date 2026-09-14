@@ -1,8 +1,8 @@
 """
-N04 (docs/PLANO_POPULACAO_E_ESCALA.md): `GameLoop._atualizar_dependentes` só recalcula
+N04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `GameLoop._atualizar_dependentes` só recalcula
 `num_dependentes` para as casas cuja composição mudou desde o fim do tick anterior — e
 não é um "cache entre ticks" na acepção proibida (Anexo 3, docs/
-PLANO_POPULACAO_E_ESCALA.md): é escopo de tick, como `npcs_por_casa` (P03). Escrito
+13_PLANO_POPULACAO_E_ESCALA.md): é escopo de tick, como `npcs_por_casa` (P03). Escrito
 antes de considerar a tarefa terminada, como o plano pede para qualquer coisa "onde um
 bug fica escondido por muitos ticks antes de aparecer".
 
@@ -71,7 +71,7 @@ def test_lista_de_npcs_trocada_forca_recalculo_total():
 
 
 def test_crescer_para_adulto_suja_a_casa_sem_passar_pelas_portas_de_mundo():
-    """H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): a única mutação que
+    """H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): a única mutação que
     muda `NPC.eh_dependente()` sem passar por `mudar_casa`/`registrar_npc`/
     `remover_npc` é o crescimento (criança vira adulto, `NPCLifecycleManager.
     processar_crescimento`) — se ele esquecesse de marcar a casa suja, o

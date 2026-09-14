@@ -1,7 +1,7 @@
 """
 SCRIPT: audit_cidades.py
 OBJETIVO: Auditar as cidades já geradas em `database/cidades/*.geojson` contra os
-          invariantes geométricos do docs/PLANO_CIDADE_VIVA.md (V02) — uma linha por
+          invariantes geométricos do docs/12_PLANO_CIDADE_VIVA.md (V02) — uma linha por
           cidade, com os números medidos que a Seção 1 do plano usa para diagnosticar
           "cidade contorcida", "rua e quadra se sobrepondo", "casa no meio da quadra" etc.
 MOMENTO DE USO: depois de cada tarefa do Bloco G ou Q (README do plano, regra de
@@ -10,10 +10,10 @@ MOMENTO DE USO: depois de cada tarefa do Bloco G ou Q (README do plano, regra de
 
 ⚠️ FERRAMENTA MANUAL DE DIAGNÓSTICO. Roda fora da engine, lê só arquivo GeoJSON. Não
 importe este módulo de dentro de engine/, web/ ou cartographer/ — não faz parte do
-runtime (ARQUITETURA.md, "é diagnóstico manual, fora do runtime").
+runtime (11_ARQUITETURA.md, "é diagnóstico manual, fora do runtime").
 
 ⚠️ NUNCA leia a saída deste script com `| tail` nem `| head` — o pipe engole o código
-de saída (`$?`), e já enganou uma sessão inteira (docs/PLANO_POPULACAO_E_ESCALA.md,
+de saída (`$?`), e já enganou uma sessão inteira (docs/13_PLANO_POPULACAO_E_ESCALA.md,
 regra de execução #4). A saída cabe numa tela sem paginar; rode direto e confira
 `echo $?` depois, se precisar do código.
 """
@@ -167,7 +167,7 @@ def _pior_invasao_muralha(features):
 
 
 def _razao_largura_profundidade(quarteiroes, metros_por_px):
-    """L04 (docs/PLANO_POPULACAO_E_ESCALA.md): mediana da razão largura/profundidade
+    """L04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): mediana da razão largura/profundidade
     das quadras de uma cidade — o número que denuncia a regressão de S01 (quadra
     larga demais, profundidade constante). Um quarteirão sempre tem 4 arestas na
     ordem [radial, anel, radial, anel] (gerador.py); pareia arestas OPOSTAS (0-2,
@@ -189,7 +189,7 @@ def _razao_largura_profundidade(quarteiroes, metros_por_px):
 
 _FAIXA_FRENTE_POR_BANDA = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_lote_frente_m_faixa_por_banda")
 
-# C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): violação dura se mais que esta fração das
+# C01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): violação dura se mais que esta fração das
 # quadras da cidade estiver fora da tolerância — uma quadra degenerada isolada num
 # canto não é bug; muitas quadras discordando do próprio alvo de frente é.
 TOLERANCIA_LOTES_POR_QUADRA_PCT = 0.25
@@ -335,7 +335,7 @@ def auditar_cidade(caminho, metros_por_px):
         "bowtie_quarteirao": bowtie_quarteirao,
         "bowtie_lote": bowtie_lote,
         "cruzamentos_anel": setores_cruzados,
-        # C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mediana/máximo continuam aqui como
+        # C01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): mediana/máximo continuam aqui como
         # COLUNA DE RELATÓRIO (o número continua útil de olhar) — só deixaram de ser
         # PORTA; quem barra o script agora é `fracao_fora_frente_alvo`.
         "l_quadra_mediana": statistics.median(contagens),
@@ -362,7 +362,7 @@ def _viola_invariantes(linha):
         return True
     if linha["sem_frente_pct"] > TOLERANCIA_SEM_FRENTE_PCT:
         return True
-    # C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): substitui o teto absoluto de L04 (mediana
+    # C01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): substitui o teto absoluto de L04 (mediana
     # em [4, 30]) pela fração de quadras fora da AUTO-CONSISTÊNCIA (ver
     # _lotes_vs_frente_alvo) — uma quadra degenerada isolada não derruba o script,
     # muitas discordando do próprio alvo de frente sim.
@@ -414,7 +414,7 @@ def main():
         print("\n❌ Um ou mais invariantes violados (bowtie, anéis cruzados, muro, lote sem "
               f"frente, ou mais de {FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA:.0%} das quadras "
               f"fora de ±{TOLERANCIA_LOTES_POR_QUADRA_PCT:.0%} do próprio alvo de frente — C01, "
-              "docs/PLANO_AVANCO_E_CALIBRAGEM.md).")
+              "docs/14_PLANO_AVANCO_E_CALIBRAGEM.md).")
         sys.exit(1)
     print("\n✅ Nenhum invariante violado nas cidades auditadas.")
 

@@ -1,5 +1,5 @@
 """
-E01 (docs/PLANO_POPULACAO_E_ESCALA.md): `RepositorioEvento.salvar_muitos` — uma
+E01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `RepositorioEvento.salvar_muitos` — uma
 transação pra todos os eventos do tick, não um commit por evento. Precisa de SQLite
 de verdade (mesmo padrão de tests/test_repositorio_npc.py).
 """

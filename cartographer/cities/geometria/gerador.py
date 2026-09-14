@@ -1,8 +1,8 @@
 """
-`GeradorCidade` — dono da EMISSÃO (Q02, docs/PLANO_CIDADE_VIVA.md: pacote separado por
+`GeradorCidade` — dono da EMISSÃO (Q02, docs/12_PLANO_CIDADE_VIVA.md: pacote separado por
 assunto, era `generate_city_geometry.py`, 638 linhas, acima do limite de 400 do
-ARQUITETURA.md). Pega a `Malha` que `modelo.construir_malha()` devolve e faz todo o
-trabalho compartilhado (ESPEC_DESENHO_CIDADE.md Seção 5.5): inset de quadra, subdivisão
+11_ARQUITETURA.md). Pega a `Malha` que `modelo.construir_malha()` devolve e faz todo o
+trabalho compartilhado (09_ESPEC_DESENHO_CIDADE.md Seção 5.5): inset de quadra, subdivisão
 em lotes, footprint, distribuição dirigida (F2/F3, em `distribuicao.py`), muralha,
 emissão de feature, índice. Nenhum modelo reimplementa nada disto.
 """
@@ -17,7 +17,7 @@ from config import cfg_get
 from . import lotes, quad
 from .distribuicao import DistribuicaoMixin
 
-# C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mesmo piso de `distribuicao.py`
+# C02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): mesmo piso de `distribuicao.py`
 # (ARESTA_MINIMA_FOOTPRINT_M) — um lote pode ter área "razoável" (o corte de canto
 # produz um quase-triângulo com a base larga) e ainda assim ter dois vértices a
 # menos de ~1,6 cm um do outro em metros locais, que colapsam no MESMO ponto depois
@@ -30,7 +30,7 @@ from .distribuicao import DistribuicaoMixin
 # de cidades reais (que não passa por essa combinação exata de banda/aresta) pegava.
 ARESTA_MINIMA_LOTE_M = 0.1
 
-# Q01/armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o que a distribuição de edifícios
+# Q01/armadilha 3 (docs/12_PLANO_CIDADE_VIVA.md): o que a distribuição de edifícios
 # (distribuicao.py) precisa saber de cada lote emitido. `id` é o id ESTÁVEL do lote
 # (posição na malha, não ordem de emissão) — o edifício que nasce nele reusa o mesmo id.
 # `props` é o dict de properties da própria feature "lote" já emitida — T03 grava o
@@ -142,7 +142,7 @@ class GeradorCidade(DistribuicaoMixin):
     # por QUALQUER modelo (Seção 5.5). "O que NÃO é gancho" da Seção 4.3.
     # ------------------------------------------------------------------
     def _distancia_faixa_dominio(self, classe):
-        # L02 (docs/PLANO_POPULACAO_E_ESCALA.md): "sem_via" não tem via nenhuma pra
+        # L02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): "sem_via" não tem via nenhuma pra
         # recuar dela — distância zero, nunca o default de "secundaria".
         if classe == "sem_via":
             return 0.0
@@ -157,7 +157,7 @@ class GeradorCidade(DistribuicaoMixin):
         são emitidas ao FINAL (`_emitir_vielas`) — `_emitir_ruas` já rodou antes desta
         função, e a viela só existe depois da subdivisão (não reordene `gerar()`).
 
-        L03 (docs/PLANO_POPULACAO_E_ESCALA.md): cada quadra sorteia com um RNG PRÓPRIO,
+        L03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cada quadra sorteia com um RNG PRÓPRIO,
         derivado do id do quarteirão — `self.rng` (compartilhado, sequencial) fazia a
         contagem de lotes da quadra N depender de quantos sorteios as quadras 0..N-1
         consumiram. Isso não mordia enquanto X02/X03 só ACRESCENTAVAM quadra (nunca

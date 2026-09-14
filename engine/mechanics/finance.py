@@ -28,7 +28,7 @@ class NPCLegacyManager:
                 
         if not herdeiros and npc.casa_id:
             parceiros = []
-            # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
+            # X04 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
             moradores = self._mundo.npcs_por_casa.get(npc.casa_id, ())
             for n in moradores:
                 if n.id != npc.id:

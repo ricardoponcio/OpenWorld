@@ -5,7 +5,7 @@ FUNÇÃO: Mundo de teste em memória para os gerenciadores de mecânica.
 DESCRIÇÃO:
     Os dublês e as fábricas que tests/test_mecanicas.py usa para montar um
     `EstadoDoMundo` sem banco, sem schema e sem pool de conexões. Vive fora do arquivo
-    de teste porque ele passou do limite de 400 linhas do projeto (ARQUITETURA.md
+    de teste porque ele passou do limite de 400 linhas do projeto (11_ARQUITETURA.md
     Seção 4) — e porque "o mundo de teste" é um assunto só, com uma razão para mudar.
 
     Não é um arquivo de teste: o nome não começa com `test_`, então o pytest não o
@@ -35,7 +35,7 @@ class RepositorioFalso:
     def salvar(self, *args):
         """Aceita tanto `salvar(entidade)` (npcs/locais/eventos) quanto
         `salvar(chave, valor)` (meta, usado por `GameLoop._avancar_relogio` — V03 do
-        docs/PLANO_CIDADE_VIVA.md). Com 1 argumento guarda o valor cru, pra
+        docs/12_PLANO_CIDADE_VIVA.md). Com 1 argumento guarda o valor cru, pra
         `entidade in db.X.salvos` continuar funcionando sem mudança nos testes."""
         self.salvos.append(args[0] if len(args) == 1 else args)
 
@@ -74,7 +74,7 @@ class RepositorioFalso:
         """Meta: devolve o valor da última `salvar(chave, valor)` — procura de trás
         pra frente em `self.salvos` (tuplas `(chave, valor)`). `None` se nunca foi
         salva, mesma semântica do repositório real (F01, docs/
-        PLANO_AVANCO_E_CALIBRAGEM.md: `MestreManager._montar_contexto_de_mundo` lê
+        14_PLANO_AVANCO_E_CALIBRAGEM.md: `MestreManager._montar_contexto_de_mundo` lê
         `MetaChave.CIDADE_SIMULADA` assim)."""
         for item in reversed(self.salvos):
             if isinstance(item, tuple) and len(item) == 2 and item[0] == chave:
@@ -94,7 +94,7 @@ class RepositorioFalso:
 
 
 class RepositorioLoteFalso:
-    """T04/O01 (docs/PLANO_CIDADE_VIVA.md): dublê em memória de RepositorioLote — um
+    """T04/O01 (docs/12_PLANO_CIDADE_VIVA.md): dublê em memória de RepositorioLote — um
     dict de `Lote` por id, o bastante pra `InfrastructureManager` (decay.py) liberar
     terreno e `NPCHousingManager` (housing.py) reservar lote real, sem banco."""
 
@@ -190,7 +190,7 @@ class _EstadosView:
 
 class RepositorioMundoFalso:
     """Dublê de `RepositorioMundo` — só o que `MestreManager._montar_contexto_de_
-    mundo` lê (F01, docs/PLANO_AVANCO_E_CALIBRAGEM.md)."""
+    mundo` lê (F01, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md)."""
 
     def coordenadas(self, cidade_id):
         return (100.0, 100.0)

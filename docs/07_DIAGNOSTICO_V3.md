@@ -2,7 +2,7 @@
 
 > **Para quem é este documento**: para o modelo/desenvolvedor que vai corrigir os problemas
 > encontrados na validação humana de 2026-09-11, depois que as Fases 0–4 do
-> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md) foram concluídas.
+> [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md) foram concluídas.
 >
 > **Este documento é auto-suficiente para as correções que ele descreve.** Você não precisa
 > reler o plano inteiro. Leia, nesta ordem:
@@ -28,7 +28,7 @@ e medida a pedido do usuário. v1.0 era só o diagnóstico.)
 
 ## 0. Regras de trabalho — leia antes de tocar em qualquer coisa
 
-Estas são as mesmas regras da Seção 0 do `PLANO_EVOLUCAO_V2.md`. Elas continuam valendo.
+Estas são as mesmas regras da Seção 0 do `06_PLANO_EVOLUCAO_V2.md`. Elas continuam valendo.
 Repetidas aqui porque este documento é auto-suficiente:
 
 1. **Nunca escreva em `database/` enquanto uma simulação ou reset estiver rodando.**
@@ -57,7 +57,7 @@ Repetidas aqui porque este documento é auto-suficiente:
 6. **Não commite nada.** O usuário valida e commita. (Restrição vigente desde 2026-09-10.)
 
 7. Ao concluir um achado: preencha a Seção 12 (log) deste documento e some uma linha no
-   "Log de Sessões" do [`ROADMAP.md`](ROADMAP.md).
+   "Log de Sessões" do [`05_ROADMAP.md`](05_ROADMAP.md).
 
 ---
 
@@ -262,7 +262,7 @@ comentário explicando (o valor em si é derivado, não precisa de chave nova):
 ```python
 def _mundo(self, x_m, y_m):
     # escala_pixel_area_km2 é ÁREA (km²/px). O lado do pixel é a RAIZ dela.
-    # Ver Seção 2.2 do docs/DIAGNOSTICO_V3.md — D1.
+    # Ver Seção 2.2 do docs/07_DIAGNOSTICO_V3.md — D1.
     metros_por_px = math.sqrt(self.escala_pixel_area_km2) * 1000.0
     return self.cx_mundo + x_m / metros_por_px, self.cy_mundo + y_m / metros_por_px
 ```
@@ -426,7 +426,7 @@ detalhe_local(x_mundo, y_mundo, seed) -> [0,1]
 **viola** a pureza se feito ingenuamente — o mesmo ponto do mundo teria altitude diferente
 em z5 e em z12. A forma correta é o campo **sempre** existir na função, mas ter amplitude tão
 pequena que nos zooms baixos ele some por reamostragem naturalmente. Leia a Seção 2 do
-`PLANO_EVOLUCAO_V2.md` (invariantes F1–F4) antes de implementar isto.
+`06_PLANO_EVOLUCAO_V2.md` (invariantes F1–F4) antes de implementar isto.
 Custo: alto. É uma fase própria.
 
 **Caminho C — Vista de cidade separada (resolve a queixa por outro ângulo).**

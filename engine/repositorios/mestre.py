@@ -36,7 +36,7 @@ class RepositorioMestre:
             conn.cursor().execute('UPDATE mestre_conversas SET aplicada = 1 WHERE id = ?', (conversa_id,))
 
     # ------------------------------------------------------------------
-    # F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): fila de ações de mundo —
+    # F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): fila de ações de mundo —
     # `enfileirar_acoes` é chamado do processo do Flask (nenhum EstadoDoMundo vivo
     # ali); `drenar_acoes_pendentes` é chamado só por run_simulation.py, que aplica
     # cada payload com o mundo vivo.

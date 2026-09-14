@@ -2,7 +2,7 @@
 MODULE: config.py
 FUNÇÃO: Compatibilidade — os parâmetros de cartografia agora moram em `config.json`,
 sob a chave "cartografia", resolvidos pelo pacote `config/` da raiz do projeto
-(ver docs/ROADMAP.md, Frente 1).
+(ver docs/05_ROADMAP.md, Frente 1).
 
 DESCRIÇÃO:
     Este arquivo mantém o nome `CARTOGRAPHER_CONFIG` só para não obrigar a reescrever

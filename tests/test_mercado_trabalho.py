@@ -4,7 +4,7 @@ schema real e dos dados de domínio (profissões/mapeamento categoria->sistema),
 usa `SemeadorDeDominio.aplicar` como `builder/populate.py` faz (mesmo padrão de
 tests/test_repositorio_npc.py: arquivo temporário, nunca `:memory:`).
 
-docs/PLANO_MUNDO_CRIVEL.md, Bloco V (V02/V03): antes desta tarefa, 87,4% das vagas
+docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V (V02/V03): antes desta tarefa, 87,4% das vagas
 do mundo medido eram residências (`buscar_vagas_disponiveis` filtrava por
 `tipo != 'Casa'`, não por categoria empregadora), e todo contratado sem profissão
 mapeada virava "Desempregado" mesmo tendo sido contratado.

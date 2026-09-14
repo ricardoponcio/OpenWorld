@@ -520,7 +520,7 @@ async function confirmarAcoesMestre(conversaId) {
             alert('Erro: ' + data.error);
         } else {
             document.getElementById('mestre-acoes-pendentes').style.display = 'none';
-            // F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): a ação foi ENFILEIRADA, não
+            // F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): a ação foi ENFILEIRADA, não
             // aplicada na hora — só vira efeito de verdade quando run_simulation.py
             // drenar a fila (próximo tick, ou próxima volta do laço se pausado).
             let texto = 'Enviado (será aplicado no próximo tick da simulação):\n' + (data.resultados || []).join('\n');

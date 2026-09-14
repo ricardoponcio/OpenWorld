@@ -6,7 +6,7 @@ DESCRIÇÃO:
     O dashboard Flask não é dono da SimulationEngine (ela roda no processo do
     run_simulation.py) — por isso "avançar o tempo" aqui não tica a engine
     diretamente, só sinaliza via mundo_meta (mesmo padrão já usado por pausa e
-    velocidade) e espera o run_simulation.py consumir. Ver docs/ROADMAP.md, Frente 5.
+    velocidade) e espera o run_simulation.py consumir. Ver docs/05_ROADMAP.md, Frente 5.
 """
 import json
 import time
@@ -28,7 +28,7 @@ def obter_mestre() -> MestreManager:
     return MestreManager(obter_db(), carregar_config_global())
 
 TEMA_PADRAO = "Fantasia Medieval"
-# F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): se uma ação enfileirada há mais tempo do
+# F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): se uma ação enfileirada há mais tempo do
 # que isto ainda não foi aplicada, run_simulation.py provavelmente não está rodando
 # (ou travou) — mesma condição que /api/mestre/avancar_tempo já expõe por timeout,
 # só que agora sem bloquear a requisição esperando.
@@ -86,7 +86,7 @@ def post_mensagem():
 
 @mestre_bp.route('/api/mestre/confirmar_acoes', methods=['POST'])
 def post_confirmar_acoes():
-    """F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): ENFILEIRA as ações propostas de uma
+    """F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): ENFILEIRA as ações propostas de uma
     mensagem do Mestre — só chega aqui depois que o jogador confirmou explicitamente
     na interface. Nunca é chamado sozinho.
 

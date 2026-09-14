@@ -1,5 +1,5 @@
 """
-Testes de `IndiceDeLocais` — docs/PLANO_CIDADE_VIVA.md P01/P02.
+Testes de `IndiceDeLocais` — docs/12_PLANO_CIDADE_VIVA.md P01/P02.
 """
 from engine.indice_locais import IndiceDeLocais
 from engine.models import Local, TipoLocal, CategoriaLocal

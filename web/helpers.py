@@ -11,7 +11,7 @@ def render_npz_array(npz_path_or_data, mundo_px_por_img_px=None):
     RGB puro em vez de bytes PNG (ex.: cartographer/tiles/render.py, o servidor de tiles
     sob demanda da Fase 0). Extraído de render_npz_map_to_bytes (antes só produzia PNG)
     para não haver duas implementações do mesmo pipeline de cor/hillshading — ver
-    docs/ROADMAP.md, Frente 6.
+    docs/05_ROADMAP.md, Frente 6.
 
     Aceita um caminho de arquivo .npz OU o array de dados já carregado (4 canais:
     altitude/temperatura/umidade/bioma). Retorna None se o caminho não existir.

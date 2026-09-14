@@ -3,7 +3,7 @@ MODULE: cidade.py
 FUNÇÃO: Estado de simulação por cidade que a geometria estática (GeoJSON) não carrega.
 
 DESCRIÇÃO:
-    T05 (docs/PLANO_CIDADE_VIVA.md): o GeoJSON de uma cidade guarda o estado INICIAL de
+    T05 (docs/12_PLANO_CIDADE_VIVA.md): o GeoJSON de uma cidade guarda o estado INICIAL de
     cada lote (a foto do momento em que foi gerado); a partir da importação, o banco é
     a verdade (armadilha 2 — cartographer/ nunca escreve estado de simulação). Uma casa
     construída durante o jogo nunca apareceria no mapa se o frontend só lesse o arquivo

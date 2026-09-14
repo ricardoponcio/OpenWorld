@@ -20,7 +20,7 @@ class DestruirLocal(AcaoDeMundo):
         local.integridade = 0
         mundo.desativar_local(acao.alvo_id)
 
-        # F03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): quem morava, trabalhava ou estava
+        # F03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): quem morava, trabalhava ou estava
         # ali reavalia agora — o local que os ocupava não existe mais. Morada/
         # localização usam o índice mantido (A04, O(1)); trabalho não tem índice
         # próprio (é uma ação rara, disparada pelo jogador — O(NPCs) aqui é barato).

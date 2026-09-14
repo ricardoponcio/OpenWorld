@@ -1,5 +1,5 @@
 """
-M01 (docs/PLANO_POPULACAO_E_ESCALA.md): `RepositorioLocal.criar`/`desativar`
+M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `RepositorioLocal.criar`/`desativar`
 incrementam `MetaChave.LOCAIS_VERSAO` na MESMA transação da escrita do local — é o
 contador que `run_simulation.py` usa pra saber que precisa chamar
 `SimulationEngine.recarregar_locais()`, sem recarregar 24 mil locais todo tick.

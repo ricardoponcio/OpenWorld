@@ -1,5 +1,5 @@
 """
-A03 (docs/PLANO_POPULACAO_E_ESCALA.md): `EstadoDoMundo.acordar`/`acordar_cidade` — a
+A03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `EstadoDoMundo.acordar`/`acordar_cidade` — a
 única porta pra "algo de fora da decisão do próprio NPC mudou o que ele quer, reavalie
 agora", furando qualquer salto grande que a agenda (A02) tivesse calculado. E a rede de
 segurança: mesmo sem NENHUM `acordar`, um NPC esquecido volta a decidir dentro do teto

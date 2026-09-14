@@ -1,7 +1,7 @@
 """
 O laço sobre `world_manifest.json`: mede o sítio de cada cidade, escolhe e instancia o
 modelo, gera o GeoJSON (`GeradorCidade`) e escreve arquivo + índice (Q02, docs/
-PLANO_CIDADE_VIVA.md).
+12_PLANO_CIDADE_VIVA.md).
 """
 import os
 import sys

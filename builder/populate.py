@@ -5,10 +5,10 @@ USO: venv/bin/python builder/populate.py --ia-max-thread 4 --tema "Fantasia Medi
 
 DESCRIÇÃO:
     Ponto de entrada fino — a orquestração real mora em `builder/populador.py`
-    (`PopuladorDeMundo`, R-D03 do PLANO_REFATORACAO.md).
+    (`PopuladorDeMundo`, R-D03 do 10_PLANO_REFATORACAO.md).
 
-    P07 (docs/PLANO_CIDADE_VIVA.md, D1): a população nasce em TODAS as cidades ativas
-    (config `cidades_ativas`). R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): não
+    P07 (docs/12_PLANO_CIDADE_VIVA.md, D1): a população nasce em TODAS as cidades ativas
+    (config `cidades_ativas`). R03 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): não
     existe mais uma base de NPCs por cidade configurável aqui — o cartógrafo decide
     quantos domicílios cada cidade tem (R01/R02), o povoador conta as residências
     ocupadas e sorteia o tamanho de cada família (`npcs_por_familia_faixa`).

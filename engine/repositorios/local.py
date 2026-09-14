@@ -43,7 +43,7 @@ class RepositorioLocal:
             ))
 
     def salvar_em_lote(self, locais: list) -> None:
-        """T02 (docs/PLANO_CIDADE_VIVA.md): importação inicial de uma cidade inteira —
+        """T02 (docs/12_PLANO_CIDADE_VIVA.md): importação inicial de uma cidade inteira —
         uma transação só, em vez de um commit por edifício (24.423 locais viravam
         24.423 commits num reset)."""
         if not locais:
@@ -79,7 +79,7 @@ class RepositorioLocal:
 
     @staticmethod
     def _incrementar_versao(cursor) -> None:
-        """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): incrementa `MetaChave.LOCAIS_VERSAO`
+        """M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): incrementa `MetaChave.LOCAIS_VERSAO`
         na MESMA transação (mesmo cursor/conexão) da escrita do local — é o que
         `run_simulation.py` usa pra saber, sem recarregar tudo, que precisa chamar
         `recarregar_locais()`."""
@@ -98,7 +98,7 @@ class RepositorioLocal:
         """Projeção enxuta (id, nome, tipo) de locais ativos DA CIDADE, usada pelo
         contexto do Modo Mestre — evita carregar e desserializar `coordenadas` de
         toda cidade (`carregar_por_id`) só para montar uma lista textual pro prompt
-        da IA. M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade e
+        da IA. M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade e
         exclui residências — a contagem agregada (`contar_residencias_ativas`) é o
         que o contexto precisa, não 22.624 linhas de "Residência X"."""
         with self.db.connection() as conn:
@@ -142,7 +142,7 @@ class RepositorioLocal:
             )
 
     def buscar_vagas_disponiveis(self, cidade_id, categorias_empregadoras: list) -> list:
-        """V02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): vaga é sempre da PRÓPRIA cidade
+        """V02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): vaga é sempre da PRÓPRIA cidade
         (`cidade_id`) e de uma categoria EMPREGADORA (`urbanismo.
         categorias_empregadoras`) — nunca mais filtrado por `tipo != 'Casa'`, que
         deixava passar 'Residência' (tipo real é 'Casa' desde V01) e qualquer cidade:
@@ -170,7 +170,7 @@ class RepositorioLocal:
             return cursor.fetchall()
 
     def cidade_tem_local_social(self, cidade_id) -> bool:
-        """M03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): a cidade tem ao menos uma
+        """M03 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): a cidade tem ao menos uma
         taverna/praça ativa — o invariante 5/9 de V05 (audit_mundo.py, fora do
         runtime), reimplementado aqui porque o Mestre roda no processo web."""
         with self.db.connection() as conn:

@@ -1,5 +1,5 @@
 """
-A04 (docs/PLANO_POPULACAO_E_ESCALA.md): `EstadoDoMundo.npcs_por_casa`/
+A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `EstadoDoMundo.npcs_por_casa`/
 `npcs_por_localizacao`/`npcs_por_cidade` — índices mantidos incrementalmente por
 `mover_npc`/`mudar_casa`/`registrar_npc`/`remover_npc`, no lugar de recalculados do
 zero a cada tick (P03/N04). O teste mais importante deste arquivo é o último

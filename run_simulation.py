@@ -7,9 +7,9 @@ from engine.models import MetaChave
 
 
 def sincronizar_locais_se_mudou(engine, ultima_versao_vista: str) -> str:
-    """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): resolve o caminho "alguém escreveu
+    """M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): resolve o caminho "alguém escreveu
     Local direto no banco, fora deste processo" — hoje isso não acontece mais pelo
-    Modo Mestre (F01, docs/PLANO_AVANCO_E_CALIBRAGEM.md: as ações dele aplicam
+    Modo Mestre (F01, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md: as ações dele aplicam
     DENTRO deste processo, via `drenar_acoes_do_mestre`, com o mundo já atualizado
     na hora), mas o mecanismo continua existindo — é o que o dashboard usaria se um
     dia escrever Local por fora também. Um `SELECT` de uma linha por tick é ruído (o
@@ -24,7 +24,7 @@ def sincronizar_locais_se_mudou(engine, ultima_versao_vista: str) -> str:
 
 
 def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
-    """F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): drena a fila de ações de mundo do
+    """F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): drena a fila de ações de mundo do
     Modo Mestre a cada volta do laço — INCLUSIVE pausado (mesmo padrão de
     `sincronizar_locais_se_mudou`/`AVANCAR_MINUTOS`: o Mestre prepara cena com a
     simulação parada). Aplica com o `EstadoDoMundo` vivo deste processo — nunca por
@@ -34,10 +34,10 @@ def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
 
 def start_simulation():
     # Este é o ponto de entrada: é aqui que as dependências são construídas, uma vez
-    # por processo (ARQUITETURA.md Seção 7). Os gerenciadores recebem o `EstadoDoMundo`
+    # por processo (11_ARQUITETURA.md Seção 7). Os gerenciadores recebem o `EstadoDoMundo`
     # e a config, nunca a engine inteira (R-F01).
     #
-    # X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket.processar_contratacoes`
+    # X03 (docs/15_PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket.processar_contratacoes`
     # e `InfrastructureManager.processar_desgaste`/`processar_reparos_espontaneos`
     # SAÍRAM daqui — moravam num `processar_gatilhos_periodicos` próprio, fora de
     # qualquer benchmark (armadilha 16: 21% do custo real por dia simulado nunca

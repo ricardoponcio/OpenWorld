@@ -1,5 +1,5 @@
 """
-X02 (docs/PLANO_CIDADE_VIVA.md) — a geometria do arrabalde: função pura no cartógrafo.
+X02 (docs/12_PLANO_CIDADE_VIVA.md) — a geometria do arrabalde: função pura no cartógrafo.
 
 `gerar_arrabalde` não abre banco, não escreve arquivo, não sabe o que é um NPC — só lê o
 `GeoJSON` atual da cidade (dict já carregado) e o `SitioCidade` (terreno), e devolve
@@ -21,7 +21,7 @@ from .modelos.base import distancia_faixa_dominio, gerar_fileiras_de_quadras
 # Penalidades de pontuação de direção — internos do algoritmo, não config (mesmo
 # precedente de PROFUNDIDADE_CORTE_MAXIMA em geometria/lotes.py e
 # FRACAO_VAO_MAXIMA_SEGURA em modelos/radial.py: número de calibração de geometria, não
-# de balanceamento de simulação — ARQUITETURA.md P3 é sobre o segundo).
+# de balanceamento de simulação — 11_ARQUITETURA.md P3 é sobre o segundo).
 PESO_AGUA = 5.0
 PESO_SETOR_USADO = 2.0
 N_AMOSTRAS_DECLIVIDADE = 5
@@ -229,7 +229,7 @@ def _gerar_features_e_lotes(eixo_pontos, banda_arrabalde, bairro, numero_arrabal
         if _quadra_conflita_com_existentes(quadra.vertices, existentes_locais):
             continue  # invadiria a última banda existente perto do portão — descarta
         quarteirao_id_str = _quarteirao_id_str(quadra.id)
-        # L03 (docs/PLANO_POPULACAO_E_ESCALA.md): mesmo raciocínio de
+        # L03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): mesmo raciocínio de
         # `GeradorCidade._gerar_quarteiroes_e_lotes` — cada quadra do arrabalde sorteia
         # com um RNG PRÓPRIO, derivado do id do quarteirão, em vez de um `rng`
         # sequencial compartilhado entre todas. `zlib.crc32`, nunca `hash()`.
@@ -261,7 +261,7 @@ def _gerar_features_e_lotes(eixo_pontos, banda_arrabalde, bairro, numero_arrabal
             if not quad.e_quad_simples(poligono):
                 continue
             if quad.aresta_minima(poligono) < ARESTA_MINIMA_LOTE_M:
-                continue  # C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mesmo guard de gerador.py
+                continue  # C02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): mesmo guard de gerador.py
             lote_id = f"{slug}_{quarteirao_id_str}_l{info['indice_no_anel']:02d}"
             _add("Polygon", poligono, "lote", {
                 "bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str,
@@ -289,7 +289,7 @@ def gerar_arrabalde(sitio, geojson_atual, lotes_alvo, seed_expansao, config,
 
     Função pura: não abre banco, não escreve arquivo, não sabe o que é um NPC. Quem
     decide QUANDO chamar é `engine/mechanics/urbanismo.py`; quem decide COMO fica a
-    geometria é aqui (armadilha 2 do docs/PLANO_CIDADE_VIVA.md).
+    geometria é aqui (armadilha 2 do docs/12_PLANO_CIDADE_VIVA.md).
     """
     slug = sitio.nome.lower().replace(" ", "_")
     portoes = _ler_portoes_locais(geojson_atual, sitio)

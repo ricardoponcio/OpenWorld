@@ -1,5 +1,5 @@
 """
-A02 (docs/PLANO_POPULACAO_E_ESCALA.md): `GameLoop` de ponta a ponta com a agenda de
+A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `GameLoop` de ponta a ponta com a agenda de
 decisões — prova que um NPC estável (dormindo, sem nada mudando) para de ser
 processado todo tick, que o efeito acumulado ainda bate com o que seria minuto a
 minuto, e que fome/energia continuam nunca pulando por cima de um limiar de verdade.
@@ -67,7 +67,7 @@ def test_fome_nunca_ultrapassa_o_limiar_apos_muitos_ticks_pulados():
 
 
 def test_comer_pula_ticks_quando_tem_fome_e_dinheiro_de_sobra():
-    """H04 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): COMER deixou de ser reavaliado a
+    """H04 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): COMER deixou de ser reavaliado a
     cada minuto — um NPC rico e ainda longe de `esta_comendo_fome_minima` recebe um
     salto de mais de 1 minuto, ao contrário do comportamento de antes de H04."""
     npc = adulto("npc_1", "Comendo", acao_atual=Acao.COMER, fome=50.0,

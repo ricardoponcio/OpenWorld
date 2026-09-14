@@ -2,7 +2,7 @@ from ..models import Lote, LoteEstado, CategoriaLocal
 
 
 class RepositorioLote:
-    """T01 (docs/PLANO_CIDADE_VIVA.md): SQL da tabela `lotes` — terreno urbano como
+    """T01 (docs/12_PLANO_CIDADE_VIVA.md): SQL da tabela `lotes` — terreno urbano como
     entidade de primeira classe. A GEOMETRIA do lote vem do GeoJSON do cartógrafo
     (imutável); este repositório é o único lugar que muda o ESTADO (armadilha 2)."""
 
@@ -39,7 +39,7 @@ class RepositorioLote:
         condicional — não um SELECT seguido de UPDATE. O pool tem várias conexões e o
         dashboard escreve no mesmo banco; leitura-depois-escrita entregaria o mesmo
         lote pra dois casais. Devolve o id do lote reservado, ou `None` quando não
-        havia nenhum livre — estado normal da cidade saturada (ARQUITETURA.md P5:
+        havia nenhum livre — estado normal da cidade saturada (11_ARQUITETURA.md P5:
         falhar alto é pra config ausente, não pra estado de jogo esperado), não uma
         exceção; `None` é o sinal que dispara a auto-expansão do Bloco X.
 
@@ -104,7 +104,7 @@ class RepositorioLote:
                 (LoteEstado.LIVRE.value, lote_id, LoteEstado.OCUPADO.value))
 
     def contar_residencias_ocupadas(self, cidade_id: int) -> int:
-        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): quantos domicílios nasceram
+        """R03 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): quantos domicílios nasceram
         ocupados nesta cidade — um lote 'ocupado' cujo Local é uma RESIDÊNCIA (marco e
         comércio de bairro também nascem 'ocupados', T03/D2, e não contam como família).
         Cada residência ocupada é uma família, no contrato de R00: o cartógrafo decide

@@ -20,7 +20,7 @@ class RepositorioEvento:
             ))
 
     def salvar_muitos(self, eventos: list) -> None:
-        """E01 (docs/PLANO_POPULACAO_E_ESCALA.md): uma transação pra TODOS os eventos
+        """E01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): uma transação pra TODOS os eventos
         do tick, não um commit por evento — mesmo padrão de `RepositorioNPC.
         salvar_muitos` (P05). `processar_interacao_social` chamava `salvar` um de
         cada vez: ~170 interações/tick com 25.000 NPCs, ~170 commits só nisto."""
@@ -34,7 +34,7 @@ class RepositorioEvento:
                  for evento in eventos])
 
     def podar_por_idade(self, dia_de_corte: int) -> int:
-        """E02 (docs/PLANO_POPULACAO_E_ESCALA.md): apaga da tabela `eventos` (NUNCA
+        """E02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): apaga da tabela `eventos` (NUNCA
         `eventos_globais` — outra tabela, outra semântica, o `GlobalEventManager`
         depende dela) tudo com "Dia N" anterior a `dia_de_corte`. `timestamp` é o
         texto RPG ("Dia 42, 14:30" — `RelogioMundo.timestamp_rpg`); extrai o número
@@ -68,7 +68,7 @@ class RepositorioEvento:
             return [dict(r) for r in rows]
 
     def resumos_recentes(self, limite: int) -> list:
-        """M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): os N mais recentes de FORA da
+        """M02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): os N mais recentes de FORA da
         fofoca (CONVERSA/DISCUSSAO) — antes, "os 10 últimos por rowid" era
         estatisticamente 9 linhas de "tiveram uma conversa" (99,1% do log medido)
         e ~1 fato de verdade. `resumos_recentes_de_fofoca` cobre a fofoca à parte."""
@@ -94,7 +94,7 @@ class RepositorioEvento:
             return cursor.fetchall()
 
     def ids_envolvidos_recentes_na_cidade(self, cidade_id, limite: int) -> set:
-        """M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): quem apareceu num evento
+        """M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): quem apareceu num evento
         recente NESTA cidade — prioridade nº 1 pro contexto do Mestre quando a
         cidade tem mais gente que o teto: o NPC que acabou de nascer, casar ou
         morrer não pode sumir do recorte por azar de ordenação."""

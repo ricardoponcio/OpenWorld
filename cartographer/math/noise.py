@@ -73,7 +73,7 @@ class NoiseGenerator:
         `lacunaridade` controla quanto a frequência sobe. Os defaults (0.5/2.0)
         preservam o comportamento histórico do projeto para os chamadores que
         ainda não foram migrados para passar esses valores explicitamente a
-        partir de config["cartografia"] (ver docs/AUDITORIA_HARDCODE.md).
+        partir de config["cartografia"] (ver docs/02_AUDITORIA_HARDCODE.md).
         """
         grid_x = np.asarray(grid_x, dtype=np.float32)
         grid_y = np.asarray(grid_y, dtype=np.float32)
@@ -163,7 +163,7 @@ class NoiseGenerator:
         `config` é o bloco config["cartografia"] (via `cfg_get`) — antes esta função
         tinha suas próprias constantes de classe (DEFAULT_TECTONIC_*) que duplicavam
         (e podiam divergir) as chaves de config equivalentes, e ignorava por completo
-        `persistencia`/`lacunariedade`. Ver docs/AUDITORIA_HARDCODE.md.
+        `persistencia`/`lacunariedade`. Ver docs/02_AUDITORIA_HARDCODE.md.
 
         `oitavas_extra` (Fase 0.3, F3): acrescenta oitavas de alta frequência sem alterar
         a forma grossa — é o mecanismo de LOD por zoom. Some às contagens de oitava base,

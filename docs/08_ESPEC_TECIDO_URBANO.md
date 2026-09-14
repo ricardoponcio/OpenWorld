@@ -5,8 +5,8 @@
 > construções, ruas com faixa de domínio, e cidades diferentes umas das outras.
 >
 > **Este documento é auto-suficiente.** Você não precisa reler o
-> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md) nem o
-> [`DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md) inteiros. Leia, nesta ordem:
+> [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md) nem o
+> [`07_DIAGNOSTICO_V3.md`](07_DIAGNOSTICO_V3.md) inteiros. Leia, nesta ordem:
 > **Seção 0** (regras de trabalho) → **Seção 1** (o pedido) → **Seção 2** (escala, curta mas
 > obrigatória) → **Seção 3** (o que está errado hoje, com medição) → **Seção 5** (decisões já
 > tomadas, não as reabra) → **Seção 6** (a especificação, passo a passo) → **Seção 7** (ordem).
@@ -27,13 +27,13 @@ acrescenta a Seção 3.5.1, o limite real de escala, que só apareceu nessa medi
 **Estado do mundo medido**: `database/world_manifest.json`, 5 continentes, 15 cidades,
 15 arquivos em `database/cidades/`, `database/openworld.db` com 539 locais e 20 NPCs.
 **Pré-requisitos já concluídos** (não refaça): D1 (escala), D9 (bbox das feições) e as ruas
-com largura em metros. Ver "Log de Sessões" do [`ROADMAP.md`](ROADMAP.md), partes 16 a 18.
+com largura em metros. Ver "Log de Sessões" do [`05_ROADMAP.md`](05_ROADMAP.md), partes 16 a 18.
 
 ---
 
 ## 0. Regras de trabalho — leia antes de tocar em qualquer coisa
 
-As seis primeiras são as mesmas da Seção 0 do `PLANO_EVOLUCAO_V2.md` e continuam valendo.
+As seis primeiras são as mesmas da Seção 0 do `06_PLANO_EVOLUCAO_V2.md` e continuam valendo.
 Repetidas aqui porque este documento é auto-suficiente.
 
 1. **Nunca escreva em `database/` enquanto uma simulação ou reset estiver rodando.**
@@ -295,7 +295,7 @@ cheio**, e é o produto NPCs × locais que estoura, não nenhum dos dois sozinho
 indexar `engine.locais` por `cidade_id` e varrer só a cidade do NPC, o que devolve 15x.
 
 **Isto está fora do escopo deste documento** (é motor, não cartografia). Não faça aqui.
-Registre no `ROADMAP.md` como frente própria, para que não vire descoberta de última hora
+Registre no `05_ROADMAP.md` como frente própria, para que não vire descoberta de última hora
 quando o mundo for povoado.
 
 ### 3.6 Custo de servir — onde está o gargalo
@@ -814,7 +814,7 @@ Cole o output real de cada um na Seção 11.
 - **Indexar `engine.locais` por cidade.** É o limite real de escala medido na Seção 3.5.1:
   as varreduras por tick são O(NPCs × locais do mundo inteiro), o que aguenta 200 NPCs e não
   aguenta 2.000. É motor, não cartografia, e é anterior a este trabalho. **Registre como
-  frente própria no `ROADMAP.md`**, não conserte aqui.
+  frente própria no `05_ROADMAP.md`**, não conserte aqui.
 - **Reduzir o número de NPCs ou mexer no `JobMarket`.**
 
 ---
@@ -1002,7 +1002,7 @@ do contrato da Seção 3.5: **cada `edificio` é um `Local`, um para um.**
 - [x] Tempo de geração: `0,76s -> 4,37s` para as 15 cidades (bem dentro da 1h autorizada;
   `node --check web/static/js/mapa_leaflet.js` e o JSON do config também validados)
 - [x] Peso de `database/cidades/`: `1,2 MB -> 52 MB` (usuário autorizou muito mais)
-- [x] Linha somada ao "Log de Sessões" do `ROADMAP.md` (Frente 7 nova + entrada de log)
+- [x] Linha somada ao "Log de Sessões" do `05_ROADMAP.md` (Frente 7 nova + entrada de log)
 
 **Pendências para o autor** (não podem ser fechadas por este modelo nesta sessão):
 1. Validação **visual** no dashboard (zoom 13/14) — a extensão do Chrome não conectou.

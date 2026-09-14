@@ -1,5 +1,5 @@
 """
-A02 (docs/PLANO_POPULACAO_E_ESCALA.md): testes de `engine/mechanics/agenda.py` — o
+A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): testes de `engine/mechanics/agenda.py` — o
 cálculo puro de "quando este NPC precisa ser reavaliado de novo". Compara sempre contra
 os limiares reais de `config.json` (carregado de verdade, não um dublê) porque a
 propriedade que importa — nunca pular por cima de um limiar — depende dos valores
@@ -39,7 +39,7 @@ def test_npc_agendado_pro_futuro_nao_esta_em_dia():
 
 
 def test_acao_nao_loteavel_agenda_so_um_minuto():
-    """SOCIALIZAR (docs/PLANO_AVANCO_E_CALIBRAGEM.md, H04): a única ação que continua
+    """SOCIALIZAR (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, H04): a única ação que continua
     de fora de `ACOES_LOTEAVEIS` depois de H04 generalizar CUIDAR_PROLE/CONSTRUIR/
     COMER — usada aqui só pra provar que o caminho "não loteável" ainda existe."""
     config = _config()
@@ -67,7 +67,7 @@ def test_dormir_nao_ultrapassa_o_limiar_de_fome_dormindo():
     """O cruzamento tem que parar ANTES (ou exatamente n)o limiar, nunca depois —
     é a garantia central da armadilha 11.
 
-    H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): o limiar real deste NPC
+    H03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): o limiar real deste NPC
     tem um desvio pessoal, permanente e determinístico (`agenda._desvio_relativo_npc`)
     — a mesma conta que `calcular_proximo_instante` faz por baixo, não o valor bruto
     da config."""
@@ -109,7 +109,7 @@ def test_energia_desmaio_nao_e_ultrapassada_trabalhando():
 
 
 def test_jitter_e_deterministico():
-    """H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): o mesmo NPC (mesmo id)
+    """H03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): o mesmo NPC (mesmo id)
     recebe sempre o MESMO desvio, em qualquer chamada — prova que o jitter não usa
     `random` puro (o que tornaria o mundo irreproduzível com a mesma seed). Também
     prova que `zlib.crc32` (não `hash()`) é o que está por baixo — `hash()` de string
@@ -152,7 +152,7 @@ def test_jitter_nas_fronteiras_desincroniza_uma_populacao_homogenea():
 
 
 def test_baldes_somam_a_populacao():
-    """H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): o invariante que sustenta o bloco
+    """H01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): o invariante que sustenta o bloco
     inteiro — todo NPC vivo está em EXATAMENTE um lugar da agenda (balde de minuto,
     conjunto de consequência, ou "sem agenda ainda"). Roda parto (esposa grávida),
     morte (solteiro com saúde baixa) e o metabolismo normal por 100 ticks, e confere

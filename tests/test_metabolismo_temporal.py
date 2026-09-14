@@ -1,5 +1,5 @@
 """
-A01 (docs/PLANO_POPULACAO_E_ESCALA.md): a espinha dorsal do Bloco A. Aplicar 480
+A01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): a espinha dorsal do Bloco A. Aplicar 480
 minutos de metabolismo de uma vez tem que dar o MESMO resultado que aplicar 1 minuto
 480 vezes — é o que permite ao Bloco A (agenda de decisões) pular tempo em vez de
 processar todo NPC todo minuto (armadilha 11).

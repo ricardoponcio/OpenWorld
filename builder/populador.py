@@ -8,7 +8,7 @@ DESCRIÇÃO:
     procedural), forma casais e laços sociais, e inicializa o mercado de trabalho.
 
     Cada fase é um método; o estado compartilhado entre fases é atributo da instância,
-    não variável local de uma função de 227 linhas (R-D03 do PLANO_REFATORACAO.md).
+    não variável local de uma função de 227 linhas (R-D03 do 10_PLANO_REFATORACAO.md).
 
     ⚠️ Limitação conhecida (Anexo 3, bug #5): `nomes_gerados` (passado à IA pra evitar
     nomes repetidos) só é atualizado DEPOIS que o `ThreadPoolExecutor` termina o lote
@@ -44,7 +44,7 @@ CIDADES_GEOJSON_DIR = "database/cidades"
 
 
 def _centroide_mundo(geom):
-    """[lng, lat] = [x_mundo, -y_mundo] (Seção 2.3 do docs/PLANO_CIDADE_VIVA.md) — desfaz
+    """[lng, lat] = [x_mundo, -y_mundo] (Seção 2.3 do docs/12_PLANO_CIDADE_VIVA.md) — desfaz
     de volta pra pixel de mundo. Um Polygon (edifício, lote — E4/Q01) usa o centroide do
     anel externo; um Point (GeoJSON antigo em disco, ou o paliativo abaixo, que ainda
     produz ponto) usa a coordenada direto. Extraído pra não copiar a mesma conta pra
@@ -66,13 +66,13 @@ def _importar_locais_da_geometria(db, cidade, config):
     paliativo da Fase 2.1/2.2 (sortear ponto aleatório num raio ao redor do
     pixel-âncora) pela geometria real da cidade (ruas, quarteirões, lotes, muralha).
 
-    T02 (docs/PLANO_CIDADE_VIVA.md): na mesma passada, importa também os LOTES (camada
+    T02 (docs/12_PLANO_CIDADE_VIVA.md): na mesma passada, importa também os LOTES (camada
     "lote", Q01) como `Lote` — o terreno que ainda não tem edifício em cima entra como
     'livre', pronto pra Bloco O reservar. `estado` inicial é 'ocupado' quando existe um
     edifício com o MESMO id (armadilha 3: o edifício É o lote onde está, mesmo id) —
     um `set` de ids, não busca geométrica.
 
-    V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo` nasce derivado de `categoria`
+    V01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo` nasce derivado de `categoria`
     via `tipo_local_de_categoria` — nunca mais copiado de `props["tipo_local"]`, que é
     só o nome de sabor (`tipo_local`, campo próprio, inalterado).
 
@@ -203,7 +203,7 @@ class PopuladorDeMundo:
         self.npcs_gerados = []
 
     def executar(self) -> None:
-        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): não existe mais uma base de
+        """R03 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): não existe mais uma base de
         NPCs por cidade vinda do config — o cartógrafo já decidiu quantos domicílios a
         cidade tem (R01/R02), o povoador só CONTA quantas residências nasceram
         ocupadas e sorteia o tamanho de cada família (`npcs_por_familia_faixa`)."""
@@ -233,7 +233,7 @@ class PopuladorDeMundo:
         self.cidades_salvas = CartographyImporter.import_manifest(self.db, MANIFEST_PATH)
 
     def _eleger_cidades_ativas(self) -> None:
-        """P07 (docs/PLANO_CIDADE_VIVA.md, D1): população em TODAS as cidades ativas,
+        """P07 (docs/12_PLANO_CIDADE_VIVA.md, D1): população em TODAS as cidades ativas,
         não só a de spawn — `cidades_ativas` no config aceita 'todas' (literal, não
         `None`, pra intenção ficar escrita) ou uma lista de nomes.
 
@@ -295,7 +295,7 @@ class PopuladorDeMundo:
             self.locais_trabalho_por_cidade[cid['db_id']] = candidatos
 
     def _familias_da_cidade(self, cidade_id: int) -> list:
-        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): as casas ocupadas da
+        """R03 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): as casas ocupadas da
         cidade, uma por família — contrato de R00: o cartógrafo decide quantos
         domicílios a cidade tem, o povoador CONTA o resultado, nunca recalcula.
         `contar_residencias_ocupadas` lê o estado que vive no banco (T01), fonte de
@@ -358,7 +358,7 @@ class PopuladorDeMundo:
         return resultados
 
     def _sortear_idade_e_estagio(self, faixas: list) -> tuple:
-        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): sorteia uma faixa etária por
+        """G01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): sorteia uma faixa etária por
         peso, uma idade uniforme DENTRO dela, e DERIVA o estágio de vida da idade
         (nunca sorteado à parte, ou os dois divergem no primeiro
         `processar_crescimento`). Devolve `(idade_dias, estagio_vida)`."""
@@ -482,7 +482,7 @@ class PopuladorDeMundo:
         return casais
 
     def _gerar_criancas_iniciais(self, casais: list) -> None:
-        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): o povoamento inicial nascia
+        """G01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): o povoamento inicial nascia
         sem criança nenhuma (`proporcao_adultos` só dividia entre adulto/idoso) — a
         população inteira se aposentava e morria junta (a coorte sincronizada do §1
         do documento). Bebê/criança só entram AQUI, DEPOIS dos casais formados, com
@@ -571,7 +571,7 @@ class PopuladorDeMundo:
 
     def _inicializar_mercado_de_trabalho(self) -> None:
         print("\n💼 Inicializando mercado de trabalho e preenchendo vagas...")
-        # P01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): sem `mundo` de propósito — é
+        # P01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): sem `mundo` de propósito — é
         # povoamento, antes de existir um `EstadoDoMundo`. `JobMarket` cai no caminho
         # só-banco.
         market = JobMarket(self.db, get_config())

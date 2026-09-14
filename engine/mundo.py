@@ -26,7 +26,7 @@ class EstadoDoMundo:
     data_simulada: datetime
     db: object
     tick_count: int = 0
-    # P01 (docs/PLANO_CIDADE_VIVA.md): índices de leitura por cidade e por papel sobre
+    # P01 (docs/12_PLANO_CIDADE_VIVA.md): índices de leitura por cidade e por papel sobre
     # o MESMO dicionário `locais` — construído uma vez, aqui, a partir do estado inicial
     # (repr=False/compare=False: não é dado de identidade do mundo, é derivado dele).
     # `locais` continua sendo o acesso por id; o índice é a fonte pra consulta por
@@ -34,7 +34,7 @@ class EstadoDoMundo:
     # local por fora de `registrar_local`/`desativar_local` deixa isto desatualizado.
     indice: IndiceDeLocais = field(default=None, repr=False, compare=False)
 
-    # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): agrupamentos de NPC mantidos, no mesmo
+    # A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): agrupamentos de NPC mantidos, no mesmo
     # espírito do índice de locais acima — construídos uma vez aqui a partir do estado
     # inicial, e daí em diante atualizados incrementalmente pelos métodos abaixo, nunca
     # recomputados do zero no laço do tick (era 17,3 ms/tick com 25.000 NPCs).
@@ -44,7 +44,7 @@ class EstadoDoMundo:
     npcs_por_localizacao: Dict = field(default=None, repr=False, compare=False)
     npcs_por_cidade: Dict = field(default=None, repr=False, compare=False)
 
-    # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): casas cuja composição
+    # H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): casas cuja composição
     # (quem mora lá, quem é dependente de quem) mudou desde a última vez que
     # `GameLoop._atualizar_dependentes` rodou — substitui a assinatura calculada
     # sobre TODAS as casas todo tick (N04), que custava ~16% do piso medido com
@@ -61,7 +61,7 @@ class EstadoDoMundo:
     # `_atualizar_dependentes` recalcular o mundo inteiro por engano.
     ha_falecidos_pendentes: bool = field(default=False, repr=False, compare=False)
 
-    # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): a agenda de decisões
+    # H01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): a agenda de decisões
     # (A02) virou ESTRUTURA DE DADOS, não predicado — `GameLoop` não pergunta mais
     # "você está em dia?" a cada um dos NPCs vivos, todo tick (isso continuava sendo
     # O(NPCs), que é exatamente o que a agenda existia pra eliminar). Todo NPC vivo
@@ -87,7 +87,7 @@ class EstadoDoMundo:
             self._reconstruir_indices_de_npc()
 
     # ------------------------------------------------------------------
-    # P02 (docs/PLANO_CIDADE_VIVA.md): único caminho de escrita de Local — um índice
+    # P02 (docs/12_PLANO_CIDADE_VIVA.md): único caminho de escrita de Local — um índice
     # que alguém esquece de atualizar é pior que nenhum índice (o bug é intermitente e
     # invisível). Todo lugar que cria ou desativa um Local (housing, urbanismo, decay,
     # ações do Modo Mestre) passa por aqui, nunca por `db.locais.salvar` direto.
@@ -114,7 +114,7 @@ class EstadoDoMundo:
         self.db.locais.salvar(local)
 
     # ------------------------------------------------------------------
-    # A03 (docs/PLANO_POPULACAO_E_ESCALA.md): única porta pra "algo de fora da
+    # A03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): única porta pra "algo de fora da
     # decisão do próprio NPC mudou o que ele quer, reavalie agora" — a agenda de
     # decisões (A02) só é segura porque todo evento que precisa de reação imediata
     # passa por aqui, e o teto de segurança (`simulacao_intervalo_maximo_decisao_min`)
@@ -143,7 +143,7 @@ class EstadoDoMundo:
                 self.acordar(npc)
 
     # ------------------------------------------------------------------
-    # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): único caminho pra mudar
+    # A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): único caminho pra mudar
     # `casa_id`/`localizacao_atual_id` de um NPC vivo, e pra registrar/remover um NPC
     # do mundo — mesmo padrão de `registrar_local`/`desativar_local` (P02). Um índice
     # que alguém esquece de atualizar é pior que nenhum índice: o NPC some do lugar
@@ -229,7 +229,7 @@ class EstadoDoMundo:
         self.ha_falecidos_pendentes = True
 
     # ------------------------------------------------------------------
-    # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): a agenda de decisões (A02) vira
+    # H01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): a agenda de decisões (A02) vira
     # estrutura de dados. `agendar_decisao`/`marcar_consequencia` são as únicas portas
     # que colocam um NPC num balde ou no conjunto de consequência; `_remover_da_agenda`
     # é o passo comum de "tire-o de onde estiver primeiro" que as duas usam por baixo
@@ -284,8 +284,8 @@ class EstadoDoMundo:
                 return
 
     def mudar_cidade(self, npc, cidade_id) -> None:
-        """A05 (docs/PLANO_POPULACAO_E_ESCALA.md): SÓ A PORTA — nada na simulação
-        chama isto ainda. P04 (docs/PLANO_CIDADE_VIVA.md) fixou que um NPC não
+        """A05 (docs/13_PLANO_POPULACAO_E_ESCALA.md): SÓ A PORTA — nada na simulação
+        chama isto ainda. P04 (docs/12_PLANO_CIDADE_VIVA.md) fixou que um NPC não
         atravessa cidade, e boa parte do ganho de performance do projeto depende
         disso continuar valendo dentro de um tick; esta porta existe pra quando uma
         mecânica de migração precisar existir (cidade que decai perde gente, cidade

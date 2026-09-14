@@ -19,7 +19,7 @@ class RepositorioNPC:
         self.db = db
 
     def _carregar_relacionamentos_por_npc(self, conn) -> dict:
-        """P03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): a tabela `relacionamentos` (tem
+        """P03 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): a tabela `relacionamentos` (tem
         `vinculo`, e é o que `listar_relacionamentos_gerais`/o Mestre consultam) é a
         fonte de verdade — não mais a coluna JSON de `npcs`, que `salvar_muitos` (fim
         de tick) nunca escreve. UMA consulta pra todos os NPCs, agrupada em memória —
@@ -92,7 +92,7 @@ class RepositorioNPC:
 
     # Colunas que mudam a cada minuto simulado, para todo NPC vivo — o que
     # `salvar_muitos` (a escrita de fim de tick) de fato precisa regravar.
-    # P02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc` e `gravidez_ticks`
+    # P02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc` e `gravidez_ticks`
     # mudam a cada minuto simulado (trabalhar/comer/socializar; gestação) e ficaram de
     # fora por engano quando N02 (doc 2) montou esta lista — o sintoma era o reload de
     # `run_simulation.py` (a cada 5h) restaurar o dinheiro gravado no povoamento e
@@ -102,7 +102,7 @@ class RepositorioNPC:
                         "localizacao_atual_id", "dinheiro_total_pc", "gravidez_ticks")
 
     def salvar_completo(self, npcs: list) -> None:
-        """N02 (docs/PLANO_POPULACAO_E_ESCALA.md): a linha INTEIRA, numa transação só —
+        """N02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): a linha INTEIRA, numa transação só —
         o que `salvar_muitos` fazia antes desta tarefa (P05). Para as colunas FRIAS,
         que só mudam num evento de verdade: nascimento, morte, casamento, mudança de
         casa, contratação, crescimento de estágio de vida. Chame este método NESSES
@@ -110,7 +110,7 @@ class RepositorioNPC:
         que ainda não existe no banco (`salvar_muitos`, por ser `UPDATE`, não cria
         linha: ver o aviso no docstring dele).
 
-        P03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): a coluna `relacionamentos` gravada
+        P03 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): a coluna `relacionamentos` gravada
         aqui é CÓPIA DE LEITURA (a poda de H05 e o dashboard leem ela), não fonte —
         `carregar_todos` lê da tabela `relacionamentos` (que tem `vinculo`, e é o que
         o Mestre consulta), nunca mais desta coluna."""
@@ -133,7 +133,7 @@ class RepositorioNPC:
                  for npc in npcs])
 
     def salvar_muitos(self, npcs: list) -> None:
-        """N02 (docs/PLANO_POPULACAO_E_ESCALA.md): escrita de FIM DE TICK — um `UPDATE`
+        """N02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): escrita de FIM DE TICK — um `UPDATE`
         estreito, só das colunas que mudam todo minuto simulado (`_COLUNAS_QUENTES`).
         Medido com 25.000 NPCs/150 relações cada: 944 ms com o `INSERT OR REPLACE` da
         linha inteira (o que hoje é `salvar_completo`), 84% disso só serializando
@@ -172,7 +172,7 @@ class RepositorioNPC:
                            (b_id, a_id, afinidade, vinculo))
 
     def salvar_relacionamentos_muitos(self, pares: list) -> None:
-        """E01 (docs/PLANO_POPULACAO_E_ESCALA.md): uma transação pra TODOS os pares
+        """E01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): uma transação pra TODOS os pares
         de relacionamento do tick — `pares` é uma lista de `(a_id, b_id, afinidade,
         vinculo)`; cada par grava as DUAS direções, como `salvar_relacionamento`."""
         if not pares:
@@ -219,7 +219,7 @@ class RepositorioNPC:
             return cursor.fetchall()
 
     def listar_resumo_vivos(self, cidade_id) -> list:
-        """M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade — o
+        """M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade — o
         contexto do Mestre listava os 840 NPCs do mundo inteiro sem filtro."""
         with self.db.connection() as conn:
             cursor = conn.cursor()
@@ -229,7 +229,7 @@ class RepositorioNPC:
             return cursor.fetchall()
 
     def contar_dependentes_sem_responsavel(self, cidade_id) -> int:
-        """M03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): quantos bebês/crianças da
+        """M03 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): quantos bebês/crianças da
         cidade não têm pai NEM mãe vivo na MESMA casa — o invariante 6 de V05
         (audit_mundo.py, fora do runtime), reimplementado aqui como consulta SQL
         porque o Mestre roda no processo web, sem `EstadoDoMundo` vivo pra

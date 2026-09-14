@@ -7,7 +7,7 @@ from .config_loader import cfg_get
 
 class WorldLogger:
     _logger = None
-    # A07 (docs/PLANO_POPULACAO_E_ESCALA.md): teto na fila — um avanço rápido produz
+    # A07 (docs/13_PLANO_POPULACAO_E_ESCALA.md): teto na fila — um avanço rápido produz
     # logs muito mais rápido do que a thread consumidora consegue committar (um
     # commit por linha). Sem teto, isso é vazamento de memória com outro nome, e a
     # thread engolia toda exceção em silêncio (`except Exception: pass`), então até

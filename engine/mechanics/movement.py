@@ -36,7 +36,7 @@ class NPCMovementManager:
             local_id = npc.casa_id
 
         # Garante que a casa existe, caso contrário tenta a primeira casa ativa DA
-        # PRÓPRIA CIDADE (P04, docs/PLANO_CIDADE_VIVA.md): `casas_disponiveis[0]` de
+        # PRÓPRIA CIDADE (P04, docs/12_PLANO_CIDADE_VIVA.md): `casas_disponiveis[0]` de
         # uma lista GLOBAL podia mudar o NPC de cidade silenciosamente — mover alguém
         # de cidade é decisão de migração, não de fallback. Sem casa na cidade dele,
         # ele fica onde está (com um warning), não teleporta pro primeiro lar livre
@@ -89,10 +89,10 @@ class NPCMovementManager:
     def mover_para_social(self, npc: NPC):
         """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local.
 
-        P01 (docs/PLANO_CIDADE_VIVA.md): consulta o índice por cidade em vez de varrer
+        P01 (docs/12_PLANO_CIDADE_VIVA.md): consulta o índice por cidade em vez de varrer
         `mundo.locais` inteiro (Seção 1.6 — este era um dos laços mais caros do tick).
 
-        N01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): fica no MESMO local se já está
+        N01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco N): fica no MESMO local se já está
         num social ativo — sem isto, o resorteio a cada tick trocaria de taverna a
         cada minuto mesmo sem o NPC "ir" a lugar nenhum, e `_executar_socializar`
         (que passou a cobrar só na chegada) cobraria de novo a cada tick, do mesmo

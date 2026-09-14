@@ -1,6 +1,6 @@
 """
 MODULE: render.py
-FUNÇÃO: Tile sob demanda (Fase 0, docs/PLANO_EVOLUCAO_V2.md, 0.4).
+FUNÇÃO: Tile sob demanda (Fase 0, docs/06_PLANO_EVOLUCAO_V2.md, 0.4).
 
 DESCRIÇÃO:
     Substitui o mosaico pré-renderizado (pyramid.py/generate_tile_pyramid.py, Frente 6 —

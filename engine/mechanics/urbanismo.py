@@ -1,7 +1,7 @@
 """
 MODULE: urbanismo.py
 FUNÇÃO: A cidade se preenche por necessidade — comércio por demanda (O02) e o gatilho
-        de auto-expansão (X01/X03), docs/PLANO_CIDADE_VIVA.md, Bloco O/X.
+        de auto-expansão (X01/X03), docs/12_PLANO_CIDADE_VIVA.md, Bloco O/X.
 
 DESCRIÇÃO:
     Antes, o comércio de bairro era decidido UMA VEZ, na geração da cidade, por uma
@@ -42,7 +42,7 @@ CIDADES_GEOJSON_DIR = "database/cidades"
 
 
 def tipo_local_de_categoria(categoria: str, config: dict) -> str:
-    """V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): único lugar que traduz a `categoria`
+    """V01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): único lugar que traduz a `categoria`
     de sistema (`CategoriaLocal`, vocabulário do cartógrafo) pro `tipo` funcional
     (`TipoLocal`) que a engine lê — vaga de emprego, índice social/passeio, chave de
     desgaste. `tipo_local` (nome de sabor) não passa por aqui. Chamado tanto por
@@ -56,8 +56,8 @@ def tipo_local_de_categoria(categoria: str, config: dict) -> str:
 class SpecObra:
     """O que `abrir_obra` precisa saber SOBRE O EDIFÍCIO — separado de quem pediu
     (`dono_npc`) e onde (`cidade_id`) pra não estourar o limite de 5 parâmetros por
-    método (ARQUITETURA.md Seção 4); `abrir_obra` já tinha 8 antes desta tarefa
-    (F02, docs/PLANO_AVANCO_E_CALIBRAGEM.md)."""
+    método (11_ARQUITETURA.md Seção 4); `abrir_obra` já tinha 8 antes desta tarefa
+    (F02, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md)."""
     categoria: str
     tipo_local: str
     nome: str
@@ -67,7 +67,7 @@ class SpecObra:
 
 
 class GerenciadorUrbanismo:
-    """A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
+    """A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria
     mecânica — mesmo gatilho diário de `NPCHousingManager` (`habitacao_hora`)."""
     CADENCIA = "por_dia"
     CADENCIA_HORA_CONFIG = "habitacao_hora"
@@ -163,9 +163,9 @@ class GerenciadorUrbanismo:
         o sinal de auto-expansão, X01).
 
         É o ÚNICO caminho pra um edifício novo nascer durante a simulação
-        (armadilha 3, docs/PLANO_CIDADE_VIVA.md: o id do Local É o id do lote onde
+        (armadilha 3, docs/12_PLANO_CIDADE_VIVA.md: o id do Local É o id do lote onde
         nasce) — `housing.py` (casa de casal), `urbanismo.py` (comércio por demanda)
-        e, desde F01/F02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md), `CriarLocal` (Modo
+        e, desde F01/F02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md), `CriarLocal` (Modo
         Mestre) chamam este método; nenhum duplica a sequência reservar/criar/marcar.
 
         `dono_npc` é OPCIONAL (F02): edifícios INSTITUCIONAIS — quartel, praça,

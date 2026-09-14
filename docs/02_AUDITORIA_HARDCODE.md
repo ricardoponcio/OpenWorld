@@ -7,7 +7,7 @@
 > Toda a engine e toda a cartografia leem através dele; `cartographer/config.py` e
 > `engine/config_loader.py` são shims finos que reexportam de lá.
 >
-> Ver [`ROADMAP.md`](ROADMAP.md) para o estado das demais frentes (2 a 6).
+> Ver [`05_ROADMAP.md`](05_ROADMAP.md) para o estado das demais frentes (2 a 6).
 
 ## Legenda
 - ✅ Migrado para `config.json` e lido via `cfg_get`.

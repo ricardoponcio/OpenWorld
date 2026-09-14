@@ -1,7 +1,7 @@
 """
 SCRIPT: bench_tick.py
 OBJETIVO: Medir o custo de `GameLoop.executar_tick()` contra o orçamento de performance
-          do docs/PLANO_CIDADE_VIVA.md — D4 (1000 ms/tick, pra sustentar velocidade 60x)
+          do docs/12_PLANO_CIDADE_VIVA.md — D4 (1000 ms/tick, pra sustentar velocidade 60x)
           — variando NPCs, locais e cidades. É a ferramenta que P01-P07 usam para provar
           (ou refutar) que o índice por cidade/papel elimina a varredura O(NPCs × locais)
           medida na Seção 1.6 do plano (53,8 ms com 20 NPCs / 24 mil locais).
@@ -31,7 +31,7 @@ from engine.loop import GameLoop
 from engine.database import DatabaseManager
 from tests.mundo_sintetico import BancoFalso, adulto, casa
 
-ORCAMENTO_MS = 1000.0  # D4 do docs/PLANO_CIDADE_VIVA.md — velocidade 60x
+ORCAMENTO_MS = 1000.0  # D4 do docs/12_PLANO_CIDADE_VIVA.md — velocidade 60x
 
 _CATEGORIAS_NAO_RESIDENCIAIS = [
     (CategoriaLocal.TAVERNA, TipoLocal.SOCIAL),
@@ -101,7 +101,7 @@ def medir_ms_por_tick(mundo: EstadoDoMundo, config: dict, n_ticks: int) -> float
 
 
 def montar_mundo_com_banco_real(n_npcs: int, n_locais: int, n_cidades: int, db_path: str) -> EstadoDoMundo:
-    """W02 (docs/PLANO_POPULACAO_E_ESCALA.md, armadilha 9): mesmo mundo sintético de
+    """W02 (docs/13_PLANO_POPULACAO_E_ESCALA.md, armadilha 9): mesmo mundo sintético de
     `montar_mundo_sintetico`, mas com um `DatabaseManager` de VERDADE (SQLite num
     arquivo `tempfile`, WAL + `synchronous=NORMAL` — o `DatabaseManager` real já
     configura isso sozinho, não precisa repetir aqui) em vez de `BancoFalso`.
@@ -140,7 +140,7 @@ def rodar_matriz_sintetica(n_ticks: int):
         (1500, 10000, 15),
         (1500, 15000, 15),
         (3000, 15000, 15),
-        # N05 (docs/PLANO_POPULACAO_E_ESCALA.md): cenários de escala grande, rumo ao
+        # N05 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cenários de escala grande, rumo ao
         # alvo de 25.000 NPCs (D7) — os menores acima já cabiam de sobra antes do
         # Bloco N; estes são os que de fato testam o teto.
         (6000, 30000, 15),
@@ -148,7 +148,7 @@ def rodar_matriz_sintetica(n_ticks: int):
         (25000, 60000, 15),
         (25000, 60000, 40),
     ]
-    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)")
+    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/12_PLANO_CIDADE_VIVA.md)")
     print(f"{'npcs':>6}  {'locais':>6}  {'cidades':>7}   {'ms/tick':>8}   veredito")
     for n_npcs, n_locais, n_cidades in matriz:
         mundo = montar_mundo_sintetico(n_npcs, n_locais, n_cidades)
@@ -157,7 +157,7 @@ def rodar_matriz_sintetica(n_ticks: int):
 
 
 def rodar_comparacao_cpu_vs_disco(n_ticks: int):
-    """W02 (docs/PLANO_POPULACAO_E_ESCALA.md, armadilha 9): `rodar_matriz_sintetica`
+    """W02 (docs/13_PLANO_POPULACAO_E_ESCALA.md, armadilha 9): `rodar_matriz_sintetica`
     mede zero de custo de disco (`BancoFalso` não escreve nada) — e a persistência é
     o maior item do orçamento com 25.000 NPCs (944 ms antes de N02). Roda o MESMO
     cenário duas vezes, uma com `BancoFalso` (CPU) e outra com SQLite de verdade num
@@ -169,7 +169,7 @@ def rodar_comparacao_cpu_vs_disco(n_ticks: int):
         (3000, 15000, 15),
         (25000, 60000, 40),
     ]
-    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)")
+    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/12_PLANO_CIDADE_VIVA.md)")
     print(f"{'npcs':>6}  {'locais':>6}  {'cidades':>7}   {'cpu (ms)':>9}   {'cpu+disco (ms)':>15}   {'delta':>8}")
     for n_npcs, n_locais, n_cidades in matriz:
         mundo_falso = montar_mundo_sintetico(n_npcs, n_locais, n_cidades)
@@ -192,7 +192,7 @@ def rodar_contra_banco_real(n_ticks: int):
     engine = SimulationEngine()
     n_npcs, n_locais = len(engine.mundo.npcs), len(engine.mundo.locais)
     n_cidades = len({n.cidade_id for n in engine.mundo.npcs}) or 1
-    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)")
+    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/12_PLANO_CIDADE_VIVA.md)")
     print(f"Banco real: {n_npcs} NPCs, {n_locais} locais, {n_cidades} cidade(s) com NPC")
     loop = GameLoop(engine.mundo, engine.config)
     inicio = time.perf_counter()

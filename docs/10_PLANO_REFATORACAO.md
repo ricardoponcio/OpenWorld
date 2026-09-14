@@ -5,7 +5,7 @@
 > o problema concreto, o que fazer, e como validar. Execute **na ordem dos blocos**.
 > Não invente escopo: se uma tarefa não está aqui, não faça agora.
 >
-> 👉 **Antes de escrever qualquer código novo**, leia [`ARQUITETURA.md`](ARQUITETURA.md).
+> 👉 **Antes de escrever qualquer código novo**, leia [`11_ARQUITETURA.md`](11_ARQUITETURA.md).
 > Ele define o padrão que o código deve ter *depois* desta refatoração — e que toda
 > feature nova deve seguir por padrão.
 
@@ -73,7 +73,7 @@
 > ⚠️ **Não traduza nomes de classes existentes.** O projeto mistura inglês
 > (`NPCBrain`, `JobMarket`) e português (`GeradorCidade`, `MestreManager`). Padronizar
 > isso agora geraria um `diff` enorme sem ganho funcional. A regra daqui pra frente,
-> registrada em `ARQUITETURA.md`, é: **código novo em português**; código existente fica
+> registrada em `11_ARQUITETURA.md`, é: **código novo em português**; código existente fica
 > como está até ter outro motivo pra ser tocado.
 
 ---
@@ -877,7 +877,7 @@ retorna 0 (acesso passa a ser por atributo).
 
 # Bloco D — Quebra de métodos gigantes (SRP)
 
-> **Regra de tamanho adotada** (registrada em `ARQUITETURA.md`):
+> **Regra de tamanho adotada** (registrada em `11_ARQUITETURA.md`):
 > método ≤ 40 linhas · classe ≤ 300 linhas · arquivo ≤ 400 linhas.
 > Acima disso, exige justificativa escrita na docstring.
 
@@ -1430,7 +1430,7 @@ classes de infraestrutura diferentes.
 
 # Bloco F — Estático vs. instância, injeção de dependência
 
-> **Critério de decisão** (registrado em `ARQUITETURA.md`):
+> **Critério de decisão** (registrado em `11_ARQUITETURA.md`):
 > - **`@staticmethod` / função de módulo**: função pura, sem estado, sem dependências.
 >   Ex.: `escala.metros_por_pixel_mundo`, `base.pontos_ao_longo_do_poligono`.
 > - **Classe de instância**: tem estado, ou depende de algo (banco, config, RNG) que
@@ -1886,10 +1886,10 @@ timeout 60 venv/bin/python run_simulation.py
 ```
 
 ### R-I02 · Atualizar a documentação
-**Arquivos:** `README.md`, `builder/README.md`, `docs/ROADMAP.md`
+**Arquivos:** `README.md`, `builder/README.md`, `docs/05_ROADMAP.md`
 **Ação:**
 1. `builder/README.md`: remova as seções de `old/` e `generator.py`.
-2. `docs/ROADMAP.md`: adicione uma linha no Log de Sessões com o que esta refatoração
+2. `docs/05_ROADMAP.md`: adicione uma linha no Log de Sessões com o que esta refatoração
    mudou e uma entrada na tabela de frentes apontando para este documento.
 3. `README.md`: se a estrutura de diretórios estiver documentada lá, atualize.
 **Risco:** baixo

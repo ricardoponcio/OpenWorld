@@ -1,19 +1,19 @@
 """
 SCRIPT: calibrar_densidade.py
 OBJETIVO: Medir k/e da fórmula `lotes = k * raio^e`, por modelo de cidade — R02 (docs/
-          PLANO_POPULACAO_E_ESCALA.md, Bloco R). Nunca DEDUZA a fórmula: a densidade de
+          13_PLANO_POPULACAO_E_ESCALA.md, Bloco R). Nunca DEDUZA a fórmula: a densidade de
           lote por raio varia por modelo — `grade` cresce com raio² (é um disco
           preenchido), `linear` cresce quase linear (é uma fita ao longo de um eixo) — e
           só a medição real, na geometria de HOJE, dá o expoente certo.
 MOMENTO DE USO: depois de qualquer mudança que toque a geometria de quadra/lote (Blocos
-                S, L ou C, docs/PLANO_POPULACAO_E_ESCALA.md e
-                docs/PLANO_AVANCO_E_CALIBRAGEM.md) — a densidade medida fica
+                S, L ou C, docs/13_PLANO_POPULACAO_E_ESCALA.md e
+                docs/14_PLANO_AVANCO_E_CALIBRAGEM.md) — a densidade medida fica
                 desatualizada, porque muda quantos lotes uma mesma cidade produz pro
                 mesmo raio.
 
 ⚠️ FERRAMENTA MANUAL DE DIAGNÓSTICO. Roda fora da engine e fora do runtime — só produz
 um número pra colar em `config.json`. Não é importada de dentro de `engine/`, `web/` ou
-`cartographer/` (ARQUITETURA.md Seção 2).
+`cartographer/` (11_ARQUITETURA.md Seção 2).
 """
 import os
 import sys

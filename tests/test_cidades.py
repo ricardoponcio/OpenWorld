@@ -1,5 +1,5 @@
 """
-Testes de geometria de cidade — docs/ESPEC_DESENHO_CIDADE.md, Seção 9.2.
+Testes de geometria de cidade — docs/09_ESPEC_DESENHO_CIDADE.md, Seção 9.2.
 
 Cobre os invariantes que a arquitetura de modelo de cidade (F4) precisa proteger: a base
 sozinha basta pra um modelo mínimo gerar uma cidade completa (T5), todo modelo registrado
@@ -107,7 +107,7 @@ def test_teto_de_notaveis_por_quarteirao():
 
 
 def test_aneis_nao_cruzam():
-    """G01 — docs/PLANO_CIDADE_VIVA.md Seção 1.1: em radial e organica, o raio de cada
+    """G01 — docs/12_PLANO_CIDADE_VIVA.md Seção 1.1: em radial e organica, o raio de cada
     vértice tem que crescer estritamente por setor (nenhum anel cruza o vizinho), em
     200 seeds por combinação de modelo x tamanho. Antes de G01 a chance de cruzamento
     chegava a 82,5% (radial, 6 anéis) e 100% (organica)."""
@@ -320,7 +320,7 @@ def test_lotes_por_quadra_em_faixa(nome_modelo):
     (Registro de execução, Q01/Q03): `num_setores` era o mesmo em toda banda radial, e
     o arco da quadra crescia linearmente com o raio enquanto a profundidade (vão entre
     anéis) era constante — quadras de até 200-400 m de largura tangencial nas bandas
-    externas. S01 (docs/PLANO_POPULACAO_E_ESCALA.md) resolveu dobrando o número de
+    externas. S01 (docs/13_PLANO_POPULACAO_E_ESCALA.md) resolveu dobrando o número de
     setores quando o arco ultrapassa a largura alvo; `radial`/`organica` deixaram de
     ser `xfail` porque passam de verdade agora."""
     geo = _gerar(MODELOS[nome_modelo])
@@ -375,7 +375,7 @@ def test_praca_sem_lote_dentro():
 
 
 def test_profundidade_de_lote_e_limitada_por_banda():
-    """L01 (docs/PLANO_POPULACAO_E_ESCALA.md): sem pátio (quadra rasa/em cunha), o
+    """L01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): sem pátio (quadra rasa/em cunha), o
     lote ia até o eixo médio da quadra — numa cunha isso produzia lotes de até 84 m de
     profundidade contra um alvo de ~22 m (fenelburgo_6_5_l53, 922 m²). Nenhum lote
     deve ter área muito acima da mediana da própria banda — usa `organica` (o modelo
@@ -399,7 +399,7 @@ def test_profundidade_de_lote_e_limitada_por_banda():
 
 
 def test_sem_lote_em_aresta_cega():
-    """L02/W01 (docs/PLANO_POPULACAO_E_ESCALA.md): nenhum lote com
+    """L02/W01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): nenhum lote com
     `classe_frente == "sem_via"` — a aresta cega do anel aberto (`organica`) não pode
     dar frente a lote nenhum, por definição."""
     geo = _gerar(MODELOS["organica"])
@@ -411,7 +411,7 @@ def test_sem_lote_em_aresta_cega():
 
 
 def test_id_de_lote_estavel_quando_uma_quadra_e_removida():
-    """L03/V01 (docs/PLANO_POPULACAO_E_ESCALA.md): o pendente que V01 não conseguiu
+    """L03/V01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): o pendente que V01 não conseguiu
     fechar — "monte uma malha, gere, remova uma quadra do meio, gere de novo, afirme
     que os ids dos lotes que sobraram não mudaram". Só é verdade agora que cada quadra
     sorteia com o próprio RNG (derivado do id do quarteirão): antes, um `self.rng`
@@ -470,7 +470,7 @@ def _lotes_reais_em(nome_modelo, tamanho, raio_m, indice_semente):
 
 @pytest.mark.parametrize("nome_modelo", ["grade", "linear", "radial", "organica"])
 def test_raio_derivado_dos_domicilios(nome_modelo):
-    """W01/R02 (docs/PLANO_POPULACAO_E_ESCALA.md): pra um `lotes_alvo` dado (longe dos
+    """W01/R02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): pra um `lotes_alvo` dado (longe dos
     dois grampos de sanidade — R04 mostrou que cidade_geo_densidade_lote_por_modelo
     prevê bem os dois pontos que `calibrar_densidade.py` mediu, mas a curva de
     potência não extrapola perfeitamente pro raio inteiro; testar bem no piso/teto

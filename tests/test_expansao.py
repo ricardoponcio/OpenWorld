@@ -1,5 +1,5 @@
 """
-Testes de `cartographer.cities.expansao` — X02, docs/PLANO_CIDADE_VIVA.md: a geometria
+Testes de `cartographer.cities.expansao` — X02, docs/12_PLANO_CIDADE_VIVA.md: a geometria
 do arrabalde é uma função pura, sem banco, sem NPC. Mesmo padrão de `tests/test_cidades.py`
 (sítio real, `SitioCidade.medir` contra o terreno cacheado do projeto) — os testes que
 dependem de terreno pulam graciosamente se `sitio.terreno` vier `None` (ambiente sem

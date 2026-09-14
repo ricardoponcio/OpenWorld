@@ -7,7 +7,7 @@
 > sessão: comece por aqui, e só desça ao código quando for efetivamente mexer em algo.
 >
 > 👉 **Vai executar as próximas melhorias?** O plano de trabalho a partir daqui está em
-> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md) — mapa do código, contratos de dados, o **modelo de
+> [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md) — mapa do código, contratos de dados, o **modelo de
 > escalas** (mundo → continente → região → cidade), o diagnóstico medido em ordem de prioridade
 > (P0 quebrado · P1 incoerente · P2 ausente) e 12 fases em 3 blocos com *gates* de verificação:
 > **Bloco I = corrigir** (Fases 0–2), **Bloco II = tornar usável na mesa** (3–5),
@@ -28,12 +28,12 @@
 
 | # | Frente | Status | Detalhe em |
 |---|--------|--------|------------|
-| 1 | Parametrização única (engine + cartografia) | 🟢 Concluído | Seção 1 + [`AUDITORIA_HARDCODE.md`](AUDITORIA_HARDCODE.md) |
+| 1 | Parametrização única (engine + cartografia) | 🟢 Concluído | Seção 1 + [`02_AUDITORIA_HARDCODE.md`](02_AUDITORIA_HARDCODE.md) |
 | 2 | Qualidade e variedade visual da cartografia | 🟡 Em andamento | Seção 2 |
 | 3 | Comportamento dos NPCs (Utility AI) | 🟡 Em andamento | Seção 3 |
-| 4 | Motor de tempo 1:1 real (Rebalanceamento Total) | 🟢 Concluído | Seção 4 (decisão revista: Abordagem 2, não 3 — ver [`ANALISE_REALTIME_1_1.md`](ANALISE_REALTIME_1_1.md)) |
-| 5 | Modo Mestre de IA (2º modo temporal) | 🟢 Concluído (fase 1) | Seção 5 (design original em [`MODO_MESTRE_IA.md`](MODO_MESTRE_IA.md)) |
-| 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🟡 Pirâmide de tiles real implementada, falta rodar no mundo do autor | Seção 6 (design original em [`MAPA_INTERATIVO.md`](MAPA_INTERATIVO.md)) |
+| 4 | Motor de tempo 1:1 real (Rebalanceamento Total) | 🟢 Concluído | Seção 4 (decisão revista: Abordagem 2, não 3 — ver [`01_ANALISE_REALTIME_1_1.md`](01_ANALISE_REALTIME_1_1.md)) |
+| 5 | Modo Mestre de IA (2º modo temporal) | 🟢 Concluído (fase 1) | Seção 5 (design original em [`03_MODO_MESTRE_IA.md`](03_MODO_MESTRE_IA.md)) |
+| 6 | Mapa interativo estilo Leaflet ("Google Maps da aventura") | 🟡 Pirâmide de tiles real implementada, falta rodar no mundo do autor | Seção 6 (design original em [`04_MAPA_INTERATIVO.md`](04_MAPA_INTERATIVO.md)) |
 
 **Ordem sugerida de execução: 1 → 2 → 3 → 4 → 5 → 6.**
 Motivo: a Frente 1 é fundação das Frentes 2 e 3 (não compensa retunar cartografia ou comportamento
@@ -86,7 +86,7 @@ Essa dispersão já **causou inconsistências reais**, verificadas linha a linha
 | 9 | `nivel_mar` está hardcoded de forma redundante em pelo menos 3 lugares fora do config | `web/helpers.py: render_npz_map_to_bytes()` (`nivel_mar = 0.35`), `roi_zoom.py.__init__` (default dict), `climate.py: DEFAULT_NIVEL_MAR` | Três cópias do mesmo número; mudar o nível do mar no config não propaga para o renderer web |
 
 Catálogo completo, item a item (arquivo, linha, valor atual, chave de config sugerida), está em
-**[`AUDITORIA_HARDCODE.md`](AUDITORIA_HARDCODE.md)** — use-o como checklist de migração.
+**[`02_AUDITORIA_HARDCODE.md`](02_AUDITORIA_HARDCODE.md)** — use-o como checklist de migração.
 
 ### Decisões tomadas
 - ✅ **Formato do config único**: `config.json` na raiz, fundindo a cartografia sob uma nova seção
@@ -135,10 +135,10 @@ Catálogo completo, item a item (arquivo, linha, valor atual, chave de config su
       (`builder/populate.py`). **2 bugs reais corrigidos**: `_executar_cuidar_prole` e
       `_executar_socializar` ignoravam chaves que já existiam no `config.json` (usavam números
       hardcoded diferentes dos valores configurados) — agora leem as chaves de verdade.
-- [x] Catálogo completo (com todos os itens marcados) em `AUDITORIA_HARDCODE.md`.
+- [x] Catálogo completo (com todos os itens marcados) em `02_AUDITORIA_HARDCODE.md`.
 
 ### Plano de fases
-1. ~~Consolidar `AUDITORIA_HARDCODE.md`~~ ✅
+1. ~~Consolidar `02_AUDITORIA_HARDCODE.md`~~ ✅
 2. ~~Definir o formato final do config único~~ ✅
 3. ~~Migrar cartografia para o config único, bloco por bloco~~ ✅ (ruído, tectônica, clima, cor/shading, zoom)
 4. ~~Remover os `default=` de função que mascaravam parâmetros de config~~ ✅
@@ -151,7 +151,7 @@ Catálogo completo, item a item (arquivo, linha, valor atual, chave de config su
 redesenhados — decidir se/como tornar os continentes mais variados em tamanho e forma é trabalho de
 qualidade visual, não de parametrização.
 
-### Status: 🟢 Concluído (2026-09-09) — engine e cartografia inteiras lendo de um único `config.json` através do pacote `config/`. Ver `AUDITORIA_HARDCODE.md` para o registro completo do que foi migrado/corrigido.
+### Status: 🟢 Concluído (2026-09-09) — engine e cartografia inteiras lendo de um único `config.json` através do pacote `config/`. Ver `02_AUDITORIA_HARDCODE.md` para o registro completo do que foi migrado/corrigido.
 
 ---
 
@@ -291,7 +291,7 @@ endereçados** (candidatos para uma próxima rodada desta frente, não escolhido
   duas vezes por tick (uma em `loop.py`, outra dentro de `actions.py:_executar_comer`) — não é um bug
   de comportamento, mas é redundância que vale revisar quando formos mexer nessa área.
 - ~~Limiares de utilidade hardcoded~~ — **já migrados para config** na Frente 1 (ver
-  `config.json["ia_decisao"]` e `AUDITORIA_HARDCODE.md`).
+  `config.json["ia_decisao"]` e `02_AUDITORIA_HARDCODE.md`).
 
 ### Decisões tomadas (2026-09-09)
 - Autor confirmou: começar pelo achado já identificado (humor), sem exemplos novos por enquanto —
@@ -331,14 +331,14 @@ observação de jogo real do autor antes de seguir.
 ## Frente 4 — Motor de tempo 1:1 (Engrenagens Híbridas)
 
 ### Objetivo (nas palavras do autor)
-Implementar a Abordagem 3 já desenhada em `docs/ANALISE_REALTIME_1_1.md` ("Engrenagens Híbridas"),
+Implementar a Abordagem 3 já desenhada em `docs/01_ANALISE_REALTIME_1_1.md` ("Engrenagens Híbridas"),
 permitindo sair da velocidade fixa de 1 tick = 15 minutos simulados para **1 tick = 1 minuto**
 simulado, com o tempo real também podendo variar de 1x até Nx (sem o piso atual de 15 minutos por
 tick).
 
 ### Decisão revista nesta sessão (2026-09-09): Abordagem 2, não Abordagem 3
 
-`docs/ANALISE_REALTIME_1_1.md` recomendava a Abordagem 3 ("Engrenagens Híbridas": tick fino de 1 min
+`docs/01_ANALISE_REALTIME_1_1.md` recomendava a Abordagem 3 ("Engrenagens Híbridas": tick fino de 1 min
 só pra mover o relógio, com a física pesada presa a um portão interno de 15 em 15 minutos). Propus
 essa abordagem primeiro; **o autor rejeitou** — objeção correta: isso seria "fingir" 1:1, o motor
 continuaria amarrado a múltiplos de 15 por baixo dos panos, só escondido um nível abaixo, e voltaria
@@ -647,7 +647,7 @@ com y negativo, xadrez de bioma nas cidades) — **falta o autor rodar `reset_ca
 
 A parte das ruas (largura real por classe de via) já tinha sido feita na Frente 6/parte 18.
 Esta frente é o resto, especificado em
-[`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md) (parte 19) e implementado na parte 20.
+[`08_ESPEC_TECIDO_URBANO.md`](08_ESPEC_TECIDO_URBANO.md) (parte 19) e implementado na parte 20.
 
 ### Implementado (2026-09-11, parte 20)
 - **E1 — Faixa de domínio da via**: a quadra encolhe pra dentro, afastando-se da linha de
@@ -670,7 +670,7 @@ Esta frente é o resto, especificado em
 
 ### Verificado (2026-09-11)
 Números completos, com o comando de cada medição, estão na Seção 11 de
-`ESPEC_TECIDO_URBANO.md`. Resumo:
+`08_ESPEC_TECIDO_URBANO.md`. Resumo:
 - Redução de área de quadra pela faixa de domínio (E1), isolada do efeito da E6: **15,7%**
   (dentro do alvo 10-25%).
 - Lote mediano 243-380 m², 55-68 lotes por quadra (E2) — dentro do alvo (200-600 m² /
@@ -740,7 +740,7 @@ cenário de 2.000 NPCs).
 
 ### Fora de escopo até aqui
 Isto é **motor**, não cartografia — fora do escopo da Frente 7 e da
-`ESPEC_TECIDO_URBANO.md` por decisão explícita (Seção 3.5.1/10 do documento). Registrado
+`08_ESPEC_TECIDO_URBANO.md` por decisão explícita (Seção 3.5.1/10 do documento). Registrado
 aqui pra não virar descoberta de última hora quando o mundo for povoado de verdade
 (múltiplas cidades simuladas, mais NPCs).
 
@@ -765,7 +765,7 @@ E, ao revisar a primeira versão da especificação, a decisão de arquitetura:
 > criar por exemplo cidades portuarias, por que é só instanciar essa interface, entrar na lista
 > randomica e propor como ela vai ser desenhada, seus comércios e etc."
 
-Especificado em [`ESPEC_DESENHO_CIDADE.md`](ESPEC_DESENHO_CIDADE.md) (parte 21, v1.1). **Nada
+Especificado em [`09_ESPEC_DESENHO_CIDADE.md`](09_ESPEC_DESENHO_CIDADE.md) (parte 21, v1.1). **Nada
 implementado ainda** — a parte 21 produziu só o estudo e a especificação.
 
 ### Diagnóstico (2026-09-11, medido — comandos na Seção 3 do documento)
@@ -843,7 +843,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
 - **2026-09-11 (parte 21, estudo e especificação do desenho de cidade)** — Depois da validação
   visual da parte 20, o autor apontou dois defeitos (centro vazio, comércio amontoado) e pediu
   um estudo sobre outros desenhos de cidade. Produzida a
-  [`ESPEC_DESENHO_CIDADE.md`](ESPEC_DESENHO_CIDADE.md), auto-suficiente e escrita para um
+  [`09_ESPEC_DESENHO_CIDADE.md`](09_ESPEC_DESENHO_CIDADE.md), auto-suficiente e escrita para um
   agente de menor senioridade executar (Frente 9, nova, ver acima). **Nenhuma linha de código
   mudou nesta sessão** — só medição e documento. Achado principal: a concentração dos notáveis
   é um bug de ordem de iteração (`self._lotes` preenchido banda a banda, setor a setor, e os
@@ -861,7 +861,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
   0,597) e bioma (3 distintos) discriminam entre as cidades, ao contrário da altitude.
 
 - **2026-09-11 (parte 20, implementação do tecido urbano — E1 a E6)** — Executada a
-  especificação da parte 19 ([`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md)), etapa por
+  especificação da parte 19 ([`08_ESPEC_TECIDO_URBANO.md`](08_ESPEC_TECIDO_URBANO.md)), etapa por
   etapa, na ordem E1→E6 (Frente 7, nova, ver acima). Rua ganhou faixa de domínio real
   (quadra encolhe pra dentro via inset de quadrilátero convexo, sem `shapely`); lote passou
   de um valor fixo de 2,4 ha pra alvo por banda + fator por cidade (~200-400 m² reais);
@@ -885,7 +885,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
   real do motor identificado (não corrigido) na parte 19. Nada commitado.
 
 - **2026-09-11 (parte 19, especificação do tecido urbano)** — A pedido do autor, escrita a
-  especificação [`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md) para outro modelo executar:
+  especificação [`08_ESPEC_TECIDO_URBANO.md`](08_ESPEC_TECIDO_URBANO.md) para outro modelo executar:
   quadras preenchidas de construções, faixa de domínio da via, e variedade real entre cidades.
   Nenhum código alterado nesta entrada. Descoberto e documentado um acoplamento que não estava
   escrito em lugar nenhum: `builder/populate.py` importa **cada** feature `edificio` como um
@@ -988,7 +988,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
 
 - **2026-09-11 (parte 15, validação humana + diagnóstico)** — O usuário validou o mapa e apontou
   três sintomas (zoom borrado/infinito, "a cidade não existe / é 1px", "cidade na água"). A
-  investigação virou [`docs/DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md): **8 achados medidos**, sendo o
+  investigação virou [`docs/07_DIAGNOSTICO_V3.md`](07_DIAGNOSTICO_V3.md): **8 achados medidos**, sendo o
   principal um **erro de unidade** — `generate_city_geometry.py` usava `escala_pixel_area_km2`
   (que é **área**, km²/px) como se fosse escala **linear**, desenhando toda a cidade **15,81×
   menor** que o projetado (`sqrt(250)`). Outros achados: as 15 cidades caem no pixel exato da
@@ -1010,7 +1010,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
   **Nenhum código do projeto foi alterado nesta sessão — só documentação.** Nada commitado.
 
 - **2026-09-11 (parte 14, sessão autônoma)** — **Plano V2/V3 executado até o fim do Bloco II core:
-  Fases 0, 1, 2, 3 e 4 implementadas, testadas e verificadas** (docs/PLANO_EVOLUCAO_V2.md tem o
+  Fases 0, 1, 2, 3 e 4 implementadas, testadas e verificadas** (docs/06_PLANO_EVOLUCAO_V2.md tem o
   detalhe completo de cada uma, incluindo achados de bug reais no caminho). Resumo do que mudou de
   fato no mundo: o tile do Mapa Live deixou de ser mosaico pré-renderizado e virou
   `TileCartographer.gerar_janela()` sob demanda (zoom refina em vez de contradizer, F1-F4
@@ -1037,7 +1037,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
   deformando os continentes de 1,05× a **1,51×** (Gardania espremido em 51%). Causa raiz comum: o
   projeto nunca declarou um modelo de escalas — "cidade" virou "continente menor", e o raio foi sendo
   aumentado (2 → 15 → 45) até ultrapassar o continente. Nenhuma correção de código nesta sessão:
-  o resultado é [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md), com as 4 regras invariantes de fonte
+  o resultado é [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md), com as 4 regras invariantes de fonte
   de zoom (contenção, prioridade por densidade, isotropia, ganho mínimo) e 12 fases em 3 blocos,
   ordenadas para consertar tudo antes de adicionar qualquer coisa nova.
 - **2026-09-09 (parte 12)** — **Bug: xadrez de biomas nas cidades do Mapa Live.** Autor anexou prints
@@ -1163,7 +1163,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
   cartografia completo (mundo → zoom de continente → render PNG) validado de ponta a ponta em
   arquivos de scratch (sem tocar nos dados reais), com preview visual comparado ao README e sem
   regressão perceptível; engine rodou 100+ ticks reais consecutivos sem exceção, cobrindo
-  dormir/trabalhar/ocioso/pensão. `docs/AUDITORIA_HARDCODE.md` reescrito como registro final (tudo
+  dormir/trabalhar/ocioso/pensão. `docs/02_AUDITORIA_HARDCODE.md` reescrito como registro final (tudo
   migrado ou explicitamente marcado como decisão de não migrar). Próxima frente sugerida: Frente 2.
 - **2026-09-09 (parte 2)** — Início da execução da Frente 1, com `/plan` aprovado antes de codar
   (plano salvo em `~/.claude/plans/lazy-inventing-bubble.md`). Criado o pacote `config/` (fonte +
@@ -1175,7 +1175,7 @@ escopo (F1-F3 apenas, ou a frente inteira até F8).
 - **2026-09-09** — Sessão de kickoff. Revisão completa do projeto (engine, cartografia, builder, web,
   banco). Autor declarou as 5 vontades de evolução (parametrização única, qualidade da cartografia,
   comportamento dos NPCs, tempo 1:1 + Modo Mestre de IA, mapa Leaflet). Criado este roadmap e os
-  documentos de apoio (`AUDITORIA_HARDCODE.md`, `MODO_MESTRE_IA.md`, `MAPA_INTERATIVO.md`), com
+  documentos de apoio (`02_AUDITORIA_HARDCODE.md`, `03_MODO_MESTRE_IA.md`, `04_MAPA_INTERATIVO.md`), com
   achados concretos já levantados para as Frentes 1, 2 e 3, e descoberta de que `builder/storyteller.py`
   já é uma base funcional para a Frente 5. Nenhuma alteração de código feita ainda — esta sessão foi
   100% de investigação e documentação.

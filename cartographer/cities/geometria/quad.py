@@ -1,6 +1,6 @@
 """
 Geometria PURA de quadrilátero — funções de módulo, não métodos de classe (Q02,
-docs/PLANO_CIDADE_VIVA.md: são utilidades soltas, ARQUITETURA.md Seção 7). Usadas por
+docs/12_PLANO_CIDADE_VIVA.md: são utilidades soltas, 11_ARQUITETURA.md Seção 7). Usadas por
 `gerador.py` (inset de quadra, footprint de edifício) e por `distribuicao.py` — nenhuma
 delas conhece `GeradorCidade`, NPC ou banco.
 """
@@ -121,7 +121,7 @@ def encolher_quad(quad, distancias):
 
 
 def lerp(a, b, t):
-    """Interpolação linear entre dois pontos 2D. Q01 (docs/PLANO_CIDADE_VIVA.md): usada
+    """Interpolação linear entre dois pontos 2D. Q01 (docs/12_PLANO_CIDADE_VIVA.md): usada
     pra cortar a aresta externa e a interna de uma faixa pelo MESMO parâmetro `t` — é o
     que garante que os lotes tilam a faixa sem vão e sem sobreposição."""
     return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)

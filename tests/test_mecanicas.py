@@ -378,7 +378,9 @@ def test_romance_surpresa_para_casa_nova_nao_quebra_a_iteracao(config):
 
     NPCSocialManager(mundo, cfg).processar_interacoes()  # não deve levantar RuntimeError
 
-    assert n1.casa_id == n2.casa_id == "c1"
+    # `random.sample` embaralha quem é n1/n2 dentro do laço — qualquer uma das duas
+    # casas prova o cenário (nenhuma tinha morador, as duas eram chave nova).
+    assert n1.casa_id == n2.casa_id in ("c1", "c2")
 
 
 # ----------------------------------------------------------------------

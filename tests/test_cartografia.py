@@ -1,5 +1,5 @@
 """
-Testes de cartografia — travam os invariantes F1-F4 (docs/PLANO_EVOLUCAO_V2.md, Seção 2.2).
+Testes de cartografia — travam os invariantes F1-F4 (docs/06_PLANO_EVOLUCAO_V2.md, Seção 2.2).
 
 Escopo deliberadamente pequeno (ver Seção 8 do plano): protege só os invariantes do
 terreno como função de coordenada de mundo. Não cobre render, rotas, IA ou engine.

@@ -1,5 +1,5 @@
 """
-LinearModelo — vila de beira de estrada (F6, ESPEC_DESENHO_CIDADE.md). Uma rua principal
+LinearModelo — vila de beira de estrada (F6, 09_ESPEC_DESENHO_CIDADE.md). Uma rua principal
 atravessando a cidade, quadras só nas laterais, cidade comprida e estreita. É o modelo que
 mais prova a interface: não tem banda nem setor — tem "fileira" e "posição ao longo do
 eixo" — e ainda assim responde às mesmas 7 perguntas que `radial`/`grade`.
@@ -15,7 +15,7 @@ class LinearModelo(ModeloCidade):
 
     def __init__(self, sitio, config, rng, raio_m_forcado=None):
         super().__init__(sitio, config, rng)
-        # R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): raio derivado de
+        # R01 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): raio derivado de
         # domicílios, não mais sorteado direto — mesmo raciocínio de radial.py.
         self.raio_m, self.lotes_alvo = derivar_ou_forcar_raio(
             sitio, config, self.rng, raio_m_forcado, self.nome)
@@ -48,7 +48,7 @@ class LinearModelo(ModeloCidade):
         theta = self.rng.uniform(0, 2 * math.pi)
         curvatura = cfg_get(self.cfg, "cidade_geo_linear_curvatura")
         comprimento = 2.0 * self.raio_m
-        # Q03 (docs/PLANO_CIDADE_VIVA.md): comprimento de célula (ao longo do eixo) e
+        # Q03 (docs/12_PLANO_CIDADE_VIVA.md): comprimento de célula (ao longo do eixo) e
         # profundidade de fileira (perpendicular) eram a MESMA chave — duas coisas
         # diferentes, e usar a mesma faixa pra profundidade dava fileira de até 90m,
         # sempre caindo no caso "pátio grande demais" de Q01 (gera viela onde bastava

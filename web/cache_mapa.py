@@ -31,7 +31,7 @@ def obter_mapa_do_cache(caminho_arquivo):
 
 
 # Cache em memória dos GeoJSON de camada, autoinvalidável por mtime (mesmo padrão de
-# `obter_mapa_do_cache`). E5 (ESPEC_TECIDO_URBANO.md Seção 5.5): guarda também a bbox de
+# `obter_mapa_do_cache`). E5 (08_ESPEC_TECIDO_URBANO.md Seção 5.5): guarda também a bbox de
 # CADA feição, calculada uma vez no carregamento — antes `_bbox_geometria` rodava a cada
 # requisição para cada feição candidata (o gargalo medido na Seção 3.6).
 _FEATURES_CACHE = {}

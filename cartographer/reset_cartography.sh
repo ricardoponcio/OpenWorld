@@ -1,7 +1,7 @@
 #!/bin/bash
 # SCRIPT DE RESET TOTAL E RECONSTRUÇÃO DA CARTOGRAFIA COM IA
 #
-# Fase 0 (docs/PLANO_EVOLUCAO_V2.md): não há mais mapas de zoom de continente/cidade nem
+# Fase 0 (docs/06_PLANO_EVOLUCAO_V2.md): não há mais mapas de zoom de continente/cidade nem
 # pirâmide de tiles pré-gerada — o tile é `TileCartographer.gerar_janela()` avaliada sob
 # demanda (web/composed_routes.py, cartographer/tiles/render.py), com cache em disco
 # chaveado por config_hash. Só pré-aquecemos os zooms mais baixos (prewarm_cache.py) pra

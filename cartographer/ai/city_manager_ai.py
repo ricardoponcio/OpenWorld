@@ -19,7 +19,7 @@ _TIPOS = ["pesqueira", "agricola", "comercial", "fortaleza", "mistica", "mineira
 
 def nome_procedural_de_cidade(rng):
     """Usado também por `cartographer/cities/generate_cities_metadata.py::
-    _garantir_nomes_unicos` (G05, docs/PLANO_MUNDO_CRIVEL.md) pra re-sortear um
+    _garantir_nomes_unicos` (G05, docs/15_PLANO_MUNDO_CRIVEL.md) pra re-sortear um
     nome de cidade que colidiu com outro já no manifesto — nome público (não mais
     `_nome_procedural`) porque agora tem dois chamadores."""
     return rng.choice(_SILABAS_INICIO) + rng.choice(_SILABAS_MEIO) + rng.choice(_SILABAS_FIM)

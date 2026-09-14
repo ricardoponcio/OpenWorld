@@ -15,7 +15,7 @@ from ..mundo import EstadoDoMundo
 class GlobalEventManager:
     def __init__(self, mundo: EstadoDoMundo):
         self._mundo = mundo
-        # A03 (docs/PLANO_POPULACAO_E_ESCALA.md): ids de evento global já vistos, pra
+        # A03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): ids de evento global já vistos, pra
         # detectar quando um É NOVO (não pra decidir se ele está ativo — isso continua
         # vindo do banco, todo tick). Escopo de instância, não é o tipo de estado que
         # fica velho: só serve pra saber "eu já acordei todo mundo por causa deste?".

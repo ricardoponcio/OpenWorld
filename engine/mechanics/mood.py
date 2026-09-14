@@ -53,10 +53,10 @@ class NPCMoodManager:
     def processar_humor(self, npc: NPC, minutos: int = 1):
         """Aproxima gradualmente o humor do NPC do humor-alvo calculado a partir do
         seu bem-estar atual. Chamado uma vez por NPC vivo processado (A02, docs/
-        PLANO_POPULACAO_E_ESCALA.md: `minutos` é quantos minutos se passaram desde a
+        13_PLANO_POPULACAO_E_ESCALA.md: `minutos` é quantos minutos se passaram desde a
         última avaliação).
 
-        X01 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda faz o NPC ser
+        X01 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda faz o NPC ser
         avaliado ~20-30 vezes por dia em vez de 1.440 — `minutos` pode ser 1 ou 240.
         A versão antiga fazia `min(minutos, distancia)` TENTATIVAS de transição, o
         que capava o número de tentativas ao número de PASSOS possíveis: com

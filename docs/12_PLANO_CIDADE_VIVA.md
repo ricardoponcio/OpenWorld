@@ -2,16 +2,16 @@
 
 > **Para quem vai executar (modelo de desenvolvimento ou humano):**
 > Este documento é uma **lista de tarefas fechadas**, no mesmo formato do
-> [`PLANO_REFATORACAO.md`](PLANO_REFATORACAO.md). Cada tarefa tem arquivo alvo, o
+> [`10_PLANO_REFATORACAO.md`](10_PLANO_REFATORACAO.md). Cada tarefa tem arquivo alvo, o
 > problema concreto (com número medido, não com opinião), a ação passo a passo e como
 > validar. **Execute na ordem dos blocos.** Se uma tarefa não está aqui, não faça agora.
 >
-> 👉 **Antes de escrever qualquer linha**, leia [`ARQUITETURA.md`](ARQUITETURA.md) —
+> 👉 **Antes de escrever qualquer linha**, leia [`11_ARQUITETURA.md`](11_ARQUITETURA.md) —
 > especialmente a Seção 2 (regra de dependência entre camadas) e a Seção 4 (limites de
 > tamanho). Este plano cria arquivos novos em três camadas diferentes e **a maior fonte
 > de erro aqui vai ser colocar código na camada errada**, não errar a matemática.
 >
-> 👉 Leia também a Seção 5.5 de [`ESPEC_DESENHO_CIDADE.md`](ESPEC_DESENHO_CIDADE.md):
+> 👉 Leia também a Seção 5.5 de [`09_ESPEC_DESENHO_CIDADE.md`](09_ESPEC_DESENHO_CIDADE.md):
 > "o que é gancho de modelo e o que é trabalho compartilhado". Metade das tarefas do
 > Bloco Q dependem de você entender essa divisão.
 
@@ -48,7 +48,7 @@
 1. **Uma tarefa por commit.** Título do commit = ID da tarefa + descrição curta.
    Ex.: `G01: perturba anel pelo vão, não pelo raio`.
 2. **Este plano MUDA comportamento observável de propósito.** Diferente do
-   `PLANO_REFATORACAO.md`, aqui o "diff de comportamento vazio" não se aplica: o
+   `10_PLANO_REFATORACAO.md`, aqui o "diff de comportamento vazio" não se aplica: o
    traçado de todas as cidades vai mudar. Veja a armadilha #1 na Seção 3.
 3. **Rode os testes antes e depois de cada tarefa:**
    ```
@@ -344,7 +344,7 @@ mudam. **Isso é esperado. Diga no commit, não tente compensar com um sorteio-f
 
 ### Armadilha 2 · O cartógrafo não pode conhecer o NPC, e a engine não pode escrever GeoJSON
 
-A regra de dependência da Seção 2 do `ARQUITETURA.md` diz: `cartographer/` não conhece
+A regra de dependência da Seção 2 do `11_ARQUITETURA.md` diz: `cartographer/` não conhece
 NPC. Este plano cria um sistema onde a simulação **constrói casas em lotes que o
 cartógrafo desenhou**. Existe uma forma óbvia e errada de fazer isso: a engine reabre o
 `.geojson` e reescreve `"estado": "ocupado"` no lote.
@@ -469,12 +469,12 @@ até 1,32 em Fenelburgo; 82,5% das cidades radiais com 6 anéis nascem com anel 
    e da muralha, que são outra conta.
 
 2. Em `radial.py`, crie uma constante de módulo (é limite estrutural, não parâmetro de
-   balanceamento — `ARQUITETURA.md` P3):
+   balanceamento — `11_ARQUITETURA.md` P3):
    ```python
    # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
    # amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
    # segurança contra a soma chegar a 1.0 (que é o anel invertido — Seção 1.1 do
-   # docs/PLANO_CIDADE_VIVA.md).
+   # docs/12_PLANO_CIDADE_VIVA.md).
    FRACAO_VAO_MAXIMA_SEGURA = 0.45
    ```
 
@@ -588,7 +588,7 @@ funcionando, não regressão.
        """Infla um polígono radialmente em torno do próprio centroide, garantindo
        que todo vértice original fique DENTRO do resultado com ao menos `folga` de
        sobra. Usado pela muralha: ela tem que envolver a cidade por construção, não
-       por sorte (Seção 1.3 do docs/PLANO_CIDADE_VIVA.md)."""
+       por sorte (Seção 1.3 do docs/12_PLANO_CIDADE_VIVA.md)."""
        cx = sum(p[0] for p in poligono) / len(poligono)
        cy = sum(p[1] for p in poligono) / len(poligono)
        envolvido = []
@@ -638,13 +638,13 @@ desalinhamento medido de 6,4 m (mediana) a 12,7 m em Fenelburgo.
 
 1. **Extraia a grade de vértices de `RadialModelo.construir_malha` para um método
    próprio.** Hoje ela nasce no meio de um método de ~100 linhas (que também está acima
-   do limite de 40 linhas do `ARQUITETURA.md` Seção 4 — aproveite):
+   do limite de 40 linhas do `11_ARQUITETURA.md` Seção 4 — aproveite):
    ```python
    def _grade_de_vertices(self, angulos, raios_base, perturb):
        """Devolve `vertices[j][i]` — a grade que TANTO as ruas TANTO as quadras leem.
        Ponto de extensão para modelos que deformam a malha (organica): deforme AQUI,
        nunca a lista de ruas depois de pronta (Seção 1.2 do
-       docs/PLANO_CIDADE_VIVA.md)."""
+       docs/12_PLANO_CIDADE_VIVA.md)."""
    ```
    O corpo é o código que já existe, com a correção de `G01`. `construir_malha` passa a
    chamá-lo.
@@ -770,7 +770,7 @@ fora do muro.
    Enquanto você está aí: **essas duas cópias são o mesmo código.** Mova para um método
    de `SitioCidade` (`altitude_em(x_m, y_m)` e `declividade_em(x_m, y_m)`) e apague as
    duas. O sítio é o dono do terreno; nem o modelo nem o gerador precisam saber como a
-   grade é indexada. Isso é `ARQUITETURA.md` P1.
+   grade é indexada. Isso é `11_ARQUITETURA.md` P1.
 
 4. Troque o `np.clip` por um retorno explícito de "fora da janela":
    ```python
@@ -778,7 +778,7 @@ fora do muro.
        """None quando o ponto cai FORA da janela amostrada — o chamador decide. Antes
        isto era np.clip, que devolvia silenciosamente a célula da borda e fazia toda
        checagem de terreno fora da cidade dar a mesma resposta (armadilha 4 do
-       docs/PLANO_CIDADE_VIVA.md)."""
+       docs/12_PLANO_CIDADE_VIVA.md)."""
    ```
    Quem chamar trata `None` como "não sei, rejeite o lote" — nunca como 0.
 
@@ -921,7 +921,7 @@ validado, nunca junto.
 `cartographer/cities/geometria/`
 
 **Problema:** o arquivo já tem **638 linhas**, contra o limite de 400 do
-`ARQUITETURA.md` Seção 4. `Q01` acrescenta ~120 linhas. Ignorar o limite aqui é o começo
+`11_ARQUITETURA.md` Seção 4. `Q01` acrescenta ~120 linhas. Ignorar o limite aqui é o começo
 do próximo `DIAGNOSTICO`.
 
 **Ação:** quebre por assunto, seguindo o padrão que `web/rotas/` já usa:
@@ -938,7 +938,7 @@ cartographer/cities/geometria/manifesto.py     # o laço sobre o manifesto, escr
 ```
 
 `quad.py` é **funções de módulo, não métodos estáticos de classe** — são utilidades puras
-e solitárias (`ARQUITETURA.md` Seção 7). Elas hoje são `@staticmethod` de `GeradorCidade`
+e solitárias (`11_ARQUITETURA.md` Seção 7). Elas hoje são `@staticmethod` de `GeradorCidade`
 só por acidente histórico.
 
 Mantenha um shim de um arquivo para não quebrar quem importa o caminho antigo:
@@ -1005,7 +1005,7 @@ causa do `np.clip`.
    ```json
    "cidade_geo_escala": 1.0,
    ```
-2. Em `escala.py` (que é o dono das conversões de escala — `ARQUITETURA.md` P1), uma
+2. Em `escala.py` (que é o dono das conversões de escala — `11_ARQUITETURA.md` P1), uma
    função única:
    ```python
    def faixa_raio_m(config, tamanho):
@@ -1052,7 +1052,7 @@ obra não tem onde perguntar "que terreno está livre nesta cidade".
 1. Em `engine/schema.sql`:
    ```sql
    -- Lotes urbanos (geometria vem do GeoJSON do cartógrafo; ESTADO vive aqui — ver
-   -- armadilha 2 do docs/PLANO_CIDADE_VIVA.md: cartographer/ nunca escreve estado de
+   -- armadilha 2 do docs/12_PLANO_CIDADE_VIVA.md: cartographer/ nunca escreve estado de
    -- simulação, engine/ nunca escreve GeoJSON).
    CREATE TABLE IF NOT EXISTS lotes (
        id TEXT PRIMARY KEY,
@@ -1074,7 +1074,7 @@ obra não tem onde perguntar "que terreno está livre nesta cidade".
    casamento e a cada checagem de habitação.
 
 2. Em `engine/models.py`, o enum e o dataclass. `estado` é texto de domínio, logo enum
-   (`ARQUITETURA.md` P4), e guarda sempre o `.value` na coluna (mesma invariante de
+   (`11_ARQUITETURA.md` P4), e guarda sempre o `.value` na coluna (mesma invariante de
    `Genero`/`EstagioVida` — R-C05):
    ```python
    class LoteEstado(Enum):
@@ -1120,7 +1120,7 @@ obra não tem onde perguntar "que terreno está livre nesta cidade".
    ```
    Devolva `None` quando `rowcount == 0` (não havia lote livre) — é o sinal que dispara a
    auto-expansão do Bloco X. **Não levante exceção:** ficar sem terreno é estado normal
-   da cidade, não erro (`ARQUITETURA.md` P5 fala de falhar alto em *config ausente*, não
+   da cidade, não erro (`11_ARQUITETURA.md` P5 fala de falhar alto em *config ausente*, não
    em estado de jogo esperado).
 
 5. Registre em `engine/repositorios/__init__.py` e em `DatabaseManager.__init__`
@@ -1462,7 +1462,7 @@ def gerar_arrabalde(sitio, geojson_atual, lotes_alvo, seed_expansao):
 
     Função pura: não abre banco, não escreve arquivo, não sabe o que é um NPC. Quem
     decide QUANDO chamar é engine/mechanics/urbanismo.py; quem decide COMO fica a
-    geometria é aqui (armadilha 2 do docs/PLANO_CIDADE_VIVA.md).
+    geometria é aqui (armadilha 2 do docs/12_PLANO_CIDADE_VIVA.md).
     """
 ```
 
@@ -1587,7 +1587,7 @@ custam 53,8 ms com 24 mil locais e 2,9 ms com mil.
        """Índices de leitura sobre os locais, por cidade e por papel. Existe porque
        cada consulta de movimento varria a lista inteira de locais, por NPC, por tick —
        o que fazia o custo do tick ser NPCs × locais (Seção 1.6 do
-       docs/PLANO_CIDADE_VIVA.md: 53,8 ms com 20 NPCs e 24 mil locais, contra 2,9 ms
+       docs/12_PLANO_CIDADE_VIVA.md: 53,8 ms com 20 NPCs e 24 mil locais, contra 2,9 ms
        com mil locais).
 
        Quem muda um local (criar, desativar, concluir obra) é obrigado a avisar o
@@ -1878,7 +1878,7 @@ tem `salvar` de 1 argumento e quebra no `_avancar_relogio`), varre uma matriz de
 Imprima o orçamento na saída, não num comentário:
 
 ```
-ORÇAMENTO: 1000 ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)
+ORÇAMENTO: 1000 ms/tick (velocidade 60x, D4 do docs/12_PLANO_CIDADE_VIVA.md)
   npcs  locais  cidades   ms/tick   veredito
    750   10000       15      78.4   OK (12.8x de folga)
   3000   15000       15     412.1   OK (2.4x de folga)
@@ -2014,7 +2014,7 @@ técnico preciso — não os troque por sinônimos.
 ## Registro de execução
 
 > ✅ **As quatro decisões pendentes registradas nesta tabela foram respondidas, com
-> medição, em [`PLANO_POPULACAO_E_ESCALA.md`](PLANO_POPULACAO_E_ESCALA.md) (Seção 1).**
+> medição, em [`13_PLANO_POPULACAO_E_ESCALA.md`](13_PLANO_POPULACAO_E_ESCALA.md) (Seção 1).**
 > Resumo: `num_setores` fixo é mesmo a causa raiz das quadras de 150 lotes (Bloco S);
 > os lotes cegos do `organica` têm duas causas concretas e consertáveis, e a tolerância
 > rígida de `audit_cidades.py` estava certa (Bloco L); o RNG derivado por quadra vale a

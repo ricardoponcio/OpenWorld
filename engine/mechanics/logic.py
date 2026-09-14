@@ -47,8 +47,8 @@ class NPCBrain:
                       eventos_globais: Optional[List] = None, indice=None):
         """`config` é o config.json completo — ver `calcular_utilidade`."""
         # --- REDE DE SEGURANÇA: Habitação ---
-        # X05 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 18): mesma correção que P04
-        # (docs/PLANO_CIDADE_VIVA.md) já aplicou em `movement.py` — `locais.items()`
+        # X05 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 18): mesma correção que P04
+        # (docs/12_PLANO_CIDADE_VIVA.md) já aplicou em `movement.py` — `locais.items()`
         # sem filtrar cidade podia mudar o NPC de cidade em silêncio (todo NPC sem
         # casa ia pra MESMA casa, a primeira do dicionário global). Mudar alguém de
         # cidade é decisão de migração, não fallback: sem casa na própria cidade,

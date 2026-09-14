@@ -67,7 +67,7 @@ def api_continentes():
     manifest = obter_manifesto()
     continentes = []
     if manifest:
-        # T05 (docs/PLANO_CIDADE_VIVA.md): o manifesto não guarda o id numérico da
+        # T05 (docs/12_PLANO_CIDADE_VIVA.md): o manifesto não guarda o id numérico da
         # cidade (é atribuído só na importação, RepositorioMundo.salvar_cidade) — o
         # frontend precisa dele pra pedir /api/cidade/<id>/lotes_alterados da cidade
         # que está olhando. Uma consulta só (não uma por cidade) monta o mapa nome->id.
@@ -91,7 +91,7 @@ def api_continentes():
         "continentes": continentes,
         # Tamanho real do mapa mundi (lado do quadrado, em pixels) — vem do manifesto
         # quando existe, senão é derivado do config (nunca um `768` escrito à mão — mesma
-        # lição da Frente 1: ver docs/ROADMAP.md).
+        # lição da Frente 1: ver docs/05_ROADMAP.md).
         "dimensao_global": (manifest or {}).get("dimensao_global") or dimensao_global_padrao,
         # A imagem de zoom do continente cobre bounding_box + essa margem de cada lado
         # (Fase 0: `janela_continente` usa o mesmo padding) — o frontend precisa saber

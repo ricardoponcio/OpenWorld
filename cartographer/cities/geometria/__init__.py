@@ -1,7 +1,7 @@
 """
-Pacote de geometria de cidade (Q02, docs/PLANO_CIDADE_VIVA.md) — era
+Pacote de geometria de cidade (Q02, docs/12_PLANO_CIDADE_VIVA.md) — era
 `cartographer/cities/generate_city_geometry.py` (638 linhas, acima do limite de 400 do
-ARQUITETURA.md Seção 4). Dividido por assunto:
+11_ARQUITETURA.md Seção 4). Dividido por assunto:
 
     gerador.py        GeradorCidade — emissão da malha, inset de quadra, muralha, índice
     quad.py           geometria pura de quadrilátero (área, inset, simples, subdivisão)

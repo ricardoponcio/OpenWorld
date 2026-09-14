@@ -1,5 +1,5 @@
 """
-Q01 (docs/PLANO_CIDADE_VIVA.md) — anel perimetral + pátio: substitui a subdivisão
+Q01 (docs/12_PLANO_CIDADE_VIVA.md) — anel perimetral + pátio: substitui a subdivisão
 recursiva (cortava a quadra ao meio sem saber onde estavam as ruas — até 64% dos lotes
 sem frente, mediana de 94 lotes por quadra numa quadra só).
 
@@ -72,7 +72,7 @@ def _eixo_medio_sem_patio(quad_ext, pair, config, banda, lote_fator_cidade):
     par escolhido — devolve um array de 4 pontos com a mesma forma de `quad_interno`,
     pra `_lotes_da_faixa` não precisar saber a diferença.
 
-    L01 (docs/PLANO_POPULACAO_E_ESCALA.md): pra uma quadra em CUNHA (fina numa ponta,
+    L01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): pra uma quadra em CUNHA (fina numa ponta,
     grossa na outra), o eixo médio bruto pode ficar muito mais longe da aresta do que
     a profundidade de lote configurada — puxa cada ponto de volta em direção à aresta
     quando isso acontece. Continua PURA (sem `self`): recebe `config`/`banda`/
@@ -175,7 +175,7 @@ def preparar_quadra(quad_bruto, classes_aresta, banda, config, lote_fator_cidade
                      quadra_area_minima, distancia_faixa_dominio_fn, indice_inicial=0):
     """Inset pela faixa de domínio + subdivisão em lotes — o mesmo par de passos que
     `GeradorCidade._gerar_quarteiroes_e_lotes` aplica a toda quadra de uma cidade nova.
-    Extraído (X02, docs/PLANO_CIDADE_VIVA.md) pra `cartographer/cities/expansao.py`
+    Extraído (X02, docs/12_PLANO_CIDADE_VIVA.md) pra `cartographer/cities/expansao.py`
     reusar sem ter uma segunda implementação de subdivisão de quadra — o arrabalde não
     pode divergir da cidade original.
 
@@ -183,7 +183,7 @@ def preparar_quadra(quad_bruto, classes_aresta, banda, config, lote_fator_cidade
     critério de `gerador.py`), senão `(quad_urbanizavel, lotes_info, patios, vielas,
     indice_final)`.
 
-    L02 (docs/PLANO_POPULACAO_E_ESCALA.md): uma quadra com as 4 arestas "sem_via" não
+    L02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): uma quadra com as 4 arestas "sem_via" não
     tem frente nenhuma pra lote nenhum — descartada aqui, mesmo critério de "degenerada"."""
     if all(c == "sem_via" for c in classes_aresta):
         return None

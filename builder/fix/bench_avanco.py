@@ -1,7 +1,7 @@
 """
 SCRIPT: bench_avanco.py
 OBJETIVO: Medir quanto tempo real leva pra avançar N dias simulados — o número que
-          justifica o Bloco A inteiro (docs/PLANO_POPULACAO_E_ESCALA.md, D13): 7 dias
+          justifica o Bloco A inteiro (docs/13_PLANO_POPULACAO_E_ESCALA.md, D13): 7 dias
           simulados em menos de 30 s, com 25.000 NPCs. Reporta segundos totais, ms por
           tick, decisões avaliadas por tick (A02 — tem que cair de milhares para
           algumas dezenas) e o tamanho final da fila de log (A07 — sem teto, um avanço
@@ -27,7 +27,7 @@ from engine.logger import WorldLogger
 from engine.mundo import EstadoDoMundo
 from builder.fix.bench_tick import montar_mundo_sintetico
 
-ALVO_SEGUNDOS_POR_7_DIAS = 30.0  # D13, docs/PLANO_POPULACAO_E_ESCALA.md
+ALVO_SEGUNDOS_POR_7_DIAS = 30.0  # D13, docs/13_PLANO_POPULACAO_E_ESCALA.md
 
 
 def avancar_dias(loop: GameLoop, dias: int, mundo: EstadoDoMundo) -> dict:
@@ -36,7 +36,7 @@ def avancar_dias(loop: GameLoop, dias: int, mundo: EstadoDoMundo) -> dict:
     `mundo` só pra ler `data_simulada.hour` (o mesmo objeto passado a `GameLoop`
     — `loop` não expõe isso publicamente, e não devia só pra este script ler).
 
-    H06 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): além da média, registra decisões/ms POR
+    H06 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): além da média, registra decisões/ms POR
     HORA do dia simulado e o MAIOR pico de decisões num único tick — os dois números
     que expõem a manada (armadilha 14). Sem eles, H03 (jitter nas fronteiras de
     relógio) é impossível de validar: uma média geral esconde um tick de 25.000

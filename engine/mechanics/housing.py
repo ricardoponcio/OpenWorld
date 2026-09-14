@@ -29,7 +29,7 @@ class NPCHousingManager:
     dono da MECÂNICA de "como um edifício nasce" (`abrir_obra`); este gerenciador
     continua dono só da POLÍTICA — qual casal, quando.
 
-    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
+    A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cadência declarada pela própria mecânica."""
     CADENCIA = "por_dia"
     CADENCIA_HORA_CONFIG = "habitacao_hora"
 
@@ -40,7 +40,7 @@ class NPCHousingManager:
 
     def iniciar_obra_para_casal(self, n1: NPC, n2: NPC = None) -> bool:
         """
-        Cria uma nova obra de residência num LOTE REAL (O01, docs/PLANO_CIDADE_VIVA.md)
+        Cria uma nova obra de residência num LOTE REAL (O01, docs/12_PLANO_CIDADE_VIVA.md)
         — reserva o lote livre mais próximo da casa atual do casal (armadilha 3: o id
         do Local É o id do lote), em vez de sortear um ponto qualquer em terra firme
         que podia cair no meio do mato, do outro lado do muro, ou em cima de outro
@@ -76,7 +76,7 @@ class NPCHousingManager:
         - Deve existir ao menos um casal de ADULTOS com cônjuge.
         - NENHUM morador da casa deve já ter uma obra em andamento.
         """
-        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
+        # X04 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
         # não recalculado por varredura — `dict(...)` é só uma cópia RASA da
         # estrutura externa (protege contra `RuntimeError` se uma obra nova
         # adicionar uma casa ao índice no meio deste laço); as listas de moradores

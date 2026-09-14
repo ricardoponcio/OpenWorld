@@ -3,7 +3,7 @@
 > 🔴 **LEIA ANTES DE CONTINUAR ESTE PLANO (2026-09-11)**: a validação humana das Fases 0–4
 > encontrou 8 defeitos, incluindo um **erro de unidade que deixa toda cidade 15,81× menor que o
 > projetado** e um algoritmo que põe **todas as cidades na linha d'água**. Eles estão medidos,
-> com causa raiz e solução prescritiva, em **[`DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md)**.
+> com causa raiz e solução prescritiva, em **[`07_DIAGNOSTICO_V3.md`](07_DIAGNOSTICO_V3.md)**.
 > **Corrija D1, D3, D4 e D5 antes de iniciar a Fase 5** — a Fase 5 (narrativa por IA) gera texto
 > em cima de cidades cuja posição e escala estão erradas.
 
@@ -16,7 +16,7 @@
 > → Seção 3 (problemas, já em ordem de prioridade) → Seção 4 (ordem de execução) → a sua fase
 > → Seção 8 (testes, se a sua fase pede teste).
 >
-> Histórico do que já foi feito (Frentes 1–6) está em [`ROADMAP.md`](ROADMAP.md).
+> Histórico do que já foi feito (Frentes 1–6) está em [`05_ROADMAP.md`](05_ROADMAP.md).
 > Ao concluir qualquer fase: preencha a Seção 7 e some uma linha no "Log de Sessões" do ROADMAP.
 
 **Revisão**: 2026-09-10 (v3.0 — auditoria de código + medição derrubaram a arquitetura da Fase 0

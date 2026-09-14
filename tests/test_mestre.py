@@ -1,6 +1,6 @@
 """
-Testes das ações de mundo do Modo Mestre — docs/PLANO_REFATORACAO.md (R-F03) e
-docs/PLANO_AVANCO_E_CALIBRAGEM.md (Bloco F).
+Testes das ações de mundo do Modo Mestre — docs/10_PLANO_REFATORACAO.md (R-F03) e
+docs/14_PLANO_AVANCO_E_CALIBRAGEM.md (Bloco F).
 
 O que estes testes protegem:
 - (a) um comando que não existe no enum é descartado em vez de cair num ramo errado;

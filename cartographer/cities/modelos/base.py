@@ -1,5 +1,5 @@
 """
-A interface de modelo de cidade (ESPEC_DESENHO_CIDADE.md F4.3/F4.4). `Rua`/`Quadra`/`Malha`
+A interface de modelo de cidade (09_ESPEC_DESENHO_CIDADE.md F4.3/F4.4). `Rua`/`Quadra`/`Malha`
 são o que um modelo devolve; `ModeloCidade` são os sete ganchos que todo modelo responde —
 a base resolve os seis genéricos de um jeito razoável, e cada modelo sobrescreve só os que
 fazem sentido pra ele. `construir_malha` é o único obrigatório.
@@ -19,10 +19,10 @@ from cartographer.cities.escala import domicilios_alvo, lotes_alvo, raio_para_lo
 
 
 def derivar_ou_forcar_raio(sitio, config, rng, raio_m_forcado, nome_modelo):
-    """R01/R02 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): compartilhado pelos
+    """R01/R02 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): compartilhado pelos
     modelos que sorteiam `raio_m` no próprio `__init__` (radial, grade, linear —
     organica herda de radial) pra nunca triplicar a mesma conta (armadilha 12, docs/
-    PLANO_POPULACAO_E_ESCALA.md: um cálculo copiado é dois cálculos que podem
+    13_PLANO_POPULACAO_E_ESCALA.md: um cálculo copiado é dois cálculos que podem
     divergir). ⚠️ Chame na MESMA posição da sequência do `rng` que o sorteio de raio
     ocupava antes de R01 — mudar a ordem muda todas as cidades do mundo (Seção 10
     item 1).
@@ -72,9 +72,9 @@ def distancia_faixa_dominio(config, classe):
     """Meia-largura da via + recuo — a distância que `quad.encolher_quad` insere entre o
     quarteirão bruto e a faixa de domínio da rua. Era duplicado, idêntico, em
     `gerador.py` e em `linear.py`; extraído aqui pra `cartographer/cities/expansao.py`
-    (X02, docs/PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo.
+    (X02, docs/12_PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo.
 
-    L02 (docs/PLANO_POPULACAO_E_ESCALA.md): "sem_via" tem distância zero — não há via
+    L02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): "sem_via" tem distância zero — não há via
     nenhuma pra recuar dela."""
     if classe == "sem_via":
         return 0.0
@@ -90,7 +90,7 @@ def gerar_fileiras_de_quadras(eixo_pontos, profundidade_m, comprimento_celula_m,
     ~`comprimento_celula_m` ao longo do eixo, e as ruas transversais nos cortes
     intermediários — a estrutura de `LinearModelo` (F6) com uma única fileira (`k=1`),
     extraída pra ser reusada por `cartographer/cities/expansao.py` (X02, docs/
-    PLANO_CIDADE_VIVA.md): o arrabalde é exatamente "casas dos dois lados de uma rua",
+    12_PLANO_CIDADE_VIVA.md): o arrabalde é exatamente "casas dos dois lados de uma rua",
     fora do muro.
 
     `id_prefix` é uma tupla; o id de cada quadra é `id_prefix + (segmento, corte, lado)`.
@@ -130,7 +130,7 @@ def gerar_fileiras_de_quadras(eixo_pontos, profundidade_m, comprimento_celula_m,
 
 
 def densificar_anel(anel, n_alvo):
-    """S02 (docs/PLANO_POPULACAO_E_ESCALA.md): insere pontos num anel já pronto,
+    """S02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): insere pontos num anel já pronto,
     SOBRE os segmentos que ele já tem, até ele ter `n_alvo` pontos — `n_alvo` tem que
     ser múltiplo de `len(anel)`. Como o ponto novo cai exatamente sobre o segmento
     entre dois vértices existentes, a POLILINHA não muda de forma, só ganha vértice —
@@ -157,7 +157,7 @@ def envolver_poligono(poligono, folga):
     """Infla um polígono radialmente em torno do próprio centroide, garantindo que todo
     vértice original fique DENTRO do resultado com ao menos `folga` de sobra. Usado pela
     muralha: ela tem que envolver a cidade por construção, não por sorte (Seção 1.3 do
-    docs/PLANO_CIDADE_VIVA.md).
+    docs/12_PLANO_CIDADE_VIVA.md).
 
     `folga` aceita um único float (mesma folga em todo vértice) ou uma sequência do
     mesmo tamanho de `poligono` (folga por vértice — variação orgânica na muralha só
@@ -187,7 +187,7 @@ class Quadra:
     # 4 strings — a classe_via da rua sobre a aresta k. Valores válidos:
     # "principal" | "anel" | "secundaria" (vias de verdade, com largura em
     # cidade_via_largura_m_por_classe) | "servico" (viela DE VERDADE — vira Rua,
-    # dá frente legítima) | "sem_via" (L02, docs/PLANO_POPULACAO_E_ESCALA.md: NÃO
+    # dá frente legítima) | "sem_via" (L02, docs/13_PLANO_POPULACAO_E_ESCALA.md: NÃO
     # existe via nenhuma nesta aresta — nenhum lote pode ter frente ali; distância de
     # faixa de domínio zero, não há via pra recuar). Armadilha 6: "servico" já
     # significou as duas coisas no mesmo campo — não confunda os dois de novo.
@@ -227,7 +227,7 @@ class ModeloCidade:
         # rng, em ordem específica (ver o comentário de determinismo em radial.py).
         self.raio_m = 500.0
         self.lote_fator_cidade = 1.0
-        # R02 (docs/PLANO_POPULACAO_E_ESCALA.md): quantos lotes a cidade deveria ter,
+        # R02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): quantos lotes a cidade deveria ter,
         # segundo `derivar_ou_forcar_raio` — `None` pro modelo mínimo (T5, sem raio
         # derivado) e pra qualquer geração calibrada (R02, `raio_m_forcado`). Quem lê
         # isto (`manifesto.py`, a correção de Newton) trata `None` como "sem alvo pra

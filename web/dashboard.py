@@ -93,7 +93,7 @@ def get_update():
 
         # Carregar limiar de morte da config (mesma chave/resolver que a engine usa —
         # antes este arquivo tinha seu próprio default (12), divergente do default
-        # usado em builder/populate.py (120), ver docs/AUDITORIA_HARDCODE.md)
+        # usado em builder/populate.py (120), ver docs/02_AUDITORIA_HARDCODE.md)
         limiar_morte = cfg_get(config, "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
 
         # NPCs

@@ -27,7 +27,7 @@ class InfrastructureManager:
     Gerenciador do ciclo de vida físico das construções.
     Toda parametrização lida via cfg_get — crash imediato se chave ausente no config.json.
 
-    X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `processar_desgaste`/
+    X03 (docs/15_PLANO_MUNDO_CRIVEL.md, decisão ❽): `processar_desgaste`/
     `processar_reparos_espontaneos` moravam em `run_simulation.py`, fora de
     qualquer benchmark — duas chaves de hora (cada método tem a própria) porque as
     outras mecânicas de `GameLoop._rotinas_diarias` só declaram uma.
@@ -67,7 +67,7 @@ class InfrastructureManager:
         Aplica desgaste passivo e por uso a todos os locais ativos.
         Deve ser chamado uma vez por dia simulado.
 
-        V04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): a penalidade de superlotação era
+        V04 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): a penalidade de superlotação era
         O(locais × NPCs) — 1.319 ms medidos com 26.748 locais e 840 NPCs; ~88 s/dia
         projetado com 25.000 NPCs, sozinho quase 3× o orçamento de 7 dias de D13.
         `_contar_ocupacao_por_local` monta o mapa UMA vez (O(NPCs)), não por local.
@@ -160,7 +160,7 @@ class InfrastructureManager:
         Transforma o local em Ruína: tipo=TipoLocal.RUINA, status=0, integridade=0.
         Ruínas são passíveis de reconstrução futura por NPCs com recursos suficientes.
 
-        T04 (docs/PLANO_CIDADE_VIVA.md): o LOTE volta a 'livre' — o id do Local É o id
+        T04 (docs/12_PLANO_CIDADE_VIVA.md): o LOTE volta a 'livre' — o id do Local É o id
         do lote (armadilha 3), e `db.lotes.liberar` já é condicional a estado='ocupado'
         (não atropela se alguém já reservou o lote de novo antes desta chamada rodar).
         O Local em si continua com status=0 pra narrativa ("as ruínas da antiga forja").

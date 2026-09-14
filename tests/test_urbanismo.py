@@ -1,5 +1,5 @@
 """
-Testes de `GerenciadorUrbanismo` — docs/PLANO_CIDADE_VIVA.md O02.
+Testes de `GerenciadorUrbanismo` — docs/12_PLANO_CIDADE_VIVA.md O02.
 """
 from engine.mechanics.urbanismo import GerenciadorUrbanismo, tipo_local_de_categoria
 from engine.models import TipoLocal, CategoriaLocal
@@ -9,7 +9,7 @@ from tests.mundo_sintetico import adulto, casa, mundo_de
 
 
 def test_todo_local_tem_tipo_do_enum():
-    """V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo_local_por_categoria` cobre
+    """V01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo_local_por_categoria` cobre
     TODAS as `CategoriaLocal`, e cada valor está em `TipoLocal` — sem isto, `tipo`
     virava cópia exata de `tipo_local` em 26.748 de 26.748 locais medidos."""
     config = get_config()
@@ -37,7 +37,7 @@ def _config_urbanismo(**overrides):
     base.update(overrides)
     return {
         "urbanismo": base,
-        # V01 (docs/PLANO_MUNDO_CRIVEL.md): `abrir_obra` deriva `tipo` daqui.
+        # V01 (docs/15_PLANO_MUNDO_CRIVEL.md): `abrir_obra` deriva `tipo` daqui.
         "geracao_urbana": {"tipo_local_por_categoria": {
             "residencia": "Casa", "forja": "Oficina", "mercado": "Loja",
             "taverna": "Social", "publico": "Social", "quartel": "Defesa",

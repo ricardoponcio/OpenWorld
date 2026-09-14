@@ -24,7 +24,7 @@ class NPCMarriageManager:
     construtor para que um teste possa substituí-lo por um dublê e verificar a união
     sem disparar obra nenhuma.
 
-    H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` (A06)
+    H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` (A06)
     — `processar_coabitacao` deixou de ser chamada a cada tick (de dentro de
     `NPCSocialManager.processar_interacoes`, ~46% do piso medido) e passou a ser uma
     rotina diária despachada por `GameLoop`, como as outras cinco mecânicas já são.
@@ -42,7 +42,7 @@ class NPCMarriageManager:
         Verifica se dois NPCs atendem a todos os critérios biológicos, sociais
         e morais para serem elegíveis ao casamento.
 
-        G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): a parte biológica (vivo, fértil,
+        G02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): a parte biológica (vivo, fértil,
         não-parente, afinidade mínima) é `NPCUtils.pode_conceber` — a MESMA checagem
         que `processar_concepcao` usa, pro mesmo motivo não divergir duas vezes
         (armadilha 12)."""
@@ -61,7 +61,7 @@ class NPCMarriageManager:
         return True
 
     def _filhos_para_mudar(self, pai_ou_mae: NPC, casa_origem: str, casa_destino: str) -> list:
-        """G04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): dependentes de `pai_ou_mae`
+        """G04 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): dependentes de `pai_ou_mae`
         que ficariam sozinhos na casa de origem se ele/ela se mudar sem eles — sem
         isto, o bebê ficava na casa antiga, virando o próprio pagador da refeição
         com 0 PC (§5.2 do documento, 10 casos num mundo real de 25 dias). Vazio se
@@ -222,18 +222,18 @@ class NPCMarriageManager:
 
         # Filtra apenas NPCs solteiros ativos (vivos), agrupados por CIDADE — casar
         # gente de cidades diferentes nunca fez sentido (P03/P04, docs/
-        # PLANO_CIDADE_VIVA.md: mesmo raciocínio de "NPC não atravessa o mundo pra ir
+        # 12_PLANO_CIDADE_VIVA.md: mesmo raciocínio de "NPC não atravessa o mundo pra ir
         # à taverna").
         solteiros_por_cidade = {}
         for n in self._mundo.npcs:
             if n.esta_vivo() and not NPCUtils.tem_conjuge(n):
                 solteiros_por_cidade.setdefault(n.cidade_id, []).append(n)
 
-        # N01 (docs/PLANO_POPULACAO_E_ESCALA.md): um casamento exige afinidade
+        # N01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): um casamento exige afinidade
         # acumulada, e afinidade só existe entre quem já se encontrou —
         # `n1.relacionamentos` já é exatamente esse conjunto, e é pequeno. Percorrê-lo
         # em vez da cidade inteira troca O(N²) por O(N × conhecidos).
-        # G03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): no máximo UM casamento
+        # G03 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): no máximo UM casamento
         # planejado por CIDADE por dia — cada cidade processada independente das
         # outras (antes desta tarefa, um `return` saía do método inteiro no
         # primeiro casamento de QUALQUER cidade: bug herdado de quando a rotina

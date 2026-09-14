@@ -8,7 +8,7 @@ class ColoringProcessor:
 
     A paleta inteira (cores de oceano e de cada bioma) vem de
     `config["cartografia"]["cores"]` — nenhuma cor fica mais hardcoded aqui. Ver
-    docs/ROADMAP.md (Frente 1) e docs/AUDITORIA_HARDCODE.md.
+    docs/05_ROADMAP.md (Frente 1) e docs/02_AUDITORIA_HARDCODE.md.
     """
 
     @staticmethod
@@ -20,7 +20,7 @@ class ColoringProcessor:
         `nivel_mar`) participa do gradiente de recife — o resto do oceano fica na cor
         profunda uniforme. Antes o gradiente usava a coluna de profundidade inteira
         (0 até nivel_mar) como domínio, o que espalhava o brilho por uma faixa muito mais
-        larga do que um recife raso razoável (Frente 2, docs/ROADMAP.md).
+        larga do que um recife raso razoável (Frente 2, docs/05_ROADMAP.md).
         """
         if nivel_mar is None:
             nivel_mar = cfg_get(config, "nivel_mar")

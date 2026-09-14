@@ -16,9 +16,9 @@ DESCRIÇÃO:
     `db` como primeiro argumento, o que é um `self` disfarçado, e `aplicar_acoes` ainda
     chamava `carregar_config_global()` por conta própria no meio da regra.
 
-    F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `aplicar_acoes` (chamado do processo do
+    F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `aplicar_acoes` (chamado do processo do
     Flask) deixou de aplicar na hora — o Modo Mestre não tem o `EstadoDoMundo` vivo
-    da simulação ali (ARQUITETURA.md, "regra de processo") — e passou a ENFILEIRAR
+    da simulação ali (11_ARQUITETURA.md, "regra de processo") — e passou a ENFILEIRAR
     (`mestre_acoes_pendentes`). `drenar_e_aplicar` é o lado oposto: só
     `run_simulation.py` chama, com o mundo vivo, a cada volta do laço."""
 from typing import List
@@ -38,7 +38,7 @@ class MestreManager:
     def montar_contexto(self, cidade_id=None, limite_eventos: int = 10) -> dict:
         """Coleta o retrato atual do mundo para alimentar o prompt da IA.
 
-        M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): filtrado pela CIDADE simulada
+        M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): filtrado pela CIDADE simulada
         (`cidade_id=None` usa `MetaChave.CIDADE_SIMULADA`) — sem filtro nem teto,
         840 NPCs já produziam 433.566 tokens medidos; com 25.000 seriam ~3 milhões.
         Residências entram como contagem agregada, não lista (22.624 linhas não são

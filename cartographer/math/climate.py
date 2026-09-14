@@ -34,8 +34,8 @@ class ClimateProcessor:
     classificação de biomas terrestres.
 
     Todos os parâmetros climáticos vêm de `config` (o bloco config["cartografia"]),
-    lidos via `cfg_get` — sem constantes de classe duplicadas. Ver docs/ROADMAP.md
-    (Frente 1) e docs/AUDITORIA_HARDCODE.md.
+    lidos via `cfg_get` — sem constantes de classe duplicadas. Ver docs/05_ROADMAP.md
+    (Frente 1) e docs/02_AUDITORIA_HARDCODE.md.
     """
     # Derivado do enum Bioma — mantém a matemática vetorizada de classify_biomes (que
     # indexa por nome) sem reescrevê-la, e sem duplicar o id numérico à mão (R-B06).

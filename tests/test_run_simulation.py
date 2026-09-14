@@ -1,5 +1,5 @@
 """
-M01 (docs/PLANO_POPULACAO_E_ESCALA.md): `sincronizar_locais_se_mudou` só chama
+M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `sincronizar_locais_se_mudou` só chama
 `SimulationEngine.recarregar_locais()` quando `MetaChave.LOCAIS_VERSAO` de fato mudou
 desde a última checagem — um `SELECT` de uma linha todo tick é ruído; recarregar 24 mil
 locais quando nada mudou não seria.

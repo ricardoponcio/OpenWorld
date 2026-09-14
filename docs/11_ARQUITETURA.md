@@ -5,9 +5,9 @@
 > descreve o que ele **deve ser**, e o que toda contribuição nova precisa respeitar.
 >
 > Quem vai executar a limpeza do que já existe usa o documento irmão,
-> [`PLANO_REFATORACAO.md`](PLANO_REFATORACAO.md).
-> Quem quer saber *o que* construir usa [`ROADMAP.md`](ROADMAP.md) e
-> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md).
+> [`10_PLANO_REFATORACAO.md`](10_PLANO_REFATORACAO.md).
+> Quem quer saber *o que* construir usa [`05_ROADMAP.md`](05_ROADMAP.md) e
+> [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md).
 > **Este documento responde *como* construir.**
 
 **Criado em:** 2026-09-11
@@ -746,7 +746,7 @@ mesma semente produzem exatamente o mesmo mundo**, bit a bit, em qualquer resolu
 
 Isso está travado por `tests/test_cartografia.py` e `tests/test_cidades.py`, e as regras
 abaixo existem porque cada uma delas já foi violada e custou uma sessão de depuração.
-Estão documentadas em `docs/PLANO_EVOLUCAO_V2.md` e `docs/ESPEC_DESENHO_CIDADE.md`.
+Estão documentadas em `docs/06_PLANO_EVOLUCAO_V2.md` e `docs/09_ESPEC_DESENHO_CIDADE.md`.
 
 ### As regras
 
@@ -890,7 +890,7 @@ arquivo protege:
 
 ```python
 """
-Testes de geometria de cidade — docs/ESPEC_DESENHO_CIDADE.md, Seção 9.2.
+Testes de geometria de cidade — docs/09_ESPEC_DESENHO_CIDADE.md, Seção 9.2.
 
 Cobre os invariantes que a arquitetura de modelo de cidade (F4) precisa proteger: a base
 sozinha basta pra um modelo mínimo gerar uma cidade completa (T5), todo modelo registrado
@@ -1080,5 +1080,5 @@ Quando estiver em dúvida sobre como escrever algo, abra um destes:
 | um teste de invariante | `tests/test_cidades.py` |
 | um comentário que explica uma decisão | `cartographer/cities/escala.py:33-38` |
 
-E quando quiser ver o que **não** fazer, o [`PLANO_REFATORACAO.md`](PLANO_REFATORACAO.md)
+E quando quiser ver o que **não** fazer, o [`10_PLANO_REFATORACAO.md`](10_PLANO_REFATORACAO.md)
 tem 13 bugs reais catalogados, cada um com o arquivo e a linha.

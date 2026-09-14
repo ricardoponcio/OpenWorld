@@ -1,5 +1,5 @@
 """
-Testes de `RepositorioLote` — docs/PLANO_CIDADE_VIVA.md T01.
+Testes de `RepositorioLote` — docs/12_PLANO_CIDADE_VIVA.md T01.
 
 Diferente de test_mecanicas.py (que usa um dublê de banco em memória), este arquivo
 precisa de SQL de verdade: `reservar_livre` é uma sentença condicional pensada

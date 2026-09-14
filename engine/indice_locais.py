@@ -1,7 +1,7 @@
 """
 MODULE: indice_locais.py
 FUNÇÃO: Índices de leitura sobre os locais, por cidade e por papel (P01, docs/
-        PLANO_CIDADE_VIVA.md).
+        12_PLANO_CIDADE_VIVA.md).
 
 DESCRIÇÃO:
     Existe porque cada consulta de movimento (`mover_para_social`,
@@ -10,7 +10,7 @@ DESCRIÇÃO:
     ser NPCs × locais (Seção 1.6 do plano: 53,8 ms com 20 NPCs e 24 mil locais, contra
     2,9 ms com mil locais).
 
-    Vocabulário e estrutura de leitura (camada de MODELO, ARQUITETURA.md) — nenhuma
+    Vocabulário e estrutura de leitura (camada de MODELO, 11_ARQUITETURA.md) — nenhuma
     regra de simulação mora aqui, só a pergunta "que locais deste papel existem nesta
     cidade", já respondida na carga.
 

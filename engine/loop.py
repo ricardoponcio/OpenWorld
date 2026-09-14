@@ -41,22 +41,22 @@ class GameLoop:
         self._mundo = mundo
         self._config = config
 
-        # N03 (docs/PLANO_POPULACAO_E_ESCALA.md): estes dois blocos são lidos por NPC,
+        # N03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): estes dois blocos são lidos por NPC,
         # todo tick, dentro de `_aplicar_metabolismo`/`_aplicar_consequencias_de_saude`
         # (1,1 milhão de `cfg_get` por tick medido com 25.000 NPCs). Atributo de
         # instância, montado uma vez aqui — nunca global de módulo nem singleton
-        # (ARQUITETURA.md Seção 7: a config é injetada por construtor, e os testes
+        # (11_ARQUITETURA.md Seção 7: a config é injetada por construtor, e os testes
         # contam com isso pra montar mundos com config diferente).
         self._cfg_bio = cfg_get(config, "biologia_e_sociedade")
         self._cfg_metabolismo = cfg_get(config, "metabolismo")
 
-        # N04/H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `_ultima_lista_de_npcs` detecta
+        # N04/H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `_ultima_lista_de_npcs` detecta
         # quando `recarregar_habitantes()` troca `mundo.npcs` por objetos novos (o NPC
         # recarregado nasce com `num_dependentes` no default 0, e nenhuma porta marcou
         # essa troca em `mundo.casas_sujas`) — ver `_atualizar_dependentes`.
         self._ultima_lista_de_npcs = None
 
-        # A02 (docs/PLANO_POPULACAO_E_ESCALA.md): quantos NPCs foram efetivamente
+        # A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): quantos NPCs foram efetivamente
         # processados (metabolismo+decisão+ação) no último tick — não é estado de
         # simulação, é só um contador pra `bench_avanco.py`/testes lerem.
         self.decisoes_avaliadas_no_ultimo_tick = 0
@@ -67,7 +67,7 @@ class GameLoop:
         self._urbanismo = GerenciadorUrbanismo(mundo, config)
         self._habitacao = NPCHousingManager(mundo, config, self._urbanismo)
         self._reino = KingdomManager(mundo, config)
-        # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): construído aqui (não mais só
+        # H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): construído aqui (não mais só
         # dentro de `NPCSocialManager`) pra `GameLoop` poder despachar
         # `processar_coabitacao` pela própria cadência diária dele, em vez de
         # `NPCSocialManager.processar_interacoes` chamá-lo a cada tick.
@@ -75,13 +75,13 @@ class GameLoop:
         self._social = NPCSocialManager(mundo, config, casamento=self._casamento)
         self._eventos_globais = GlobalEventManager(mundo)
         self._humor = NPCMoodManager(config)
-        # X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket`/`InfrastructureManager`
+        # X03 (docs/15_PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket`/`InfrastructureManager`
         # moravam em `run_simulation.py`, fora de qualquer benchmark — 21% do custo
         # real por dia simulado nunca tinha sido medido (armadilha 16).
         self._mercado = JobMarket(mundo.db, config, mundo)
         self._infra = InfrastructureManager(mundo, config)
 
-        # A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cada mecânica declara a própria
+        # A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): cada mecânica declara a própria
         # cadência (`CADENCIA`/`CADENCIA_HORA_CONFIG`, ver as classes) — acrescentar
         # uma rotina diária nova é acrescentar uma linha aqui, nunca editar
         # `_executar_rotinas_agendadas`. Só `por_dia` existe de verdade hoje; um modo
@@ -108,7 +108,7 @@ class GameLoop:
         eventos_globais = self._atualizar_eventos_globais()
         self._executar_rotinas_agendadas()
 
-        # P03 (docs/PLANO_CIDADE_VIVA.md) + A04 (docs/PLANO_POPULACAO_E_ESCALA.md):
+        # P03 (docs/12_PLANO_CIDADE_VIVA.md) + A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md):
         # antes recalculado do zero aqui, todo tick (17,3 ms com 25.000 NPCs, metade
         # do "piso" medido em A00). Agora é o índice MANTIDO de `EstadoDoMundo` —
         # atualizado incrementalmente por `mover_npc`/`mudar_casa`/`registrar_npc`/
@@ -119,7 +119,7 @@ class GameLoop:
         npcs_alterados = []
         agora = self._mundo.data_simulada
 
-        # H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): os "devidos" agora
+        # H01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): os "devidos" agora
         # vêm da agenda de baldes, não de uma varredura de `self._mundo.npcs` inteiro
         # perguntando "você está em dia?" a cada um — o balde de "agora", mais
         # qualquer balde deixado pra trás (raro: um `acordar` no meio de um tick, ou
@@ -181,8 +181,8 @@ class GameLoop:
 
         self._remover_falecidos()
         self._processar_partos(maes_em_parto)
-        # P05 (docs/PLANO_CIDADE_VIVA.md): UMA transação pro tick inteiro, não um
-        # commit por NPC. N02 (docs/PLANO_POPULACAO_E_ESCALA.md): `salvar_muitos` só
+        # P05 (docs/12_PLANO_CIDADE_VIVA.md): UMA transação pro tick inteiro, não um
+        # commit por NPC. N02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `salvar_muitos` só
         # regrava as colunas que mudam todo minuto (energia, fome, social, saude,
         # humor, acao_atual, localizacao_atual_id) — as colunas frias (relacionamentos,
         # genealogia etc.) já foram gravadas por `salvar_completo` no ponto do evento
@@ -228,7 +228,7 @@ class GameLoop:
     def _aplicar_metabolismo(self, npc: NPC, minutos: int, maes_em_parto: list):
         """Perda/ganho passivo de energia/fome/social, e o consumo extra de gestação —
         função do TEMPO DECORRIDO (`minutos`), não do passo (A01, docs/
-        PLANO_POPULACAO_E_ESCALA.md). É exato pra energia/fome/social: a taxa não
+        13_PLANO_POPULACAO_E_ESCALA.md). É exato pra energia/fome/social: a taxa não
         depende do valor atual, então multiplicar por `minutos` e grampear no fim
         (`normalizar_necessidades`) dá o mesmo resultado que dar `minutos` passos de um
         minuto (armadilha 11) — hoje `minutos` é sempre 1 (a agenda de decisões, A02,
@@ -265,8 +265,8 @@ class GameLoop:
         npc.social -= random.uniform(cfg_get(meta, "social_base_perda_min"), cfg_get(meta, "social_base_perda_max")) * minutos
 
     def _aplicar_efeito_continuo(self, npc: NPC, minutos: int):
-        """A02 (docs/PLANO_POPULACAO_E_ESCALA.md) + H04 (docs/
-        PLANO_AVANCO_E_CALIBRAGEM.md): o efeito, por minuto, de CONTINUAR fazendo a
+        """A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md) + H04 (docs/
+        14_PLANO_AVANCO_E_CALIBRAGEM.md): o efeito, por minuto, de CONTINUAR fazendo a
         ação atual — a parte "linear" (sem ramificação de estado) do que
         `NPCActionManager.executar_acao` faria se rodasse a cada minuto. Chamado
         pra toda ação em `agenda.ACOES_LOTEAVEIS`, e só pra elas — o agendamento
@@ -286,9 +286,9 @@ class GameLoop:
         elif npc.acao_atual == Acao.TRABALHAR:
             cfg = cfg_get(cfg_acoes, "trabalhar")
             npc.energia -= cfg_get(cfg, "energia_perda") * minutos
-            # N02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): mesma conta de
+            # N02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco N): mesma conta de
             # `NPCActionManager._executar_trabalhar` — duplicar divergiria em
-            # silêncio (armadilha 12, docs/PLANO_POPULACAO_E_ESCALA.md).
+            # silêncio (armadilha 12, docs/13_PLANO_POPULACAO_E_ESCALA.md).
             npc.dinheiro_total_pc += salario_por_minuto(npc, self._mundo.locais, cfg_acoes) * minutos
         elif npc.acao_atual == Acao.OCIOSO:
             cfg = cfg_get(cfg_acoes, "ocioso")
@@ -316,7 +316,7 @@ class GameLoop:
             pagador.dinheiro_total_pc -= custo_do_tick * minutos
 
     def _candidatos_extra_agenda(self, npc: NPC, npcs_por_casa: dict):
-        """H04 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): os candidatos de agenda que
+        """H04 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): os candidatos de agenda que
         dependem de estado FORA do NPC — `agenda.py` continua sem ler `mundo`
         (R-F01), então quem tem acesso (`GameLoop`) calcula aqui, sempre com
         `agenda.minutos_ate_cruzar` (nunca uma fórmula própria), e injeta via
@@ -372,7 +372,7 @@ class GameLoop:
         self._mundo.ha_falecidos_pendentes = False
 
     def _podar_eventos_antigos(self):
-        """E02 (docs/PLANO_POPULACAO_E_ESCALA.md): varredura diária — apaga da
+        """E02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): varredura diária — apaga da
         tabela `eventos` (não `eventos_globais`) tudo mais velho que
         `simulacao.eventos_retencao_dias_simulados` dias simulados. Com 25.000 NPCs
         são ~245.000 linhas de evento por dia; sem poda a tabela nunca para de
@@ -391,8 +391,8 @@ class GameLoop:
             self._reproducao.processar_parto(mae)
 
     def _atualizar_dependentes(self):
-        """N04 (docs/PLANO_POPULACAO_E_ESCALA.md) + H02 (docs/
-        PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): `num_dependentes` só é
+        """N04 (docs/13_PLANO_POPULACAO_E_ESCALA.md) + H02 (docs/
+        14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): `num_dependentes` só é
         recalculado para as casas marcadas sujas (`mundo.casas_sujas`) desde a
         última vez que este método rodou — H02 substituiu a assinatura calculada
         sobre TODAS as casas todo tick (N04: 0,47s/tick com 25.000 NPCs recomputando

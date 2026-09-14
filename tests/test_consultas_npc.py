@@ -1,5 +1,5 @@
 """
-Testes de `NPCUtils` — docs/PLANO_CIDADE_VIVA.md P03.
+Testes de `NPCUtils` — docs/12_PLANO_CIDADE_VIVA.md P03.
 """
 from engine.consultas_npc import NPCUtils
 from engine.models import EstagioVida

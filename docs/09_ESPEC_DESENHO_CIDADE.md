@@ -6,8 +6,8 @@
 > (posição, bioma, clima) e produz o desenho inteiro.
 >
 > **Este documento é auto-suficiente.** Você **não** precisa ler o
-> [`PLANO_EVOLUCAO_V2.md`](PLANO_EVOLUCAO_V2.md) nem o [`DIAGNOSTICO_V3.md`](DIAGNOSTICO_V3.md).
-> Da [`ESPEC_TECIDO_URBANO.md`](ESPEC_TECIDO_URBANO.md) (o trabalho anterior, já concluído)
+> [`06_PLANO_EVOLUCAO_V2.md`](06_PLANO_EVOLUCAO_V2.md) nem o [`07_DIAGNOSTICO_V3.md`](07_DIAGNOSTICO_V3.md).
+> Da [`08_ESPEC_TECIDO_URBANO.md`](08_ESPEC_TECIDO_URBANO.md) (o trabalho anterior, já concluído)
 > você só precisa do que está resumido na **Seção 2** daqui.
 >
 > Leia nesta ordem: **Seção 0** (regras de trabalho) → **Seção 1** (o pedido) → **Seção 2** (como
@@ -29,15 +29,15 @@ proposta foi adotada; ver Seções 4.1, 5.5 e F4, e a subseção 4.2, medida par
 mostra que os dados de clima já existem e discriminam entre as cidades.)
 **Estado do mundo medido**: `database/world_manifest.json`, 5 continentes, 15 cidades (14
 arquivos — ver Seção 3.6), `database/cidades/` com 52 MB e **32.787 edifícios**.
-**Pré-requisito já concluído** (não refaça): toda a `ESPEC_TECIDO_URBANO.md` (E1 a E6) —
+**Pré-requisito já concluído** (não refaça): toda a `08_ESPEC_TECIDO_URBANO.md` (E1 a E6) —
 faixa de domínio da via, lote realista, edifício poligonal, importador de `Polygon`, índice
-por cidade, variedade de raio/anéis/setores. Ver `ROADMAP.md`, Frente 7 e Log parte 20.
+por cidade, variedade de raio/anéis/setores. Ver `05_ROADMAP.md`, Frente 7 e Log parte 20.
 
 ---
 
 ## 0. Regras de trabalho — leia antes de tocar em qualquer coisa
 
-São as mesmas da `ESPEC_TECIDO_URBANO.md` e continuam valendo. Repetidas aqui porque este
+São as mesmas da `08_ESPEC_TECIDO_URBANO.md` e continuam valendo. Repetidas aqui porque este
 documento é auto-suficiente.
 
 1. **Nunca escreva em `database/` enquanto uma simulação ou reset estiver rodando.**
@@ -343,7 +343,7 @@ vagas de taverna e 6.553 casas não dá emprego a ninguém.
 
 ### 3.4 Só existe uma forma de cidade
 
-Todas as 15 cidades são o mesmo traçado radial. A `ESPEC_TECIDO_URBANO.md` E6 deu variedade de
+Todas as 15 cidades são o mesmo traçado radial. A `08_ESPEC_TECIDO_URBANO.md` E6 deu variedade de
 **números** (raio, anéis, setores sorteados por faixa), mas não de **forma**. Uma capital
 comercial, uma fortaleza e uma vila agrícola são, geometricamente, a mesma coisa em escalas
 diferentes.
@@ -434,7 +434,7 @@ registrado na Seção 10 como pendência do autor — não tente consertar aqui.
 `cidade["nome"].lower().replace(" ", "_")`, então a segunda sobrescreve o arquivo da primeira:
 15 cidades no manifesto, 14 arquivos em `database/cidades/`.
 
-Já registrado na `ESPEC_TECIDO_URBANO.md` Seção 11. **Fora do escopo deste documento** — está
+Já registrado na `08_ESPEC_TECIDO_URBANO.md` Seção 11. **Fora do escopo deste documento** — está
 aqui só para você não achar que quebrou algo ao contar 14 onde o manifesto diz 15.
 
 ---
@@ -1666,7 +1666,7 @@ pode aumentar muito (ver F5.2).
    já apareceu duas vezes neste código.
 
 2. **`_encolher_quad` é geometria pura.** Ele **não** aplica piso de área — quem aplica é o
-   chamador. Isso foi um bug real na E3 da `ESPEC_TECIDO_URBANO.md` (969 de 1.018 footprints
+   chamador. Isso foi um bug real na E3 da `08_ESPEC_TECIDO_URBANO.md` (969 de 1.018 footprints
    sumiram porque o piso da quadra vazou para o footprint do edifício). Se você reutilizá-lo em
    um modelo novo, **não** reintroduza o piso lá dentro.
 
@@ -1685,7 +1685,7 @@ pode aumentar muito (ver F5.2).
    `FeatureCollection` vazio, sem log, sem 404.
 
 5. **Explosão de `Local`.** F5 com célula pequena pode triplicar o mundo. Meça com 9.4 **antes**
-   de gerar as 14. O limite de escala do motor já está registrado em `ROADMAP.md` Frente 8 —
+   de gerar as 14. O limite de escala do motor já está registrado em `05_ROADMAP.md` Frente 8 —
    este trabalho aproxima aquele limite, não o cria.
 
 6. **`JobMarket` varre `locais` inteiro.** `engine/mechanics/market.py:77` faz um `SELECT` sobre
@@ -1964,4 +1964,4 @@ pode aumentar muito (ver F5.2).
     já está calibrado com `linear`/`grade` como aproximação honesta enquanto isso não muda;
   - a cidade é plana na própria escala (3.5a) — bloqueia qualquer modelo guiado por relevo;
   - colisão de slug de `Cidade dos Ventos` (3.6);
-  - `ROADMAP.md` Frente 8 (índice de `engine.locais` por cidade) fica mais próxima do limite.
+  - `05_ROADMAP.md` Frente 8 (índice de `engine.locais` por cidade) fica mais próxima do limite.

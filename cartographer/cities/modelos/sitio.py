@@ -1,12 +1,12 @@
 """
 SitioCidade — os dados de posição/geografia/clima que todo modelo de cidade recebe
-(ESPEC_DESENHO_CIDADE.md F4.2). Medido UMA VEZ por cidade, antes de instanciar o modelo,
+(09_ESPEC_DESENHO_CIDADE.md F4.2). Medido UMA VEZ por cidade, antes de instanciar o modelo,
 e passado pronto — nenhum modelo chama `obter_cartografo()` nem lê `mapa_composto.npz`
 diretamente.
 
 Armadilha de determinismo (F4.6/Seção 10.1): `SitioCidade.medir()` precisa do RAIO da
 cidade pra saber que janela de terreno amostrar, mas o raio real só é conhecido DEPOIS
-que o modelo existe — desde R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R) ele é
+que o modelo existe — desde R01 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R) ele é
 DERIVADO do número de domicílios sorteado (`escala.py:raio_para_lotes`), não mais
 sorteado direto. A saída: a janela usa o TETO de `faixa_raio_m` (não mais uma amostra
 do rng) — seguro por construção, porque `raio_para_lotes` sempre grampeia o raio
@@ -64,7 +64,7 @@ class SitioCidade:
     terreno: Optional[np.ndarray]  # canal 0 da janela, 128x128
     grad_x: Optional[np.ndarray]
     grad_y: Optional[np.ndarray]
-    # G06 (armadilha 4, docs/PLANO_CIDADE_VIVA.md): meia-largura REAL da janela de
+    # G06 (armadilha 4, docs/12_PLANO_CIDADE_VIVA.md): meia-largura REAL da janela de
     # terreno, em metros — maior que raio_m (cidade_geo_janela_terreno_fator), pra dar
     # margem pro Bloco X ler terreno fora da muralha sem cair no np.clip silencioso que
     # devolvia a célula da borda pra qualquer ponto fora da cidade original.
@@ -84,13 +84,13 @@ class SitioCidade:
         y_mundo = float(cidade["y_global"])
         metros_por_px = metros_por_pixel_mundo(config)
 
-        # R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio real só é conhecido
+        # R01 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio real só é conhecido
         # DEPOIS do modelo existir (é derivado do número de domicílios sorteado, não
         # mais sorteado direto — `raio_para_lotes`). Dimensionar a janela de terreno
         # com o TETO de `faixa_raio_m` (não mais uma amostra provisória do rng) é
         # seguro por construção: `raio_para_lotes` sempre GRAMPEIA o raio derivado
         # dentro dessa mesma faixa, então o teto nunca é menor que o raio final —
-        # a janela nunca fica pequena demais (G06/Q04, docs/PLANO_CIDADE_VIVA.md).
+        # a janela nunca fica pequena demais (G06/Q04, docs/12_PLANO_CIDADE_VIVA.md).
         _, teto_raio_m = faixa_raio_m(config, tamanho)
         fator_janela = cfg_get(config, "cidade_geo_janela_terreno_fator")
         raio_janela_m = teto_raio_m * fator_janela
@@ -135,7 +135,7 @@ class SitioCidade:
 
     # ------------------------------------------------------------------
     # G06: o sítio é o dono do terreno — nem modelo nem gerador precisam saber como a
-    # grade é indexada (ARQUITETURA.md P1). Substitui os dois `_indice_terreno`
+    # grade é indexada (11_ARQUITETURA.md P1). Substitui os dois `_indice_terreno`
     # idênticos que existiam em radial.py e generate_city_geometry.py.
     # ------------------------------------------------------------------
     def _indice(self, x_m: float, y_m: float):

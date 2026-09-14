@@ -10,7 +10,7 @@ class TectonicsProcessor:
 
     Todas as funções recebem `config` (o bloco config["cartografia"]) e leem seus
     parâmetros via `cfg_get` — nenhum valor de balanceamento fica mais hardcoded
-    aqui. Ver docs/ROADMAP.md (Frente 1) e docs/AUDITORIA_HARDCODE.md.
+    aqui. Ver docs/05_ROADMAP.md (Frente 1) e docs/02_AUDITORIA_HARDCODE.md.
     """
 
     @staticmethod
@@ -108,7 +108,7 @@ class TectonicsProcessor:
         `map_size` é a dimensão real do mundo composto (ex.: tile_size * tiles_por_lado),
         calculada pelo chamador — não é um parâmetro de balanceamento de cartografia, por
         isso não vem de `config` (antes era um literal 768.0 fixo, quebrando silenciosamente
-        se o grid de tiles do mundo mudasse de tamanho; ver achado #3 de AUDITORIA_HARDCODE.md).
+        se o grid de tiles do mundo mudasse de tamanho; ver achado #3 de 02_AUDITORIA_HARDCODE.md).
         """
         margem_segura = cfg_get(config, "vinheta_margem_segura")
         largura_fade = cfg_get(config, "vinheta_largura_fade")

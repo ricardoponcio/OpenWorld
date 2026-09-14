@@ -21,7 +21,7 @@ class AfetarNpc(AcaoDeMundo):
         npc.saude = max(ESCALA_MINIMA, min(ESCALA_MAXIMA, npc.saude + delta_saude))
         npc.humor = humor
         mundo.db.npcs.salvar(npc)
-        # F03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mudou saúde/humor do NPC por um
+        # F03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): mudou saúde/humor do NPC por um
         # motivo que não é o próprio metabolismo dele — reavalia agora, sem esperar o
         # instante que a agenda (A02) já tivesse calculado.
         mundo.acordar(npc)
@@ -30,7 +30,7 @@ class AfetarNpc(AcaoDeMundo):
     @staticmethod
     def _humor_valido(humor_proposto) -> str:
         """Humor vem da IA — entrada não confiável, valida contra o enum antes de
-        persistir (R-C04 / ARQUITETURA.md Seção 9)."""
+        persistir (R-C04 / 11_ARQUITETURA.md Seção 9)."""
         try:
             return HumorNPC(humor_proposto).value
         except ValueError:

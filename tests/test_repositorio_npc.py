@@ -1,6 +1,6 @@
 """
-Testes de `RepositorioNPC.salvar_completo`/`salvar_muitos` — docs/PLANO_CIDADE_VIVA.md
-P05 e docs/PLANO_POPULACAO_E_ESCALA.md N02.
+Testes de `RepositorioNPC.salvar_completo`/`salvar_muitos` — docs/12_PLANO_CIDADE_VIVA.md
+P05 e docs/13_PLANO_POPULACAO_E_ESCALA.md N02.
 
 Como em tests/test_repositorio_lote.py, precisa de SQLite de verdade (arquivo
 temporário, nunca `:memory:` — o pool de conexões abre várias, cada `:memory:` seria um
@@ -70,7 +70,7 @@ def test_salvar_muitos_atualiza_so_as_colunas_quentes(tmp_path):
 
 
 def test_dinheiro_e_gravidez_sobrevivem_a_recarga(tmp_path):
-    """P02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc`/
+    """P02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc`/
     `gravidez_ticks` mudam a cada minuto simulado (trabalhar/comer/socializar;
     gestação) e ficaram de fora de `_COLUNAS_QUENTES` por engano — o reload de
     `run_simulation.py` (a cada 5h) restaurava os dois pro valor gravado no
@@ -107,7 +107,7 @@ def test_salvar_muitos_lista_vazia_nao_quebra(tmp_path):
 
 
 def test_salvar_relacionamentos_muitos_grava_as_duas_direcoes(tmp_path):
-    """E01 (docs/PLANO_POPULACAO_E_ESCALA.md): uma transação pra todos os pares de
+    """E01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): uma transação pra todos os pares de
     relacionamento do tick — cada par grava as DUAS direções, igual a
     `salvar_relacionamento` chamado par a par."""
     db = _db(tmp_path)

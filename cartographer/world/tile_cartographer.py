@@ -47,7 +47,7 @@ class TileCartographer:
         # valor era um literal 768.0 fixo dentro da vinheta e do gradiente de
         # temperatura — agora é calculado pelo chamador (WorldManager) e passado
         # explicitamente, então mudar o grid de tiles não quebra silenciosamente
-        # essas duas contas (achado #3 de docs/AUDITORIA_HARDCODE.md).
+        # essas duas contas (achado #3 de docs/02_AUDITORIA_HARDCODE.md).
         self.tamanho_global = tamanho_global if tamanho_global is not None else self.size * 3
 
     def generate_tile(self, offset_x, offset_y):

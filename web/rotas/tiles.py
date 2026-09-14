@@ -11,7 +11,7 @@ tiles_bp = Blueprint('tiles', __name__)
 @tiles_bp.route('/tiles/<int:z>/<int:x>/<int:y>.png')
 def get_tile(z, x, y):
     """
-    Serve o tile (z,x,y) do Mapa Live. Fase 0 (docs/PLANO_EVOLUCAO_V2.md): não é mais um
+    Serve o tile (z,x,y) do Mapa Live. Fase 0 (docs/06_PLANO_EVOLUCAO_V2.md): não é mais um
     recorte de mosaico pré-renderizado — é `TileCartographer.gerar_janela()` avaliada na
     bbox de mundo daquele tile, gerada na primeira vista e servida do cache em disco depois
     (chave = config_hash do manifesto, ver cartographer/tiles/render.py). Tile fora do

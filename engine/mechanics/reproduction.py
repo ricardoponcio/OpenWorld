@@ -26,7 +26,7 @@ _ROTULO_GENERO_BEBE = {Genero.MASCULINO.value: "menino", Genero.FEMININO.value: 
 class DadosBatizado:
     """Tudo que a thread de batizado precisa para pedir o nome à IA e reescrever o
     evento de nascimento. Existe para o método assíncrono não ter 8 parâmetros
-    (limite do projeto é 5 — ARQUITETURA.md Seção 4)."""
+    (limite do projeto é 5 — 11_ARQUITETURA.md Seção 4)."""
     bebe_id: str
     genero: str
     sobrenome: str
@@ -42,7 +42,7 @@ class NPCReproductionManager:
     precisa dos NPCs, dos locais (para superlotação) e dos repositórios de NPC e
     evento.
 
-    A06 (docs/PLANO_POPULACAO_E_ESCALA.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` são a
+    A06 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `CADENCIA`/`CADENCIA_HORA_CONFIG` são a
     cadência declarada pela própria mecânica — `GameLoop` lê isto pra montar o
     despacho diário, em vez de um `if hora ==` hardcoded por mecânica."""
     CADENCIA = "por_dia"
@@ -55,7 +55,7 @@ class NPCReproductionManager:
     def processar_concepcao(self):
         """Varredura noturna para concepção em casais que dividem a mesma casa e têm alta afinidade."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
-        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
+        # X04 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
         # não recalculado por varredura — este laço não muda de casa ninguém, o
         # dict vivo é seguro de iterar direto.
         por_casa = self._mundo.npcs_por_casa
@@ -75,7 +75,7 @@ class NPCReproductionManager:
             for h in homens:
                 for m in mulheres:
                     afinidade = h.relacionamentos.get(m.id, 0)
-                    # G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): checagem completa —
+                    # G02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): checagem completa —
                     # inclui `sao_parentes`, que este caminho nunca chamava (2 filhos
                     # de pais consanguíneos num mundo real de 25 dias, §5.2).
                     if NPCUtils.pode_conceber(h, m, afinidade, cfg_bio):
@@ -109,7 +109,7 @@ class NPCReproductionManager:
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         # 1. Encontrar o pai (o morador masculino com quem a mãe tem maior afinidade)
         pai = None
-        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
+        # X04 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
         moradores = self._mundo.npcs_por_casa.get(mae.casa_id, ())
         # Excluir a própria mãe da lista
         moradores = [n for n in moradores if n.id != mae.id]
@@ -177,7 +177,7 @@ class NPCReproductionManager:
         if pai:
             self._mundo.db.npcs.salvar(pai)
             
-        # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): antes disto recarregava TODOS os
+        # A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): antes disto recarregava TODOS os
         # NPCs do banco só pra incluir o bebê na memória — O(NPCs) pra acrescentar UM.
         # `registrar_npc` o adiciona direto (e mantém os três índices coerentes), sem
         # descartar os objetos de mãe/pai já mutados nesta mesma chamada.

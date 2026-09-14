@@ -1,6 +1,6 @@
 """
 SCRIPT: audit_mundo.py
-OBJETIVO: V05 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V) — o auditor do mundo VIVO.
+OBJETIVO: V05 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V) — o auditor do mundo VIVO.
           `audit_cidades.py` audita a GEOMETRIA (GeoJSON, sem banco); este audita QUEM
           MORA NELA: os 9 invariantes de emprego/vocabulário/demografia que a Seção 3/5
           do documento mediu quebrados, mais o `--dias N`/`--ate-renovacao` que as
@@ -258,7 +258,7 @@ def _renovacao_completa(mundo, ids_originais: set) -> bool:
 
 
 def _rodar_dias(db_path: str, dias_alvo: int, ate_renovacao: bool) -> None:
-    """X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket.processar_contratacoes`
+    """X03 (docs/15_PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket.processar_contratacoes`
     e `InfrastructureManager.processar_desgaste`/`processar_reparos_espontaneos` já
     rodam DENTRO de `engine.tick()` (viraram rotinas de `GameLoop._rotinas_diarias`)
     — nenhuma chamada extra aqui, ou rodariam duas vezes."""

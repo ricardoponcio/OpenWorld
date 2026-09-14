@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS locais (
     dono_npc_id TEXT DEFAULT ''
 );
 
--- Lotes urbanos (T01, docs/PLANO_CIDADE_VIVA.md): geometria vem do GeoJSON do
+-- Lotes urbanos (T01, docs/12_PLANO_CIDADE_VIVA.md): geometria vem do GeoJSON do
 -- cartógrafo, ESTADO vive aqui — armadilha 2: cartographer/ nunca escreve estado de
 -- simulação, engine/ nunca escreve GeoJSON. x/y (não JSON) porque O01 ordena lote
 -- livre mais próximo por distância ao quadrado, sem sqrt, num ORDER BY simples.
@@ -166,9 +166,9 @@ CREATE TABLE IF NOT EXISTS mestre_conversas (
     aplicada INTEGER DEFAULT 0 -- 1 quando o jogador confirmou e as ações foram aplicadas
 );
 
--- F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): fila de ações de mundo do Modo Mestre.
+-- F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): fila de ações de mundo do Modo Mestre.
 -- O Mestre roda no processo do Flask e não tem o EstadoDoMundo vivo da simulação
--- (ARQUITETURA.md, "regra de processo": só run_simulation.py instancia a engine) —
+-- (11_ARQUITETURA.md, "regra de processo": só run_simulation.py instancia a engine) —
 -- em vez de escrever direto no banco, enfileira aqui; run_simulation.py drena a
 -- cada volta do laço (mesmo pausado) e aplica com o mundo vivo, exatamente o
 -- padrão que AVANCAR_MINUTOS já usa pra "preparar cena com a simulação parada".

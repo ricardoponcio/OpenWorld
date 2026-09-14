@@ -35,7 +35,7 @@ class CartographyImporter:
 
     @staticmethod
     def _falhar_se_nome_de_cidade_duplicado(manifest: dict) -> None:
-        """G05 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): o nome da cidade vira o slug
+        """G05 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): o nome da cidade vira o slug
         do arquivo GeoJSON e o namespace de id de lote/local (armadilha 3) —
         importar duas cidades com o mesmo nome deixa uma delas com ZERO locais, em
         silêncio (achado real: duas "Cidade dos Ventos" no mesmo manifesto).
@@ -51,7 +51,7 @@ class CartographyImporter:
                         f"[CARTOGRAFIA] Nome de cidade duplicado no manifesto: '{nome}' "
                         f"aparece em '{continente_do_nome[nome]}' e em '{cont['nome']}'. "
                         f"Rode cartographer/reset_cartography.sh pra gerar um mundo novo "
-                        f"(G05, docs/PLANO_MUNDO_CRIVEL.md) — importar pela metade "
+                        f"(G05, docs/15_PLANO_MUNDO_CRIVEL.md) — importar pela metade "
                         f"deixaria uma das duas cidades sem locais."
                     )
                 continente_do_nome[nome] = cont["nome"]

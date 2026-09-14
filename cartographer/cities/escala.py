@@ -7,7 +7,7 @@ cada vez que uma delas foi feita à mão em outro arquivo saiu errada: o D1 conf
 comprimento, e a largura de rua nasceu em px de tela, o que a deixava mais estreita quanto
 mais perto você chegava.
 
-A cidade é sub-pixel na escala do mundo (Seção 2.1/2.3 do docs/DIAGNOSTICO_V3.md: 1 px de
+A cidade é sub-pixel na escala do mundo (Seção 2.1/2.3 do docs/07_DIAGNOSTICO_V3.md: 1 px de
 mundo = 15,81 km, então a cidade "grande" tem 0,114 px de mundo de diâmetro). Sem um
 `zoom_min` por camada, ruas e edifícios apareceriam amontoados num ponto em qualquer zoom
 baixo.
@@ -45,9 +45,9 @@ def faixa_raio_m(config, tamanho):
     sorteiam o raio) passam por aqui; se um dos dois lesse a chave crua e o outro
     passasse pela escala, a janela deixaria de cobrir a cidade e o terreno seria lido
     errado, silenciosamente, por causa do `np.clip` que G06 removeu (Q04, docs/
-    PLANO_CIDADE_VIVA.md).
+    12_PLANO_CIDADE_VIVA.md).
 
-    R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): desde que o raio passou a ser
+    R01 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): desde que o raio passou a ser
     DERIVADO do número de domicílios (`raio_para_lotes`), esta faixa deixou de ser a
     FONTE do raio e virou só o piso/teto de sanidade que grampeia o resultado — ela
     continua sendo o que `SitioCidade` usa pra dimensionar a janela de terreno (o teto
@@ -63,7 +63,7 @@ def domicilios_alvo(config, tamanho, rng):
     (`raio_para_lotes`), não mais sorteado direto. Único lugar que lê
     `cidade_geo_domicilios_alvo_faixa_por_tamanho`.
 
-    `cidade_geo_escala` (D5, docs/PLANO_CIDADE_VIVA.md) multiplica AQUI — domicílios,
+    `cidade_geo_escala` (D5, docs/12_PLANO_CIDADE_VIVA.md) multiplica AQUI — domicílios,
     não mais raio. O float continua sendo "o tamanho das cidades do mundo", só que
     numa unidade que corresponde a gente de verdade (`builder/populador.py` conta os
     domicílios que nasceram ocupados pra decidir quantas famílias povoar, R03)."""
@@ -77,7 +77,7 @@ def lotes_alvo(config, tamanho, domicilios: float) -> float:
     precisa pra comportar `domicilios` residências, dada a fração de lotes ocupados
     no nascimento (`cidade_geo_ocupacao_inicial_por_tamanho`, D2) e o piso de área
     residencial (`cidade_geo_fracao_residencial_min`) — os dois já existem, D01/D02
-    de PLANO_CIDADE_VIVA.md, e não são recalculados aqui, só lidos."""
+    de 12_PLANO_CIDADE_VIVA.md, e não são recalculados aqui, só lidos."""
     ocupacao = cfg_get(config, "cidade_geo_ocupacao_inicial_por_tamanho").get(tamanho, 1.0)
     fracao_residencial_min = cfg_get(config, "cidade_geo_fracao_residencial_min")
     return domicilios / (ocupacao * fracao_residencial_min)
@@ -129,7 +129,7 @@ def corrigir_raio_por_newton(config, modelo_nome: str, tamanho: str, raio_usado:
 def diametro_px_de_mundo(config, raio_m):
     """Diâmetro da cidade em px de MUNDO, a partir do raio REAL da cidade em metros.
 
-    ESPEC_TECIDO_URBANO.md Seção 6/E6 (2026-09-11): recebia `tamanho` e buscava o raio
+    08_ESPEC_TECIDO_URBANO.md Seção 6/E6 (2026-09-11): recebia `tamanho` e buscava o raio
     NOMINAL da tabela (`cidade_geo_raio_m_por_tamanho`). Desde que o raio passou a ser
     sorteado por cidade dentro de uma faixa (Seção 5.6), isso teria feito toda cidade
     'media' acender rua/edifício no mesmo zoom, apagando a variedade que a E6 introduz.

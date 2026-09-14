@@ -1,6 +1,6 @@
 """
 F2/F3 — distribuição dirigida de marcos + comércio de bairro (Q02, docs/
-PLANO_CIDADE_VIVA.md: pacote separado por assunto). `DistribuicaoMixin` é composto em
+12_PLANO_CIDADE_VIVA.md: pacote separado por assunto). `DistribuicaoMixin` é composto em
 `GeradorCidade` (gerador.py) — os métodos aqui usam `self._lotes`, `self.rng`,
 `self.modelo`, `self.cfg` etc., que a classe final fornece.
 """
@@ -22,7 +22,7 @@ ARESTA_MINIMA_FOOTPRINT_M = 0.1
 @dataclass
 class _AlocacaoDeLotes:
     """Índices auxiliares da distribuição de edifícios (F2/F3, R-D05 do
-    PLANO_REFATORACAO.md): que lote pertence a que quarteirão, que quarteirão pertence a
+    10_PLANO_REFATORACAO.md): que lote pertence a que quarteirão, que quarteirão pertence a
     que zona, e que lote já foi tomado. Existe pra `_distribuir_edificios` parar de ser
     um método de ~110 linhas com uma closure (`tem_vaga`) referenciando uma variável
     (`ocupados`) definida depois dela."""
@@ -88,7 +88,7 @@ class DistribuicaoMixin:
         atribuição ainda viram Residência até o orçamento de ocupação inicial (D2) — o
         resto fica lote livre. Um edifício por lote — Polygon (footprint dentro do lote).
 
-        Quebrado em fases (R-D05 do PLANO_REFATORACAO.md) — cada uma um método
+        Quebrado em fases (R-D05 do 10_PLANO_REFATORACAO.md) — cada uma um método
         privado, com o estado compartilhado (`_AlocacaoDeLotes`) passado explicitamente,
         não uma closure fechando sobre uma variável definida mais abaixo no corpo."""
         self._footprints = self._precomputar_footprints()
@@ -258,7 +258,7 @@ class DistribuicaoMixin:
         Residência; qualquer outro fica SEM edifício — lote livre (T03/D2), pronto pra
         obra da simulação ocupar depois.
 
-        Armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o edifício usa o MESMO id do lote onde
+        Armadilha 3 (docs/12_PLANO_CIDADE_VIVA.md): o edifício usa o MESMO id do lote onde
         nasce — não um contador global de emissão, que desloca `NPC.casa_id`/
         `local_trabalho_id` de todo mundo sempre que uma quadra a mais é descartada."""
         residencia_padrao = cfg_get(self.cfg, "cidade_geo_residencia_padrao")

@@ -1,7 +1,7 @@
 """
-OrganicaModelo — radial degradado de propósito (F7, ESPEC_DESENHO_CIDADE.md). Herda de
+OrganicaModelo — radial degradado de propósito (F7, 09_ESPEC_DESENHO_CIDADE.md). Herda de
 `RadialModelo` (permitido e esperado, Seção 5.5/F7.1) e aplica degradações sobre a GRADE
-de vértices (G04, docs/PLANO_CIDADE_VIVA.md Seção 1.2) — nunca sobre a lista de ruas
+de vértices (G04, docs/12_PLANO_CIDADE_VIVA.md Seção 1.2) — nunca sobre a lista de ruas
 depois de pronta: rua e quadra são duas leituras da mesma grade, e só perturbando a
 grade elas continuam coincidindo.
 """
@@ -26,7 +26,7 @@ class OrganicaModelo(RadialModelo):
         # `self.irreg` (só a silhueta de grade/muralha lê), então "organica é mais torta
         # que radial" passa a ser a mesma fração do vão, só que amplificada — sempre
         # saturada no limite estrutural, nunca no valor bruto do config
-        # (Anexo 2 do docs/PLANO_CIDADE_VIVA.md).
+        # (Anexo 2 do docs/12_PLANO_CIDADE_VIVA.md).
         fator = cfg_get(config, "cidade_geo_organica_fator_irregularidade")
         self.anel_fracao_vao = min(self.anel_fracao_vao * fator, FRACAO_VAO_MAXIMA_SEGURA)
 
@@ -42,7 +42,7 @@ class OrganicaModelo(RadialModelo):
         Como rua e quadra leem esta mesma grade (retornada por `_grade_de_vertices`), as
         duas tortam juntas e continuam coincidindo (Seção 1.2).
 
-        S03 (docs/PLANO_POPULACAO_E_ESCALA.md): o passo angular É POR BANDA agora —
+        S03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): o passo angular É POR BANDA agora —
         depois de S01, a banda externa pode ter várias vezes mais setores que a
         interna, e um passo global (o de antes) deixaria de ser uma fração pequena do
         passo de verdade daquela banda: dois setores vizinhos trocariam de lugar, e o
@@ -69,7 +69,7 @@ class OrganicaModelo(RadialModelo):
         # contíguo de 1 a 3 setores; a rua vira polilinha aberta, não um loop. G04: isso
         # muda SÓ A RUA — a quadra adjacente ao arco aberto passa a não ter frente
         # naquela aresta, então a `classes_aresta` dela troca de "anel" pra "sem_via"
-        # (L02, docs/PLANO_POPULACAO_E_ESCALA.md: não existe via nenhuma ali — recuo
+        # (L02, docs/13_PLANO_POPULACAO_E_ESCALA.md: não existe via nenhuma ali — recuo
         # zero, nenhum lote pode ter frente).
         novas_ruas = []
         aneis_abertos = {}  # indice do anel -> conjunto de setores no vão aberto (na resolução DAQUELE anel)

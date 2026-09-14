@@ -62,7 +62,7 @@ class NPCUtils:
         (multiplicador de custo da refeição).
 
         ⚠️ O(NPCs) por chamada (`obter_moradores_da_casa` varre todo mundo.npcs) — P03
-        (docs/PLANO_CIDADE_VIVA.md): com 750 NPCs chamados por NPC por tick isso é
+        (docs/12_PLANO_CIDADE_VIVA.md): com 750 NPCs chamados por NPC por tick isso é
         O(NPCs²). Só pra teste/uso pontual; no laço de tick use
         `contar_dependentes_na_casa_agrupado` com `agrupar_por_casa` pré-calculado."""
         moradores = NPCUtils.obter_moradores_da_casa(npcs, npc.casa_id, apenas_vivos=True)
@@ -85,9 +85,9 @@ class NPCUtils:
 
     @staticmethod
     def recalcular_dependentes_da_casa(moradores: List[NPC]) -> None:
-        """N04 (docs/PLANO_POPULACAO_E_ESCALA.md): atualiza `num_dependentes` de todo
+        """N04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): atualiza `num_dependentes` de todo
         morador de UMA casa — chamado só para as casas marcadas sujas
-        (`EstadoDoMundo.casas_sujas`, H02, docs/PLANO_AVANCO_E_CALIBRAGEM.md) desde a
+        (`EstadoDoMundo.casas_sujas`, H02, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md) desde a
         última vez que `GameLoop` checou, em vez de para os 25.000 NPCs do mundo todo
         tick, para um número que quase nunca muda."""
         for morador in moradores:
@@ -117,7 +117,7 @@ class NPCUtils:
         Residências ativas (status=1) da CIDADE `cidade_id` que estão completamente
         vazias (zero moradores vivos).
 
-        P03 (docs/PLANO_CIDADE_VIVA.md): consulta `mundo.indice.residencias_ativas`
+        P03 (docs/12_PLANO_CIDADE_VIVA.md): consulta `mundo.indice.residencias_ativas`
         (por cidade) em vez de varrer TODOS os locais do mundo — O(locais x NPCs) virou
         O(residências da cidade). De quebra fecha o mesmo bug de "cidade errada" que P04
         corrige em movement.py: antes buscava em `locais.items()` sem filtrar cidade,
@@ -188,7 +188,7 @@ class NPCUtils:
 
     @staticmethod
     def pode_conceber(a: NPC, b: NPC, afinidade: int, cfg_bio: dict) -> bool:
-        """G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): a checagem completa de
+        """G02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): a checagem completa de
         elegibilidade biológica pra conceber — vivo, fértil, NÃO PARENTE, afinidade
         mínima — usada pelos DOIS caminhos que hoje decidem se um casal tem filho:
         `processar_concepcao` (a união já mora junta) e
@@ -197,7 +197,7 @@ class NPCUtils:
         nunca checava parentesco, e produziu filhos de mãe×filho e irmão×irmã num
         mundo real (§5.2 do documento). Extraída pra um lugar só: duplicar a
         checagem é como as duas divergiram da primeira vez (armadilha 12, docs/
-        PLANO_POPULACAO_E_ESCALA.md)."""
+        13_PLANO_POPULACAO_E_ESCALA.md)."""
         if not a.esta_vivo() or not a.pode_procriar():
             return False
         if not b.esta_vivo() or not b.pode_procriar():
@@ -208,7 +208,7 @@ class NPCUtils:
 
     @staticmethod
     def estagio_vida_por_idade_dias(idade_dias: int, cfg_bio: dict) -> str:
-        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): classifica o estágio de vida a
+        """G01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): classifica o estágio de vida a
         PARTIR da idade em dias simulados — mesmos limiares que
         `NPCLifecycleManager.processar_crescimento` usa pra transição incremental.
         Só faz sentido pra CLASSIFICAR do zero (povoamento inicial, `builder/
@@ -229,7 +229,7 @@ class NPCUtils:
         Retorna a obra (Local em construção, status=0) cujo dono é o NPC ou seu
         cônjuge (R-C03).
 
-        P02 (docs/PLANO_CIDADE_VIVA.md): consulta `mundo.indice.obra_por_dono` (dict
+        P02 (docs/12_PLANO_CIDADE_VIVA.md): consulta `mundo.indice.obra_por_dono` (dict
         `npc_id -> local_id`, O(1)) em vez de varrer todos os locais — era a varredura
         mais cara do profiler (Seção 1.6), chamada por NPC, por tick. Antes disso, o
         dono era gravado como texto livre dentro de `descricao` (f"Dono: {id}") e

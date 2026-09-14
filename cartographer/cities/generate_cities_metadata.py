@@ -24,7 +24,7 @@ NPZ_PATH = "database/mapa_composto.npz"
 
 
 def _garantir_nomes_unicos(cidades: list, manifest: dict, cont: dict) -> None:
-    """G05 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): o nome da cidade é a chave que
+    """G05 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): o nome da cidade é a chave que
     tudo a jusante usa — o slug do arquivo GeoJSON e os ids de lote/local
     (armadilha 3) — duas cidades com o mesmo nome compartilham namespace, e uma
     delas fica com ZERO locais pra sempre (achado real: duas "Cidade dos Ventos"

@@ -2,10 +2,10 @@
 RadialModelo — o traçado de hoje (burgo medieval em anéis + radiais ao redor de um
 mercado), movido pra cá pela refatoração do F4.
 
-S01/S02 (docs/PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): o número de setores deixou de
+S01/S02 (docs/13_PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): o número de setores deixou de
 ser único pra cidade inteira — ele DOBRA a cada banda em que o arco ultrapassaria a
 largura alvo (`self.setores_por_banda`, monotônico não-decrescente). Isso muda a saída
-de toda cidade radial (armadilha 1 do PLANO_CIDADE_VIVA.md: determinístico não quer
+de toda cidade radial (armadilha 1 do 12_PLANO_CIDADE_VIVA.md: determinístico não quer
 dizer igual ao de antes) e é o motivo de a "grade" deixar de ser um array 2D regular
 `(banda, setor)` e virar uma lista de linhas de tamanho variável.
 """
@@ -18,7 +18,7 @@ from .base import (ModeloCidade, Rua, Quadra, Malha, envolver_poligono,
 # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
 # amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
 # segurança contra a soma chegar a 1.0 (que é o anel invertido — Seção 1.1 do
-# docs/PLANO_CIDADE_VIVA.md).
+# docs/12_PLANO_CIDADE_VIVA.md).
 FRACAO_VAO_MAXIMA_SEGURA = 0.45
 
 # S01: o arco de uma quadra pode ficar até 1.5x a largura alvo antes de a banda seguinte
@@ -34,7 +34,7 @@ class RadialModelo(ModeloCidade):
         # ⚠️ Ordem de consumo do self.rng idêntica à do GeradorCidade de antes do F4
         # (domicílios -> anéis -> fator de lote -> setores) — mudar a ordem muda
         # todas as cidades do mundo, silenciosamente (Seção 10 item 1). R01 (docs/
-        # PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio deixou de ser sorteado
+        # 13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio deixou de ser sorteado
         # direto — é DERIVADO do número de domicílios sorteado aqui, na MESMA
         # posição da sequência que o sorteio de raio ocupava antes.
         self.raio_m, self.lotes_alvo = derivar_ou_forcar_raio(
@@ -42,7 +42,7 @@ class RadialModelo(ModeloCidade):
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)
         # G05: num_aneis deixa de ser sorteado independente do raio — o vão entre anéis
         # (raio_m / (num_aneis+1)) É a profundidade da quadra (Anexo 3 do
-        # docs/PLANO_CIDADE_VIVA.md), e sorteá-los à parte fazia o vão variar de 82 a
+        # docs/12_PLANO_CIDADE_VIVA.md), e sorteá-los à parte fazia o vão variar de 82 a
         # 169 m entre cidades do mesmo tamanho, produzindo até 209 lotes numa quadra só.
         # A faixa por tamanho vira LIMITE (piso/teto), não mais fonte do sorteio.
         # ⚠️ Isto remove um `self.rng.randint` da sequência — todas as cidades mudam
@@ -97,7 +97,7 @@ class RadialModelo(ModeloCidade):
 
     # ------------------------------------------------------------------
     # Leitura de terreno local — G06: delega a `SitioCidade`, o único dono da grade
-    # (ARQUITETURA.md P1). Usada aqui só em heurística de posicionamento (praça,
+    # (11_ARQUITETURA.md P1). Usada aqui só em heurística de posicionamento (praça,
     # portão) dentro do raio original, nunca perto da borda da janela — `None` (ponto
     # fora da janela) cai pra 0.0, "sem preferência", o que é seguro nestes dois usos.
     # ------------------------------------------------------------------
@@ -136,7 +136,7 @@ class RadialModelo(ModeloCidade):
     def _amplitude_anel_m(self):
         """G01: o VÃO entre anéis vizinhos (constante) é o espaço disponível pra
         perturbar o raio de um vértice — nunca o raio em si (que cresce com a banda).
-        Ver docs/PLANO_CIDADE_VIVA.md Seção 1.1."""
+        Ver docs/12_PLANO_CIDADE_VIVA.md Seção 1.1."""
         vao = self.raio_m / (self.num_aneis + 1)
         return vao * self.anel_fracao_vao
 
@@ -146,7 +146,7 @@ class RadialModelo(ModeloCidade):
         (`len(vertices[j]) == self.setores_por_banda[j]`), não mais um array 2D
         regular. Ponto de extensão pra modelos que deformam a malha (G04, `organica`):
         deforme AQUI, nunca a lista de ruas depois de pronta (Seção 1.2 do
-        docs/PLANO_CIDADE_VIVA.md) — senão rua e quadra deixam de coincidir.
+        docs/12_PLANO_CIDADE_VIVA.md) — senão rua e quadra deixam de coincidir.
 
         A asserção de anéis cruzados compara o vértice da banda `j` com o ponto
         CORRESPONDENTE do anel `j-1` já densificado (S02) pra resolução de `j` — bandas
@@ -212,7 +212,7 @@ class RadialModelo(ModeloCidade):
         # partir dela — garante por construção que a praça caiba dentro do núcleo.
         centro_praca = self._melhor_centro_praca(self.raios_base[0])
         raio_banda0 = self.raios_base[0]
-        # C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md), achado ao destravar bandas mais
+        # C02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md), achado ao destravar bandas mais
         # profundas: o anel do núcleo é CONCÊNTRICO NA ORIGEM, mas `centro_praca` pode
         # estar deslocado dela (`_melhor_centro_praca`) — o vértice do anel do núcleo
         # mais perto da praça de verdade é o que fica na direção de `centro_praca`, a

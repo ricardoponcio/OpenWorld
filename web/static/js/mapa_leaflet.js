@@ -55,7 +55,7 @@ const CAMADAS_VETORIAIS_DISPONIVEIS = [...CAMADAS_MUNDO, ...CAMADAS_DETALHE_CIDA
 const CAMADAS_NOMES_AMIGAVEIS = { cidades: '🏰 Cidades', pois: '📍 Pontos de Interesse', estradas: '🛣️ Estradas', fronteiras: '🗺️ Fronteiras' };
 const TIPO_CIDADE_EMOJI = { capital: '👑', fortaleza: '🏯', portuaria: '⚓', pesqueira: '🎣', comercial: '💰', mistica: '🔮', 'mística': '🔮', mineira: '⛏️', agricola: '🌾', 'agrícola': '🌾', residencial: '🏠' };
 // A residência é massa construída, não informação — tom neutro único, sem cor de
-// categoria (Seção 6/E3 do ESPEC_TECIDO_URBANO.md: com ~1.350 residências e ~48 prédios
+// categoria (Seção 6/E3 do 08_ESPEC_TECIDO_URBANO.md: com ~1.350 residências e ~48 prédios
 // notáveis por cidade, dar cor de categoria a todas empasta a tela). A cor de categoria
 // fica reservada pros notáveis, que são os que o jogador procura.
 const CATEGORIA_EDIFICIO_COR = { residencia: '#9c8a76', fazenda: '#228B22', quartel: '#4682B4', taverna: '#D2691E', publico: '#696969', mercado: '#FFD700', forja: '#A9A9A9', universidade: '#5D3FD3', generic: '#808080' };
@@ -199,7 +199,7 @@ function estiloRua(feature) {
     };
 }
 
-// E3 do ESPEC_TECIDO_URBANO.md: `edificio` virou Polygon (footprint dentro do lote), não
+// E3 do 08_ESPEC_TECIDO_URBANO.md: `edificio` virou Polygon (footprint dentro do lote), não
 // mais um Point desenhado por `criarMarcadorDetalheCidade` — passa a usar `style` como
 // rua/quarteirao/lote. Preenchimento sólido (é massa construída), contorno bem discreto
 // pra não competir com o traço do lote por baixo.
@@ -212,7 +212,7 @@ function estiloEdificio(feature) {
     };
 }
 
-// T05 (docs/PLANO_CIDADE_VIVA.md): lote livre e lote ocupado precisam se distinguir,
+// T05 (docs/12_PLANO_CIDADE_VIVA.md): lote livre e lote ocupado precisam se distinguir,
 // senão a cidade parece igual à de antes (D2/T03 preenche só uma fração dela). O valor
 // inicial vem de `feature.properties.estado`, gravado na geometria por T03; depois da
 // importação o BANCO é a verdade (armadilha 2) — `mesclarLotesAlteradosLeaflet` reescreve
@@ -230,7 +230,7 @@ const ESTILO_CAMADA_CIDADE = {
     rua: estiloRua,
     quarteirao: { color: '#888', weight: 1, opacity: 0.4, fillOpacity: 0.04 },
     praca: { color: '#2ecc71', weight: 1, opacity: 0.6, fillOpacity: 0.25 },
-    // Q01 (docs/PLANO_CIDADE_VIVA.md): o miolo da quadra que não é lote — horta, poço,
+    // Q01 (docs/12_PLANO_CIDADE_VIVA.md): o miolo da quadra que não é lote — horta, poço,
     // quintal comum. Sem contorno próprio (o do quarteirão já marca o limite).
     patio: { color: '#2ecc71', weight: 0, opacity: 0, fillOpacity: 0.18 },
     lote: estiloLote,
@@ -351,7 +351,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
     return marker;
 }
 
-// T05 (docs/PLANO_CIDADE_VIVA.md): o GeoJSON de cidade guarda o estado do lote NA
+// T05 (docs/12_PLANO_CIDADE_VIVA.md): o GeoJSON de cidade guarda o estado do lote NA
 // IMPORTAÇÃO (T03); a partir daí o BANCO é a verdade (armadilha 2) — uma casa
 // construída/uma ruína durante o jogo nunca apareceria no mapa se o frontend só lesse
 // o arquivo. Busca o delta por cidade visível e reescreve `properties.estado` das

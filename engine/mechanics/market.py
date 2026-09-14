@@ -11,9 +11,9 @@ _ESTAGIOS_SEM_EMPREGO = (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value, Esta
 @dataclass
 class _ContextoContratacao:
     """O que o matchmaking de uma cidade precisa saber SOBRE O MUNDO — separado de
-    qual cidade e quais candidatos (ARQUITETURA.md Seção 4, limite de 5 parâmetros
+    qual cidade e quais candidatos (11_ARQUITETURA.md Seção 4, limite de 5 parâmetros
     por método). `alterados` é o acumulador de NPCs vivos que mudaram — X02
-    (docs/PLANO_MUNDO_CRIVEL.md): um `salvar_completo` por NPC contratado/demitido
+    (docs/15_PLANO_MUNDO_CRIVEL.md): um `salvar_completo` por NPC contratado/demitido
     virou 11,6 s medidos com ~34 mil candidatos; grava tudo numa transação só, no
     fim de `processar_contratacoes`."""
     mapeamento: dict
@@ -28,14 +28,14 @@ class JobMarket:
     (`DatabaseManager(db_path)`), e `run_simulation.py` acabava com DOIS pools no mesmo
     processo (a `SimulationEngine` e o `JobMarket`), sem motivo nenhum.
 
-    P01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): `mundo` é OPCIONAL. Com ele, os
+    P01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco P): `mundo` é OPCIONAL. Com ele, os
     candidatos vêm de `mundo.npcs` (já em memória, sem round-trip) e a contratação
     aplica no objeto vivo — o NPC descobre que foi contratado NA HORA, sem depender
     de `recarregar_habitantes()` (P02 tirou essa muleta do caminho quente). Sem
     `mundo` (`builder/populador.py`, antes de existir um `EstadoDoMundo` — é
     povoamento, não simulação), os candidatos vêm do banco e a escrita é só-banco.
 
-    X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `processar_contratacoes` morava em
+    X03 (docs/15_PLANO_MUNDO_CRIVEL.md, decisão ❽): `processar_contratacoes` morava em
     `run_simulation.py`, fora de qualquer benchmark, rodando a cada 5h — a cadência
     de `GameLoop._rotinas_diarias` só suporta 1x/dia; mudança de cadência disclosed
     no Registro, não um efeito colateral silencioso."""
@@ -82,7 +82,7 @@ class JobMarket:
 
     def processar_contratacoes(self):
         """Varre o mundo em busca de vagas e NPCs desempregados. V02
-        (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): por CIDADE — um candidato só compete
+        (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco V): por CIDADE — um candidato só compete
         pelas vagas da PRÓPRIA cidade; sem vaga lá, fica desempregado (migração é
         decisão de domínio, nunca efeito colateral de matchmaking — mesmo raciocínio
         de P04, doc 1)."""
@@ -108,7 +108,7 @@ class JobMarket:
             self._contratar_na_cidade(cidade_id, candidatos, ctx)
             for cidade_id, candidatos in candidatos_por_cidade.items()
         )
-        # X02 (docs/PLANO_MUNDO_CRIVEL.md): UMA transação pra todos os NPCs vivos
+        # X02 (docs/15_PLANO_MUNDO_CRIVEL.md): UMA transação pra todos os NPCs vivos
         # que mudaram, não uma por NPC — ver o docstring de `_ContextoContratacao`.
         if ctx.alterados:
             self.db.npcs.salvar_completo(ctx.alterados)

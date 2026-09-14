@@ -9,7 +9,7 @@ DESCRIÇÃO:
 
     É o ponto de entrada que constrói as dependências de infraestrutura do processo
     de simulação: o `DatabaseManager` nasce aqui e em nenhum gerenciador de mecânica
-    (ARQUITETURA.md Seção 7, "Injeção de dependência").
+    (11_ARQUITETURA.md Seção 7, "Injeção de dependência").
 """
 from .database import DatabaseManager
 from .indice_locais import IndiceDeLocais
@@ -48,7 +48,7 @@ class SimulationEngine:
         novos_npcs = self.mundo.db.npcs.carregar_todos()
         if novos_npcs:
             self.mundo.npcs = novos_npcs
-            # A04 (docs/PLANO_POPULACAO_E_ESCALA.md): a lista inteira foi trocada por
+            # A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): a lista inteira foi trocada por
             # objetos novos — os índices mantidos (npcs_por_casa/localizacao/cidade)
             # apontariam pra objetos que não existem mais em `mundo.npcs` se não
             # forem reconstruídos aqui.
@@ -56,7 +56,7 @@ class SimulationEngine:
             WorldLogger.debug(f"🔄 Memória sincronizada com o banco de dados ({len(self.mundo.npcs)} NPCs).")
 
     def recarregar_locais(self):
-        """M01 (docs/PLANO_POPULACAO_E_ESCALA.md): recarrega `mundo.locais` do banco
+        """M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): recarrega `mundo.locais` do banco
         e reconstrói o `IndiceDeLocais` — espelha `recarregar_habitantes()`.
         Chamado por `run_simulation.py` quando `MetaChave.LOCAIS_VERSAO` mudar (ação
         do Modo Mestre criou/destruiu um Local). Reconstruir só o dicionário sem

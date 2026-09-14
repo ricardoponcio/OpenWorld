@@ -33,7 +33,7 @@ class EstagioVida(Enum):
     IDOSO = "idoso"
     MORTO = "morto"
 
-# N03 (docs/PLANO_POPULACAO_E_ESCALA.md): `.value` num membro de Enum é um acesso de
+# N03 (docs/13_PLANO_POPULACAO_E_ESCALA.md): `.value` num membro de Enum é um acesso de
 # descritor (`__get__`), não uma leitura de atributo simples — medido em 9,1 milhões de
 # chamadas por tick com 3.000 NPCs (1,23 s), maior item isolado do perfil depois do
 # quadrático de casamento. `NPC.is_adulto`/`is_idoso`/`esta_vivo`/`eh_dependente` são
@@ -104,7 +104,7 @@ class EstadoInfraestrutura(Enum):
     RUINA       = "Ruína"        # 10–0
 
 class LoteEstado(Enum):
-    """T01 (docs/PLANO_CIDADE_VIVA.md): estado do terreno urbano — a geometria do lote
+    """T01 (docs/12_PLANO_CIDADE_VIVA.md): estado do terreno urbano — a geometria do lote
     vem do GeoJSON do cartógrafo (imutável), o ESTADO vive só na tabela `lotes`
     (armadilha 2: `cartographer/` nunca escreve estado de simulação)."""
     LIVRE = "livre"
@@ -152,7 +152,7 @@ class TipoEvento(Enum):
     IMPOSTO = "IMPOSTO"
     CRESCIMENTO = "CRESCIMENTO"
     MAIORIDADE = "MAIORIDADE"
-    # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): casamento era gravado como CONVERSA
+    # M02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): casamento era gravado como CONVERSA
     # — indistinguível de um papo qualquer no log, exceto pelo texto.
     UNIAO = "UNIAO"
     CONVERSA = "CONVERSA"
@@ -171,7 +171,7 @@ class VinculoSocial(Enum):
 
 class MetaChave(Enum):
     """Chaves da tabela `mundo_meta` (sinalização entre run_simulation.py, o dashboard
-    e o Modo Mestre — ver ARQUITETURA.md Seção 1: "Regra de processo"). Um erro de
+    e o Modo Mestre — ver 11_ARQUITETURA.md Seção 1: "Regra de processo"). Um erro de
     digitação numa string solta era silencioso: carregar_meta devolvia None e o
     sistema seguia com o default (R-B05)."""
     SIMULACAO_PAUSADA   = "simulacao_pausada"
@@ -182,7 +182,7 @@ class MetaChave(Enum):
     CIDADE_SIMULADA     = "cidade_simulada"
     CIDADES_ATIVAS      = "cidades_ativas"
     MAPA_TERRENO        = "mapa_terreno"
-    # M01 (docs/PLANO_POPULACAO_E_ESCALA.md): contador incrementado, na MESMA
+    # M01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): contador incrementado, na MESMA
     # transação da escrita, toda vez que uma ação do Modo Mestre cria ou destrói um
     # Local — run_simulation.py lê isto uma vez por tick e chama
     # `engine.recarregar_locais()` quando muda, em vez de recarregar 24 mil locais
@@ -228,7 +228,7 @@ class Local:
 
 @dataclass
 class Lote:
-    """T01 (docs/PLANO_CIDADE_VIVA.md): terreno urbano como entidade de primeira classe.
+    """T01 (docs/12_PLANO_CIDADE_VIVA.md): terreno urbano como entidade de primeira classe.
     A GEOMETRIA (polígono, área, classe da frente) vem do GeoJSON do cartógrafo — aqui
     só o suficiente pra engine decidir "que terreno está livre nesta cidade" e onde ele
     fica. `id` é o mesmo id do lote gravado no GeoJSON (armadilha 3: posicional, estável
@@ -319,7 +319,7 @@ class NPC:
     # ser escrito por nenhum outro módulo.
     num_dependentes: int = 0
 
-    # A02 (docs/PLANO_POPULACAO_E_ESCALA.md): agenda de decisão — `None` significa
+    # A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): agenda de decisão — `None` significa
     # "nunca avaliado, processar agora". Como `num_dependentes`, NÃO é persistido: um
     # `recarregar_habitantes()` ou reinício do processo reseta os dois pra `None`, o
     # que só custa uma reavaliação a mais no próximo tick, nunca um NPC congelado.

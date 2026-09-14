@@ -8,7 +8,7 @@
 > genuinamente 1 minuto e todo número de `config.json` foi recalculado (taxas ÷15, probabilidades por
 > fórmula composta, durações ×15) em vez de dividido ingenuamente. Na prática o "risco de precisão"
 > citado abaixo só se manifestou num único lugar concreto (dinheiro, que virou `float`), não no
-> sistema todo. Detalhes de execução e verificação estão na **Frente 4** do [`ROADMAP.md`](ROADMAP.md);
+> sistema todo. Detalhes de execução e verificação estão na **Frente 4** do [`05_ROADMAP.md`](05_ROADMAP.md);
 > o vínculo com o "Modo Mestre de IA" está na **Frente 5**.
 
 Este documento descreve a análise técnica e as possíveis abordagens para adaptar o ecossistema do *OpenWorld Engine* a uma proporção de tempo 1:1 com a vida real (onde 1 minuto na vida real equivale a 1 minuto no jogo).

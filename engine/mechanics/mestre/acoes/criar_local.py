@@ -13,10 +13,10 @@ class CriarLocal(AcaoDeMundo):
     comando = ComandoMestre.CRIAR_LOCAL
 
     def aplicar(self, mundo, contexto: ContextoMestre, acao: AcaoProposta) -> List[str]:
-        """M02 (docs/PLANO_POPULACAO_E_ESCALA.md) + F01/F02 (docs/
-        PLANO_AVANCO_E_CALIBRAGEM.md): chama `abrir_obra` DE VERDADE — o mesmo
+        """M02 (docs/13_PLANO_POPULACAO_E_ESCALA.md) + F01/F02 (docs/
+        14_PLANO_AVANCO_E_CALIBRAGEM.md): chama `abrir_obra` DE VERDADE — o mesmo
         caminho único pelo qual todo edifício nasce durante a simulação (O03,
-        docs/PLANO_CIDADE_VIVA.md). M02 precisou reservar o lote na mão e inventar
+        docs/12_PLANO_CIDADE_VIVA.md). M02 precisou reservar o lote na mão e inventar
         `_avaliar_expansao_fora_do_processo` porque o Modo Mestre não tinha o
         `EstadoDoMundo` vivo; agora tem (roda dentro de `run_simulation.py`, via
         `MestreManager.drenar_e_aplicar`), então esse desvio inteiro some.

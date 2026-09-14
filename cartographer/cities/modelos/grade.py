@@ -1,5 +1,5 @@
 """
-GradeModelo — colônia romana / cidade planejada (F5, ESPEC_DESENHO_CIDADE.md). Ruas retas
+GradeModelo — colônia romana / cidade planejada (F5, 09_ESPEC_DESENHO_CIDADE.md). Ruas retas
 cruzando em ângulo reto, quadras retangulares, cardo+decumanus (as duas avenidas centrais)
 cruzando na praça. É o contraste mais forte contra o `radial` — por isso o primeiro modelo
 novo a entrar.
@@ -15,7 +15,7 @@ class GradeModelo(ModeloCidade):
 
     def __init__(self, sitio, config, rng, raio_m_forcado=None):
         super().__init__(sitio, config, rng)  # roda ajustar_por_sitio (calibra self.lado_faixa)
-        # R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): raio derivado de
+        # R01 (docs/13_PLANO_POPULACAO_E_ESCALA.md, Bloco R): raio derivado de
         # domicílios, não mais sorteado direto — mesmo raciocínio de radial.py.
         self.raio_m, self.lotes_alvo = derivar_ou_forcar_raio(
             sitio, config, self.rng, raio_m_forcado, self.nome)

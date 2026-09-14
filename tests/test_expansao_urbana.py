@@ -1,6 +1,6 @@
 """
 Testes de `GerenciadorUrbanismo.avaliar_expansao`/`_aplicar_arrabalde` — X01/X03,
-docs/PLANO_CIDADE_VIVA.md. Ao contrário de `tests/test_urbanismo.py` (O02, tudo em
+docs/12_PLANO_CIDADE_VIVA.md. Ao contrário de `tests/test_urbanismo.py` (O02, tudo em
 memória), estes tocam disco de verdade: um GeoJSON de cidade real (gerado pela mesma
 pipeline de `cartographer/cities/`, escrito num diretório temporário) e a mesma
 sequência ler → gerar_arrabalde → escrever atômico → reindexar que a simulação real usa.

@@ -13,13 +13,13 @@ DESCRIÇÃO:
     nenhum quando o local alvo não existe; forçar uma string só obrigaria a inventar um
     resultado vazio.
 
-    F01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `aplicar` recebe `EstadoDoMundo`, não
+    F01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `aplicar` recebe `EstadoDoMundo`, não
     `db` — só `run_simulation.py` chama isto agora (`MestreManager.drenar_e_aplicar`),
     com o mundo vivo, então cada ação pode usar as portas de `mundo`
     (`acordar`/`mover_npc`/`mudar_casa`/`registrar_local`/`desativar_local`) em vez
     de escrever direto no banco por fora dos índices mantidos em memória — que
     ficariam desatualizados até o próximo `recarregar_habitantes()`/`recarregar_locais()`
-    (armadilha 12, docs/PLANO_POPULACAO_E_ESCALA.md). `mundo.db` continua disponível
+    (armadilha 12, docs/13_PLANO_POPULACAO_E_ESCALA.md). `mundo.db` continua disponível
     pra quem só precisa de leitura/escrita crua (ex.: lotes)."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -37,7 +37,7 @@ class ContextoMestre:
     acabou de nascer, REATRIBUIR_NPC lê esse id quando o payload traz o marcador
     `NOVO_LOCAL`. Antes isso era uma variável solta no meio do laço.
 
-    `config` (F02, docs/PLANO_AVANCO_E_CALIBRAGEM.md): CRIAR_LOCAL precisa montar um
+    `config` (F02, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): CRIAR_LOCAL precisa montar um
     `GerenciadorUrbanismo(mundo, config)` pra chamar `abrir_obra` de verdade — a
     config inteira, não só os quatro campos já extraídos acima, porque
     `GerenciadorUrbanismo` lê de vários dicionários (`urbanismo`, `geracao_urbana`)."""
@@ -62,7 +62,7 @@ class AcaoProposta:
     def de_payload(cls, payload: dict) -> Optional['AcaoProposta']:
         """Converte o dicionário cru proposto pela IA. Devolve None se o comando não
         existir no enum — resposta de LLM é entrada não confiável e precisa ser validada
-        antes de chegar ao mundo (ARQUITETURA.md Seção 9)."""
+        antes de chegar ao mundo (11_ARQUITETURA.md Seção 9)."""
         try:
             comando = ComandoMestre(payload.get("comando"))
         except ValueError:

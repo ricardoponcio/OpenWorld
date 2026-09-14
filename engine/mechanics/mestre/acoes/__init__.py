@@ -6,7 +6,7 @@ DESCRIÇÃO:
     O registro é escrito à mão, de propósito: varrer o diretório deixaria o conjunto de
     comandos aceitos dependente da ordem do sistema de arquivos, e um arquivo meio
     escrito passaria a ser um comando válido. Mesma política dos modelos de cidade
-    (ARQUITETURA.md, D6).
+    (11_ARQUITETURA.md, D6).
 
     Para acrescentar um comando: o membro novo em `ComandoMestre`, um arquivo aqui com a
     classe, e uma entrada em `ACOES`. O despacho não muda.

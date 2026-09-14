@@ -1,7 +1,7 @@
 """
 MODULE: agenda.py
 FUNÇÃO: Agenda de decisões — quando um NPC precisa ser reavaliado (A02, docs/
-PLANO_POPULACAO_E_ESCALA.md).
+13_PLANO_POPULACAO_E_ESCALA.md).
 
 DESCRIÇÃO:
     Hoje o tick processa os 25.000 NPCs todo minuto simulado; medido, 99,83% deles
@@ -14,7 +14,7 @@ DESCRIÇÃO:
     `GameLoop` é quem decide o que fazer com a resposta (R-F01: nenhum estado do
     mundo é lido ou escrito aqui).
 
-ARMADILHA 11 (docs/PLANO_POPULACAO_E_ESCALA.md): um acumulador linear (fome, energia)
+ARMADILHA 11 (docs/13_PLANO_POPULACAO_E_ESCALA.md): um acumulador linear (fome, energia)
 pode ser saltado com segurança contanto que o salto pare ANTES de qualquer limiar que
 mude o que o NPC quer ou que tenha efeito de consequência. Por isso `minutos_ate_cruzar`
 arredonda pra BAIXO (nunca pra cima): errar pra menos custa uma reavaliação a mais;
@@ -25,7 +25,7 @@ Só as ações "estáveis" (`ACOES_LOTEAVEIS`) recebem salto grande. Isso era, e
 `Acao.CUIDAR_PROLE` ficavam de fora por terem estado interno próprio (ver Registro de
 execução, tarefa A02).
 
-H04 (docs/PLANO_AVANCO_E_CALIBRAGEM.md) generalizou as três, porque cada uma termina
+H04 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md) generalizou as três, porque cada uma termina
 exatamente num CRUZAMENTO calculável, igual fome/energia — só que dois deles moram
 fora do NPC, e agenda.py continua sem ler `mundo` (R-F01: "Funções puras" acima).
 Pra esses dois, `calcular_proximo_instante` aceita `candidatos_extra`: números já
@@ -63,7 +63,7 @@ def em_consequencia(npc, cfg_bio) -> bool:
     reavaliado todo tick até sair dele, mesmo que `proximo_instante_decisao` aponte
     pro futuro (armadilha 11, classe 2).
 
-    H01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): usada como regra de
+    H01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 13): usada como regra de
     ENTRADA/SAÍDA do conjunto `EstadoDoMundo.npcs_em_consequencia`
     (`mundo.marcar_consequencia`) — chamada só pra quem já está sendo processado
     neste tick, nunca mais varrida sobre os NPCs do mundo inteiro."""
@@ -103,7 +103,7 @@ def minutos_ate_cruzar(valor_atual: float, taxa_por_minuto: float, limiar: float
 
 
 def _desvio_jitter_fronteira_min(npc, config) -> int:
-    """H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): deslocamento
+    """H03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): deslocamento
     determinístico por NPC — `zlib.crc32`, NUNCA `hash()` (varia por processo,
     `PYTHONHASHSEED`) nem `random` puro (tornaria o mundo irreproduzível com a mesma
     seed). Sempre o MESMO valor pro mesmo `npc.id`, em qualquer chamada, em qualquer
@@ -163,7 +163,7 @@ def calcular_proximo_instante(npc, agora, config, candidatos_extra=None):
     (`simulacao_intervalo_maximo_decisao_min`) — a rede que transforma um `acordar`
     esquecido (A03) em atraso de algumas horas, não em NPC congelado pra sempre.
 
-    `candidatos_extra` (H04, docs/PLANO_AVANCO_E_CALIBRAGEM.md): minutos adicionais
+    `candidatos_extra` (H04, docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): minutos adicionais
     calculados por quem TEM acesso a `mundo` (`GameLoop`/`NPCActionManager`) — pra
     CONSTRUIR (`obra.integridade` mora em `mundo.locais`) e COMER (quanto o saldo do
     PAGADOR sustenta). Continuam usando `minutos_ate_cruzar`, nunca uma fórmula
@@ -188,7 +188,7 @@ def calcular_proximo_instante(npc, agora, config, candidatos_extra=None):
     dormindo = npc.acao_atual == Acao.DORMIR
     gravida = npc.genero == Genero.FEMININO.value and npc.gravidez_ticks > 0
 
-    # H03 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): os dois desvios
+    # H03 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 14): os dois desvios
     # determinísticos deste NPC, calculados uma vez e reusados nos candidatos
     # abaixo — nunca em cima do limiar de CONSEQUÊNCIA (inaniação), que não é lugar
     # pra variação nenhuma.
