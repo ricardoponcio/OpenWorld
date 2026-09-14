@@ -11,11 +11,13 @@ DESCRIÇÃO:
     passa a CONTER um `EstadoDoMundo` em vez de ser ele, e cada gerenciador recebe só
     isso (mais a `config`, que é estática e não faz parte do estado do mundo).
 """
+import collections
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List
 
 from .indice_locais import IndiceDeLocais
+from .models import ContadorMundo
 
 
 @dataclass
@@ -80,6 +82,12 @@ class EstadoDoMundo:
     npcs_em_consequencia: Dict = field(default=None, repr=False, compare=False)
     npcs_sem_agenda: Dict = field(default=None, repr=False, compare=False)
 
+    # O02 (docs/16_PLANO_PAINEL_E_IA.md): ocorrências do dia simulado corrente, por
+    # ContadorMundo — substitui os warnings por NPC/por tick que inundavam o log
+    # (42.476 linhas de inanição numa amostra). O coletor de estatísticas (O03) lê e
+    # zera isto quando o dia simulado vira.
+    contadores: collections.Counter = field(default_factory=collections.Counter, repr=False, compare=False)
+
     def __post_init__(self):
         if self.indice is None:
             self.indice = IndiceDeLocais(self.locais)
@@ -141,6 +149,12 @@ class EstadoDoMundo:
         for npc in self.npcs_por_cidade.get(cidade_id, ()):
             if npc.esta_vivo():
                 self.acordar(npc)
+
+    def contar(self, contador: ContadorMundo, quantidade: int = 1) -> None:
+        """O02: única porta de incremento — nunca `mundo.contadores[...] += 1`
+        direto (a mesma regra dos índices de NPC: uma porta só, pra não ter dois
+        lugares divergindo de como contar a mesma coisa)."""
+        self.contadores[contador] += quantidade
 
     # ------------------------------------------------------------------
     # A04 (docs/13_PLANO_POPULACAO_E_ESCALA.md): único caminho pra mudar

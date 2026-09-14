@@ -1,5 +1,5 @@
 from datetime import datetime
-from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao
+from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao, ContadorMundo
 from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
@@ -129,9 +129,11 @@ class NPCLifecycleManager:
         idade_str = f" aos {idade_anos} anos" if idade_anos > 0 else ""
         if npc.estagio_vida == EstagioVida.IDOSO.value:
             resumo = f"Luto na Vila: O ancião {npc.nome} faleceu{idade_str} pacificamente de velhice."
+            self._mundo.contar(ContadorMundo.OBITO_VELHICE)
         else:
             resumo = f"Luto na Vila: O habitante {npc.nome} faleceu{idade_str} devido a problemas de saúde/inanição."
-        
+            self._mundo.contar(ContadorMundo.OBITO_SAUDE)
+
         evento = Evento(
             id=novo_id(PrefixoId.EVENTO_MORTE),
             timestamp=timestamp_rpg,

@@ -190,6 +190,20 @@ class MetaChave(Enum):
     LOCAIS_VERSAO       = "locais_versao"
 
 
+class ContadorMundo(Enum):
+    """O02 (docs/16_PLANO_PAINEL_E_IA.md): ocorrências agregadas por dia simulado,
+    lidas pelo coletor de estatísticas (O03) — substituem os warnings por NPC. Com
+    30 mil NPCs, um `warning` por NPC por tick não é alerta, é estatística: medido
+    42.476 linhas de inanição numa amostra de log."""
+    NASCIMENTO             = "nascimento"
+    OBITO_VELHICE          = "obito_velhice"
+    OBITO_SAUDE            = "obito_saude"        # inclui inanição
+    CASAMENTO              = "casamento"
+    REFEICAO_PARCIAL       = "refeicao_parcial"
+    SEM_DINHEIRO_SEM_SOPAO = "sem_dinheiro_sem_sopao"
+    MINUTO_EM_INANICAO     = "minuto_em_inanicao"
+
+
 class ComandoMestre(Enum):
     """Ações de mundo que o Modo Mestre aceita (R-F03). O valor é a string que a IA
     devolve no campo `comando` e que vai para a coluna `acoes_propostas` — resposta de

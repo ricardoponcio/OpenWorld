@@ -16,7 +16,7 @@ DESCRIÇÃO:
 """
 import random
 from datetime import timedelta
-from .models import NPC, Acao, EstagioVida, Genero, MetaChave, ESCALA_MAXIMA
+from .models import NPC, Acao, EstagioVida, Genero, MetaChave, ContadorMundo, ESCALA_MAXIMA
 from .logger import WorldLogger
 from .consultas_npc import NPCUtils
 from .config_loader import cfg_get
@@ -356,7 +356,10 @@ class GameLoop:
         cfg_bio = self._cfg_bio
         if npc.fome > cfg_get(cfg_bio, "inaniacao_fome_limiar"):
             npc.saude -= cfg_get(cfg_bio, "inaniacao_perda_saude")
-            WorldLogger.warning(f"💔 [INANIÇÃO] {npc.nome} está perdendo saúde! (Saúde: {npc.saude})", npc=npc)
+            # O02 (docs/16_PLANO_PAINEL_E_IA.md): era um warning por NPC faminto, por
+            # tick — 42.476 linhas numa amostra de log. Continua perdendo saúde
+            # igual; só virou estatística agregada em vez de linha.
+            self._mundo.contar(ContadorMundo.MINUTO_EM_INANICAO)
         elif npc.fome < cfg_get(cfg_bio, "recuperacao_sono_fome_maxima") and npc.acao_atual == Acao.DORMIR:
             if npc.saude < ESCALA_MAXIMA:
                 npc.saude = min(ESCALA_MAXIMA, npc.saude + cfg_get(cfg_bio, "dormir_ganho_saude"))

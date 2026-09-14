@@ -1,4 +1,4 @@
-from ..models import NPC, Acao, EstagioVida
+from ..models import NPC, Acao, EstagioVida, ContadorMundo
 from ..logger import WorldLogger
 from .movement import NPCMovementManager
 from ..consultas_npc import NPCUtils
@@ -181,19 +181,17 @@ class NPCActionManager:
             npc.fome -= fome_rec
             npc.energia += energia_ganho_do_tick * proporcao
 
-            if is_dependent:
-                WorldLogger.warning(f"⚠️  [SUBNUTRIÇÃO PROGRESSIVA INFANTIL] O dependente {npc.nome} comeu uma porção parcial (pago por {pagador.nome}, gastou {custo_pago} PC, reduziu fome em {fome_rec:.1f})", npc=npc)
-            else:
-                WorldLogger.warning(f"⚠️  [SUBNUTRIÇÃO PROGRESSIVA] {npc.nome} comeu uma porção parcial (gastou {custo_pago} PC, reduziu fome em {fome_rec:.1f})", npc=npc)
+            # O02 (docs/16_PLANO_PAINEL_E_IA.md): era um warning por NPC subnutrido,
+            # por tick — vira estatística agregada, lida pelo coletor (O03).
+            self._mundo.contar(ContadorMundo.REFEICAO_PARCIAL)
         else:
             # NPC tentou comer mas não tinha dinheiro
             sopao_ok = self._reino.fornecer_sopao(npc, fome_rec_do_tick, energia_ganho_do_tick)
 
-            if not sopao_ok and WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
-                if is_dependent:
-                    WorldLogger.warning(f"⚠️  [ECONOMIA] O dependente {npc.nome} está com fome, mas seu responsável {pagador.nome} não tem dinheiro!", npc=npc)
-                else:
-                    WorldLogger.warning(f"⚠️  [ECONOMIA] {npc.nome} está sem dinheiro para comer!", npc=npc)
+            if not sopao_ok:
+                # O02: idem — 20.241+15.585+... linhas de "sem dinheiro" numa
+                # amostra de log (Seção 2.2).
+                self._mundo.contar(ContadorMundo.SEM_DINHEIRO_SEM_SOPAO)
 
     def _executar_trabalhar(self, npc: NPC, cfg_acoes: dict):
         if not npc.local_trabalho_id:

@@ -1,7 +1,7 @@
 import random
 import threading
 from dataclasses import dataclass
-from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao, Genero
+from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao, Genero, ContadorMundo
 from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
@@ -187,7 +187,8 @@ class NPCReproductionManager:
         # `registrar_npc` o adiciona direto (e mantém os três índices coerentes), sem
         # descartar os objetos de mãe/pai já mutados nesta mesma chamada.
         self._mundo.registrar_npc(novo_bebe)
-        
+        self._mundo.contar(ContadorMundo.NASCIMENTO)  # O02 (docs/16_PLANO_PAINEL_E_IA.md)
+
         # Registrar evento de parto com nome temporário
         pais_str = f"{mae.nome} e {pai.nome}" if pai else mae.nome
         resumo_temp = f"Nascimento na Vila! Nasceu o bebê {nome_temp_bebe} ({_ROTULO_GENERO_BEBE[genero_bebe]}), filho de {pais_str}."

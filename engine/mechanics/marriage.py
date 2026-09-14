@@ -8,7 +8,7 @@ DESCRIÇÃO:
     casamento no RPG, e a rotina cron de casamentos passivos.
 """
 import random
-from ..models import NPC, Evento, TipoEvento, EstadoCivil, VinculoSocial
+from ..models import NPC, Evento, TipoEvento, EstadoCivil, VinculoSocial, ContadorMundo
 from ..identificadores import PrefixoId, novo_id
 from ..tempo import RelogioMundo
 from ..logger import WorldLogger
@@ -194,6 +194,7 @@ class NPCMarriageManager:
             resumo_estruturado=resumo
         )
         self._mundo.db.eventos.salvar(evento)
+        self._mundo.contar(ContadorMundo.CASAMENTO)  # O02 (docs/16_PLANO_PAINEL_E_IA.md)
 
         # Aumentar afinidade e salvar o relacionamento no banco
         n1.relacionamentos[n2.id] = min(1000, n1.relacionamentos.get(n2.id, 0) + bonus_afinidade)
