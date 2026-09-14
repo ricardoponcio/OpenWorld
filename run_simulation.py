@@ -87,8 +87,8 @@ def start_simulation():
 
             engine.tick()
 
-            if velocidade > 1.0:
-                print(f"⏩ Velocidade: {velocidade}x")
+            # O01 (docs/16_PLANO_PAINEL_E_IA.md): o print por tick saiu — o resumo
+            # periódico do coletor de estatísticas (O03) substitui isso.
             time.sleep(espera)
 
     except KeyboardInterrupt:

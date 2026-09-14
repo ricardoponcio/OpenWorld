@@ -162,11 +162,15 @@ class NPCActionManager:
             pagador.dinheiro_total_pc -= custo_do_tick
             npc.energia += energia_ganho_do_tick
 
-            if is_dependent:
-                WorldLogger.debug(f"🍔 [ALIMENTAÇÃO PROGRESSIVA INFANTIL] O dependente {npc.nome} comeu uma porção. Custo: {custo_do_tick} PC (Pago por {pagador.nome} | Saldo: {pagador.dinheiro_total_pc} PC | Fome: {npc.fome:.1f})", npc=npc)
-            else:
-                dep_str = f" com {num_dependentes} dependentes" if num_dependentes > 0 else ""
-                WorldLogger.debug(f"🍔 [ALIMENTAÇÃO PROGRESSIVA] {npc.nome} comeu uma porção{dep_str}. Custo: {custo_do_tick} PC (Dinheiro restante: {pagador.dinheiro_total_pc} PC | Fome: {npc.fome:.1f})", npc=npc)
+            # O01 (docs/16_PLANO_PAINEL_E_IA.md): sem amostragem, era a linha mais
+            # frequente do log — 161.971+110.578+94.518 ocorrências numa amostra de
+            # 300 MB (Seção 2.2), uma por refeição bem-sucedida de cada NPC.
+            if WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
+                if is_dependent:
+                    WorldLogger.debug(f"🍔 [ALIMENTAÇÃO PROGRESSIVA INFANTIL] O dependente {npc.nome} comeu uma porção. Custo: {custo_do_tick} PC (Pago por {pagador.nome} | Saldo: {pagador.dinheiro_total_pc} PC | Fome: {npc.fome:.1f})", npc=npc)
+                else:
+                    dep_str = f" com {num_dependentes} dependentes" if num_dependentes > 0 else ""
+                    WorldLogger.debug(f"🍔 [ALIMENTAÇÃO PROGRESSIVA] {npc.nome} comeu uma porção{dep_str}. Custo: {custo_do_tick} PC (Dinheiro restante: {pagador.dinheiro_total_pc} PC | Fome: {npc.fome:.1f})", npc=npc)
         elif pagador.dinheiro_total_pc > 0:
             # Comer parcial do tick (subnutrido)
             proporcao = pagador.dinheiro_total_pc / custo_do_tick

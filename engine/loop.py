@@ -204,7 +204,9 @@ class GameLoop:
         hora_formatada = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
         self._mundo.db.meta.salvar(MetaChave.HORA_ISO, self._mundo.data_simulada.isoformat())
         self._mundo.db.meta.salvar(MetaChave.HORA_FORMATADA, hora_formatada)
-        WorldLogger.info(f"\n--- Tick {self._mundo.tick_count} | {hora_formatada} ---")
+        # O01 (docs/16_PLANO_PAINEL_E_IA.md): era INFO — 1 linha por minuto simulado
+        # no console/arquivo. O resumo periódico (O03) substitui isso.
+        WorldLogger.debug(f"\n--- Tick {self._mundo.tick_count} | {hora_formatada} ---")
 
     def _atualizar_eventos_globais(self) -> list:
         self._eventos_globais.atualizar_eventos_globais()

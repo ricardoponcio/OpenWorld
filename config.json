@@ -194,7 +194,10 @@
     },
     "observabilidade": {
         "_comentario": "R-B10 do 10_PLANO_REFATORACAO.md (2026-09-11): amostragem de log de ação. Um tick é 1 minuto de jogo — logar toda ação de todo NPC a cada tick inundaria o arquivo. `log_acao_a_cada_n_ticks` substitui o `tick_count % 4` que estava copiado (sem nome, sem config) em 5 lugares (actions.py x4, kingdom.py x1).",
-        "log_acao_a_cada_n_ticks": 4
+        "log_acao_a_cada_n_ticks": 4,
+        "_comentario_niveis": "O01 (docs/16_PLANO_PAINEL_E_IA.md): níveis mínimos por destino. Com 30 mil NPCs, DEBUG no arquivo gerava ~29 MB/min (725 MB em 25 min medidos). Valores aceitos: DEBUG, INFO, WARNING, ERROR.",
+        "log_arquivo_nivel": "INFO",
+        "log_console_nivel": "WARNING"
     },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",

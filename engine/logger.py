@@ -3,7 +3,23 @@ import logging
 import sqlite3
 import queue
 import threading
-from .config_loader import cfg_get
+import time
+from enum import Enum
+from .config_loader import cfg_get, carregar_config_global
+
+
+class NivelLog(Enum):
+    """O01 (docs/16_PLANO_PAINEL_E_IA.md): nível mínimo aceito pelos handlers de
+    arquivo/console do logger — o texto vem de config.json["observabilidade"]. Valor
+    fora deste conjunto derruba a construção do logger (ARQUITETURA P4/P5)."""
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+
+    def como_nivel_logging(self) -> int:
+        return getattr(logging, self.value)
+
 
 class WorldLogger:
     _logger = None
@@ -64,29 +80,13 @@ class WorldLogger:
             WorldLogger._log_thread = threading.Thread(target=WorldLogger._log_worker, daemon=True)
             WorldLogger._log_thread.start()
 
-    _npc_logging_enabled = None
-    _last_config_check = 0
-
     @staticmethod
     def is_npc_logging_enabled():
-        import time
-        now = time.time()
-        if WorldLogger._npc_logging_enabled is None or now - WorldLogger._last_config_check > 5.0:
-            WorldLogger._last_config_check = now
-            try:
-                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-                config_path = os.path.join(base_dir, "config.json")
-                if os.path.exists(config_path):
-                    import json
-                    with open(config_path, "r", encoding="utf-8") as f:
-                        cfg = json.load(f)
-                    # default=True: fallback de sistema — logger não deve parar a simulação
-                    WorldLogger._npc_logging_enabled = cfg_get(cfg, "salvar_logs_npc_no_banco", default=True)
-                else:
-                    WorldLogger._npc_logging_enabled = True
-            except Exception:
-                WorldLogger._npc_logging_enabled = True
-        return WorldLogger._npc_logging_enabled
+        """O01 (docs/16_PLANO_PAINEL_E_IA.md): lia `config.json` à mão a cada 5s
+        (ARQUITETURA §5 proíbe isso) — `carregar_config_global()` já cacheia o
+        dicionário por processo, então não há mais custo de I/O a evitar aqui.
+        `default=True`: fallback de sistema — o logger não deve parar a simulação."""
+        return cfg_get(carregar_config_global(), "salvar_logs_npc_no_banco", default=True)
 
     @staticmethod
     def queue_db_log(npc, level, msg):
@@ -117,6 +117,14 @@ class WorldLogger:
             os.makedirs(log_dir, exist_ok=True)
             log_file = os.path.join(log_dir, "world.log")
 
+            # O01 (docs/16_PLANO_PAINEL_E_IA.md): níveis mínimos por destino vêm do
+            # config — com 30 mil NPCs, DEBUG fixo no arquivo gerava ~29 MB/min
+            # (725 MB em 25 min medidos). NivelLog(valor) derruba alto se o texto no
+            # config não for um dos quatro nomes aceitos (ARQUITETURA P4/P5).
+            cfg_obs = cfg_get(carregar_config_global(), "observabilidade")
+            nivel_arquivo = NivelLog(cfg_get(cfg_obs, "log_arquivo_nivel")).como_nivel_logging()
+            nivel_console = NivelLog(cfg_get(cfg_obs, "log_console_nivel")).como_nivel_logging()
+
             logger = logging.getLogger("OpenWorld")
             logger.setLevel(logging.DEBUG)
             logger.propagate = False
@@ -125,20 +133,20 @@ class WorldLogger:
             if logger.handlers:
                 logger.handlers.clear()
 
-            # 1. File Handler (Salva TUDO - Nível DEBUG)
+            # 1. File Handler
             file_formatter = logging.Formatter(
                 '[%(asctime)s] [%(levelname)s] %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
             )
             file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
-            file_handler.setLevel(logging.DEBUG)
+            file_handler.setLevel(nivel_arquivo)
             file_handler.setFormatter(file_formatter)
             logger.addHandler(file_handler)
 
-            # 2. Console Handler (Apenas eventos importantes - Nível INFO)
+            # 2. Console Handler
             console_formatter = logging.Formatter('%(message)s')
             console_handler = logging.StreamHandler()
-            console_handler.setLevel(logging.INFO)
+            console_handler.setLevel(nivel_console)
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)
 
@@ -163,6 +171,11 @@ class WorldLogger:
         """Log detalhado - Apenas no arquivo de log (DEBUG)."""
         if WorldLogger._modo_avanco_rapido:
             return
+        # O01 (docs/16_PLANO_PAINEL_E_IA.md): se nem o arquivo aceita DEBUG (nível
+        # configurado acima disso) nem o banco por NPC está ligado, esta chamada não
+        # ia produzir nada — sai antes de formatar/atravessar o handler.
+        if not WorldLogger.get_logger().isEnabledFor(logging.DEBUG) and not WorldLogger.is_npc_logging_enabled():
+            return
         WorldLogger.get_logger().debug(msg)
         if npc:
             WorldLogger.queue_db_log(npc, "DEBUG", msg)
@@ -171,6 +184,8 @@ class WorldLogger:
     def info(msg: str, npc = None):
         """Log geral - Vai para console e arquivo (INFO)."""
         if WorldLogger._modo_avanco_rapido:
+            return
+        if not WorldLogger.get_logger().isEnabledFor(logging.INFO) and not WorldLogger.is_npc_logging_enabled():
             return
         WorldLogger.get_logger().info(msg)
         if npc:

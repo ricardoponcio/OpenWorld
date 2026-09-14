@@ -55,7 +55,11 @@ class NPCMovementManager:
         # Se mudou de localização, atualiza
         if npc.localizacao_atual_id != local_id:
             nome_local = locais[local_id].nome if local_id in locais else local_id
-            WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para {nome_local}.", npc=npc)
+            # O01 (docs/16_PLANO_PAINEL_E_IA.md): ~25.000 linhas por sobrenome numa
+            # amostra de 300 MB (Seção 2.2) — o deslocamento é o movimento mais
+            # comum de todos, precisa de amostragem como o resto do log por ação.
+            if WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
+                WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para {nome_local}.", npc=npc)
             self._mundo.mover_npc(npc, local_id)
 
     def mover_para_casa(self, npc: NPC):
@@ -72,7 +76,8 @@ class NPCMovementManager:
 
         if npc.localizacao_atual_id != local_id:
             nome_local = locais[local_id].nome if locais and local_id in locais else local_id
-            WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para a {nome_local}.", npc=npc)
+            if WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
+                WorldLogger.debug(f"🚶 {npc.nome} deslocou-se para a {nome_local}.", npc=npc)
             self._mundo.mover_npc(npc, local_id)
 
     def mover_para_trabalho(self, npc: NPC):
