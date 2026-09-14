@@ -16,6 +16,8 @@ import sys
 import time
 import argparse
 import random
+import tempfile
+import shutil
 from datetime import datetime
 
 raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -26,6 +28,7 @@ from config import get_config
 from engine.models import EstagioVida, TipoLocal, CategoriaLocal
 from engine.mundo import EstadoDoMundo
 from engine.loop import GameLoop
+from engine.database import DatabaseManager
 from tests.mundo_sintetico import BancoFalso, adulto, casa
 
 ORCAMENTO_MS = 1000.0  # D4 do docs/PLANO_CIDADE_VIVA.md — velocidade 60x
@@ -97,6 +100,28 @@ def medir_ms_por_tick(mundo: EstadoDoMundo, config: dict, n_ticks: int) -> float
     return 1000.0 * total / n_ticks
 
 
+def montar_mundo_com_banco_real(n_npcs: int, n_locais: int, n_cidades: int, db_path: str) -> EstadoDoMundo:
+    """W02 (docs/PLANO_POPULACAO_E_ESCALA.md, armadilha 9): mesmo mundo sintético de
+    `montar_mundo_sintetico`, mas com um `DatabaseManager` de VERDADE (SQLite num
+    arquivo `tempfile`, WAL + `synchronous=NORMAL` — o `DatabaseManager` real já
+    configura isso sozinho, não precisa repetir aqui) em vez de `BancoFalso`.
+
+    Os NPCs/locais são gravados ANTES de medir (`salvar_completo`/`salvar_em_lote`) —
+    sem isto, o `UPDATE ... WHERE id = ?` de `salvar_muitos` (N02) não bateria em
+    nenhuma linha, e o benchmark mediria o custo de um `UPDATE` que não acha nada, não
+    o de gravar de verdade (`BancoFalso` não tem essa distinção, por isso não mede
+    disco: é exatamente o problema que esta tarefa existe pra corrigir)."""
+    locais = _construir_locais(n_locais, n_cidades)
+    npcs = _construir_npcs(n_npcs, locais, n_cidades)
+    db = DatabaseManager(db_path)
+    db.locais.salvar_em_lote(locais)
+    db.npcs.salvar_completo(npcs)
+    return EstadoDoMundo(
+        npcs=npcs, locais={l.id: l for l in locais}, cidades={},
+        data_simulada=datetime(2026, 9, 12, 8, 0), db=db, tick_count=0,
+    )
+
+
 def _veredito(ms_por_tick: float) -> str:
     if ms_por_tick <= 0:
         return "OK"
@@ -131,6 +156,37 @@ def rodar_matriz_sintetica(n_ticks: int):
         print(f"{n_npcs:>6}  {n_locais:>6}  {n_cidades:>7}   {ms:>8.1f}   {_veredito(ms)}")
 
 
+def rodar_comparacao_cpu_vs_disco(n_ticks: int):
+    """W02 (docs/PLANO_POPULACAO_E_ESCALA.md, armadilha 9): `rodar_matriz_sintetica`
+    mede zero de custo de disco (`BancoFalso` não escreve nada) — e a persistência é
+    o maior item do orçamento com 25.000 NPCs (944 ms antes de N02). Roda o MESMO
+    cenário duas vezes, uma com `BancoFalso` (CPU) e outra com SQLite de verdade num
+    `tempfile` (CPU+disco) — a diferença entre as duas colunas é o número que N02
+    existia pra derrubar."""
+    config = get_config()
+    matriz = [
+        (750, 10000, 15),
+        (3000, 15000, 15),
+        (25000, 60000, 40),
+    ]
+    print(f"ORÇAMENTO: {ORCAMENTO_MS:.0f} ms/tick (velocidade 60x, D4 do docs/PLANO_CIDADE_VIVA.md)")
+    print(f"{'npcs':>6}  {'locais':>6}  {'cidades':>7}   {'cpu (ms)':>9}   {'cpu+disco (ms)':>15}   {'delta':>8}")
+    for n_npcs, n_locais, n_cidades in matriz:
+        mundo_falso = montar_mundo_sintetico(n_npcs, n_locais, n_cidades)
+        ms_cpu = medir_ms_por_tick(mundo_falso, config, n_ticks)
+
+        tmp_dir = tempfile.mkdtemp(prefix="openworld_bench_")
+        try:
+            db_path = os.path.join(tmp_dir, "bench.db")
+            mundo_real = montar_mundo_com_banco_real(n_npcs, n_locais, n_cidades, db_path)
+            ms_disco = medir_ms_por_tick(mundo_real, config, n_ticks)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        print(f"{n_npcs:>6}  {n_locais:>6}  {n_cidades:>7}   {ms_cpu:>9.1f}   {ms_disco:>15.1f}   "
+              f"{ms_disco - ms_cpu:>+8.1f}")
+
+
 def rodar_contra_banco_real(n_ticks: int):
     from engine.core import SimulationEngine
     engine = SimulationEngine()
@@ -150,11 +206,15 @@ def rodar_contra_banco_real(n_ticks: int):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--real", action="store_true", help="roda contra database/openworld.db em vez do sintético")
+    parser.add_argument("--com-banco", action="store_true",
+                        help="W02: compara CPU (BancoFalso) contra CPU+disco (SQLite real em tempfile), mesmo cenário")
     parser.add_argument("--ticks", type=int, default=3, help="ticks por cenário (padrão: 3)")
     args = parser.parse_args()
 
     if args.real:
         rodar_contra_banco_real(args.ticks)
+    elif args.com_banco:
+        rodar_comparacao_cpu_vs_disco(args.ticks)
     else:
         rodar_matriz_sintetica(args.ticks)
 
