@@ -41,6 +41,17 @@ from cartographer.cities.expansao import gerar_arrabalde, numero_do_proximo_arra
 CIDADES_GEOJSON_DIR = "database/cidades"
 
 
+def tipo_local_de_categoria(categoria: str, config: dict) -> str:
+    """V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): único lugar que traduz a `categoria`
+    de sistema (`CategoriaLocal`, vocabulário do cartógrafo) pro `tipo` funcional
+    (`TipoLocal`) que a engine lê — vaga de emprego, índice social/passeio, chave de
+    desgaste. `tipo_local` (nome de sabor) não passa por aqui. Chamado tanto por
+    `abrir_obra` (edifício novo em runtime) quanto por
+    `builder/populador.py::_importar_locais_da_geometria` (importação inicial) — as
+    duas ÚNICAS origens de `Local` no projeto."""
+    return cfg_get(config, "geracao_urbana", "tipo_local_por_categoria")[categoria]
+
+
 @dataclass
 class SpecObra:
     """O que `abrir_obra` precisa saber SOBRE O EDIFÍCIO — separado de quem pediu
@@ -194,7 +205,7 @@ class GerenciadorUrbanismo:
         obra = Local(
             id=lote_id,
             nome=spec.nome,
-            tipo=spec.tipo_local,
+            tipo=tipo_local_de_categoria(spec.categoria, self._config),
             categoria=spec.categoria,
             cidade_id=cidade_id,
             descricao=spec.nome if pronta else f"{spec.nome}, em construção.",
@@ -204,6 +215,7 @@ class GerenciadorUrbanismo:
             integridade=100 if pronta else 0,
             capacidade=spec.capacidade,
             salario_base=spec.salario_base,
+            tipo_local=spec.tipo_local,
             bairro=lote.bairro,
         )
         self._mundo.registrar_local(obra)

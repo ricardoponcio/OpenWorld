@@ -11,7 +11,7 @@ DESCRIÇÃO:
     mundo sintético em memória.
 """
 import random
-from ..models import NPC, Acao
+from ..models import NPC, Acao, TipoLocal
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
 from ..mundo import EstadoDoMundo
@@ -90,7 +90,17 @@ class NPCMovementManager:
         """Move o NPC para um local social ativo ou para casa se tiver dependentes/nenhum local.
 
         P01 (docs/PLANO_CIDADE_VIVA.md): consulta o índice por cidade em vez de varrer
-        `mundo.locais` inteiro (Seção 1.6 — este era um dos laços mais caros do tick)."""
+        `mundo.locais` inteiro (Seção 1.6 — este era um dos laços mais caros do tick).
+
+        N01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): fica no MESMO local se já está
+        num social ativo — sem isto, o resorteio a cada tick trocaria de taverna a
+        cada minuto mesmo sem o NPC "ir" a lugar nenhum, e `_executar_socializar`
+        (que passou a cobrar só na chegada) cobraria de novo a cada tick, do mesmo
+        jeito que antes."""
+        local_atual = self._mundo.locais.get(npc.localizacao_atual_id)
+        if local_atual is not None and local_atual.status == 1 and local_atual.tipo == TipoLocal.SOCIAL.value:
+            return
+
         sociais = self._mundo.indice.sociais(npc.cidade_id)
 
         num_dep = npc.num_dependentes

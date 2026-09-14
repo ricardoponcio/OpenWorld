@@ -1,5 +1,7 @@
 import json
-from ..models import Evento
+from ..models import Evento, TipoEvento
+
+_TIPOS_FOFOCA = (TipoEvento.CONVERSA.value, TipoEvento.DISCUSSAO.value)
 
 
 class RepositorioEvento:
@@ -66,10 +68,51 @@ class RepositorioEvento:
             return [dict(r) for r in rows]
 
     def resumos_recentes(self, limite: int) -> list:
+        """M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): os N mais recentes de FORA da
+        fofoca (CONVERSA/DISCUSSAO) — antes, "os 10 últimos por rowid" era
+        estatisticamente 9 linhas de "tiveram uma conversa" (99,1% do log medido)
+        e ~1 fato de verdade. `resumos_recentes_de_fofoca` cobre a fofoca à parte."""
         with self.db.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT resumo_estruturado FROM eventos ORDER BY rowid DESC LIMIT ?", (limite,))
+            placeholders = ",".join("?" for _ in _TIPOS_FOFOCA)
+            cursor.execute(
+                f"SELECT resumo_estruturado FROM eventos WHERE tipo_evento NOT IN ({placeholders}) "
+                f"ORDER BY rowid DESC LIMIT ?",
+                (*_TIPOS_FOFOCA, limite))
             return cursor.fetchall()
+
+    def resumos_recentes_de_fofoca(self, limite: int) -> list:
+        """M02: CONVERSA/DISCUSSAO à parte — o contexto do Mestre ainda mostra um
+        gostinho de vida social cotidiana, sem deixar ela engolir os fatos."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in _TIPOS_FOFOCA)
+            cursor.execute(
+                f"SELECT resumo_estruturado FROM eventos WHERE tipo_evento IN ({placeholders}) "
+                f"ORDER BY rowid DESC LIMIT ?",
+                (*_TIPOS_FOFOCA, limite))
+            return cursor.fetchall()
+
+    def ids_envolvidos_recentes_na_cidade(self, cidade_id, limite: int) -> set:
+        """M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): quem apareceu num evento
+        recente NESTA cidade — prioridade nº 1 pro contexto do Mestre quando a
+        cidade tem mais gente que o teto: o NPC que acabou de nascer, casar ou
+        morrer não pode sumir do recorte por azar de ordenação."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            rows = cursor.execute(
+                """SELECT e.envolvidos FROM eventos e
+                   JOIN locais l ON l.id = e.local_id
+                   WHERE l.cidade_id = ?
+                   ORDER BY e.rowid DESC LIMIT ?""",
+                (cidade_id, limite)).fetchall()
+        ids = set()
+        for row in rows:
+            try:
+                ids.update(json.loads(row["envolvidos"]) or [])
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return ids
 
     def listar_recentes(self, limite: int) -> list:
         with self.db.connection() as conn:

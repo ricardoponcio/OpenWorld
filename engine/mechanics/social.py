@@ -65,7 +65,8 @@ class NPCSocialManager:
                 n1, n2 = random.sample(acordados, 2)
                 if n1.id != n2.id:
                     evento, par = self._computar_interacao(n1, n2, loc_id)
-                    eventos.append(evento)
+                    if evento is not None:
+                        eventos.append(evento)
                     pares_de_relacionamento.append(par)
 
         self._mundo.db.eventos.salvar_muitos(eventos)
@@ -81,7 +82,8 @@ class NPCSocialManager:
         `processar_interacoes` usa `_computar_interacao` (mesma regra, sem gravar) e
         escreve em lote (E01)."""
         evento, par = self._computar_interacao(n1, n2, loc_id)
-        self._mundo.db.eventos.salvar(evento)
+        if evento is not None:
+            self._mundo.db.eventos.salvar(evento)
         self._mundo.db.npcs.salvar_relacionamento(*par)
         return evento, par
 
@@ -99,23 +101,32 @@ class NPCSocialManager:
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         ganhos = cfg_get(cfg_bio, "interacao_afinidade_ganhos")
         mod = random.choice(ganhos)
-        nova_afinidade = n1.relacionamentos.get(n2.id, 0) + mod
+        afinidade_antiga = n1.relacionamentos.get(n2.id, 0)
+        nova_afinidade = afinidade_antiga + mod
 
         n1.relacionamentos[n2.id] = nova_afinidade
         n2.relacionamentos[n1.id] = nova_afinidade
 
         # Determinar Vínculo
-        vinculo = NPCSocialManager._classificar_vinculo(nova_afinidade, cfg_bio).value
+        vinculo_antigo = NPCSocialManager._classificar_vinculo(afinidade_antiga, cfg_bio)
+        vinculo_novo = NPCSocialManager._classificar_vinculo(nova_afinidade, cfg_bio)
+        vinculo = vinculo_novo.value
 
-        tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
-        resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
-        timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
-
-        evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}",
-                        timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
-
-        WorldLogger.debug(f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})", npc=n1)
-        WorldLogger.queue_db_log(n2, "DEBUG", f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})")
+        # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): só vira LINHA NO BANCO se o
+        # vínculo mudou de FAIXA — com `interacao_chance=0,0452`, 5.758 eventos/dia
+        # (840 NPCs) eram 99,1% "tiveram uma conversa", ruído que enterrava os 10
+        # últimos fatos de `resumos_recentes` embaixo de fofoca. A afinidade em
+        # memória (acima) e o par de relacionamento (abaixo, sempre devolvido)
+        # continuam ajustando a cada interação — só o EVENTO fica condicional.
+        evento = None
+        if vinculo_novo != vinculo_antigo:
+            tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
+            resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
+            timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
+            evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}",
+                            timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
+            WorldLogger.debug(f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})", npc=n1)
+            WorldLogger.queue_db_log(n2, "DEBUG", f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})")
 
         # --- ROMANCE FÍSICO: Decisão de coabitação durante conversa real ---
         # Carrega a chance de romance surpresa físico de forma configurável

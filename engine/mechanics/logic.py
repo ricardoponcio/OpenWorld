@@ -13,6 +13,7 @@ DESCRIÇÃO:
 """
 from typing import Dict, List, Optional
 from ..models import Acao, NPC
+from ..logger import WorldLogger
 from .utilidade import (
     ContextoDecisao,
     AvaliadorComer, AvaliadorDormir, AvaliadorTrabalhar, AvaliadorSocializar,
@@ -46,10 +47,20 @@ class NPCBrain:
                       eventos_globais: Optional[List] = None, indice=None):
         """`config` é o config.json completo — ver `calcular_utilidade`."""
         # --- REDE DE SEGURANÇA: Habitação ---
+        # X05 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 18): mesma correção que P04
+        # (docs/PLANO_CIDADE_VIVA.md) já aplicou em `movement.py` — `locais.items()`
+        # sem filtrar cidade podia mudar o NPC de cidade em silêncio (todo NPC sem
+        # casa ia pra MESMA casa, a primeira do dicionário global). Mudar alguém de
+        # cidade é decisão de migração, não fallback: sem casa na própria cidade,
+        # `casa_id` fica como está, com um warning.
         if locais and (npc.casa_id not in locais):
-            casas_disponiveis = [l_id for l_id, l in locais.items() if l.tipo == 'Casa' or l.categoria == 'residencia']
+            casas_disponiveis = indice.residencias_ativas(npc.cidade_id) if indice else []
             if casas_disponiveis:
                 npc.casa_id = casas_disponiveis[0]
+            else:
+                WorldLogger.warning(
+                    f"⚠️ [DECISÃO] {npc.nome} não tem casa válida na própria cidade "
+                    f"(cidade_id={npc.cidade_id}) — casa_id inalterado.", npc=npc)
 
         utilidades = NPCBrain.calcular_utilidade(npc, hora_atual, config, locais, eventos_globais, indice)
         npc.acao_atual = max(utilidades, key=utilidades.get)

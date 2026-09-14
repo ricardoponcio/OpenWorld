@@ -1,7 +1,8 @@
 from typing import List, Dict
 from datetime import datetime
-from .models import NPC, Local, MetaChave, TipoLocal, Acao, EstadoCivil
+from .models import NPC, Local, MetaChave, TipoLocal, Acao, EstadoCivil, EstagioVida
 from .tempo import RelogioMundo
+from .config_loader import cfg_get
 
 
 class NPCUtils:
@@ -184,6 +185,43 @@ class NPCUtils:
             return True
 
         return False
+
+    @staticmethod
+    def pode_conceber(a: NPC, b: NPC, afinidade: int, cfg_bio: dict) -> bool:
+        """G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): a checagem completa de
+        elegibilidade biológica pra conceber — vivo, fértil, NÃO PARENTE, afinidade
+        mínima — usada pelos DOIS caminhos que hoje decidem se um casal tem filho:
+        `processar_concepcao` (a união já mora junta) e
+        `verificar_elegibilidade_casamento` (o casal ainda vai decidir morar
+        junto). Antes desta tarefa só o segundo chamava `sao_parentes` — o primeiro
+        nunca checava parentesco, e produziu filhos de mãe×filho e irmão×irmã num
+        mundo real (§5.2 do documento). Extraída pra um lugar só: duplicar a
+        checagem é como as duas divergiram da primeira vez (armadilha 12, docs/
+        PLANO_POPULACAO_E_ESCALA.md)."""
+        if not a.esta_vivo() or not a.pode_procriar():
+            return False
+        if not b.esta_vivo() or not b.pode_procriar():
+            return False
+        if NPCUtils.sao_parentes(a, b):
+            return False
+        return afinidade >= cfg_get(cfg_bio, "concepcao_afinidade_minima")
+
+    @staticmethod
+    def estagio_vida_por_idade_dias(idade_dias: int, cfg_bio: dict) -> str:
+        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): classifica o estágio de vida a
+        PARTIR da idade em dias simulados — mesmos limiares que
+        `NPCLifecycleManager.processar_crescimento` usa pra transição incremental.
+        Só faz sentido pra CLASSIFICAR do zero (povoamento inicial, `builder/
+        populador.py`); todo NPC nascido dentro da simulação já nasce Bebê e cresce
+        por transição, nunca por esta função — se os dois discordarem, é porque um
+        dos dois parou de ler `crescimento_dias_*` daqui (armadilha 12)."""
+        if idade_dias < cfg_get(cfg_bio, "crescimento_dias_bebe_para_crianca"):
+            return EstagioVida.BEBE.value
+        if idade_dias < cfg_get(cfg_bio, "crescimento_dias_crianca_para_adulto"):
+            return EstagioVida.CRIANCA.value
+        if idade_dias < cfg_get(cfg_bio, "crescimento_dias_adulto_para_idoso"):
+            return EstagioVida.ADULTO.value
+        return EstagioVida.IDOSO.value
 
     @staticmethod
     def obter_obra_do_npc(mundo, npc: NPC):

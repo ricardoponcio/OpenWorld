@@ -27,10 +27,12 @@ from datetime import timedelta
 from engine.database import DatabaseManager
 from engine.models import (
     Local, NPC, EstadoCivil, CategoriaLocal, ProfissaoID, VinculoSocial, Genero, EstagioVida,
-    MetaChave, Lote, LoteEstado,
+    MetaChave, Lote, LoteEstado, PROFISSAO_DEPENDENTE,
 )
 from engine.tempo import RelogioMundo
+from engine.consultas_npc import NPCUtils
 from engine.mechanics.market import JobMarket
+from engine.mechanics.urbanismo import tipo_local_de_categoria
 from engine.ai import AIGeneratorClient, AIFallbacks
 from engine.logger import WorldLogger
 from engine.geo import GeoUtils
@@ -57,7 +59,7 @@ def _centroide_mundo(geom):
     return lng, -lat
 
 
-def _importar_locais_da_geometria(db, cidade):
+def _importar_locais_da_geometria(db, cidade, config):
     """
     Fase 4.5 (P2.2): importa os edifícios do GeoJSON gerado por
     `cartographer/cities/generate_city_geometry.py` como `Local` — substitui de vez o
@@ -69,6 +71,10 @@ def _importar_locais_da_geometria(db, cidade):
     'livre', pronto pra Bloco O reservar. `estado` inicial é 'ocupado' quando existe um
     edifício com o MESMO id (armadilha 3: o edifício É o lote onde está, mesmo id) —
     um `set` de ids, não busca geométrica.
+
+    V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo` nasce derivado de `categoria`
+    via `tipo_local_de_categoria` — nunca mais copiado de `props["tipo_local"]`, que é
+    só o nome de sabor (`tipo_local`, campo próprio, inalterado).
 
     Retorna a lista de ids de `Local` com categoria "residencia" (housing de NPC), ou
     `None` se a cidade não tem geometria gerada — o chamador decide o fallback.
@@ -91,12 +97,13 @@ def _importar_locais_da_geometria(db, cidade):
         camada = props.get("camada")
         if camada == "edificio":
             x_mundo, y_mundo = _centroide_mundo(feat["geometry"])
+            categoria = props.get("categoria", "generic")
             locais.append(Local(
                 id=props["id"],
                 nome=props["nome"],
-                tipo=props.get("tipo_local", "Edifício"),
+                tipo=tipo_local_de_categoria(categoria, config),
                 cidade_id=cidade['db_id'],
-                categoria=props.get("categoria", "generic"),
+                categoria=categoria,
                 descricao=f"{props.get('tipo_local', 'Edifício')} em {cidade['nome']} ({props.get('bairro', '')}).",
                 coordenadas=[round(x_mundo, 6), round(y_mundo, 6)],
                 capacidade=props.get("capacidade", 5),
@@ -106,7 +113,7 @@ def _importar_locais_da_geometria(db, cidade):
                 dono_npc_id=props.get("dono_npc_id", ""),
             ))
             edificio_ids.add(props["id"])
-            if props.get("categoria") == CategoriaLocal.RESIDENCIA.value:
+            if categoria == CategoriaLocal.RESIDENCIA.value:
                 casas_ids.append(props["id"])
         elif camada == "lote":
             lotes_crus.append((props, *_centroide_mundo(feat["geometry"])))
@@ -180,11 +187,13 @@ class PopuladorDeMundo:
         self.ia_max_thread = ia_max_thread
 
         config = get_config()
+        self.config = config
         self.cfg_pop = cfg_get(config, "geracao_populacao")
         self.cfg_urbano = cfg_get(config, "geracao_urbana")
         self.nivel_mar = cfg_get(config, "cartografia", "nivel_mar")
         self.raio_locais = cfg_get(self.cfg_urbano, "locais_raio_px")
-        self.limiar_morte = cfg_get(config, "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
+        self.cfg_bio = cfg_get(config, "biologia_e_sociedade")
+        self.limiar_morte = cfg_get(self.cfg_bio, "crescimento_dias_idoso_para_morte")
 
         self.cidades_salvas = []
         self.cidades_ativas = []
@@ -210,7 +219,8 @@ class PopuladorDeMundo:
 
         dnas = self._gerar_dnas_em_paralelo()
         self._criar_npcs(dnas)
-        self._formar_casais_iniciais()
+        casais = self._formar_casais_iniciais()
+        self._gerar_criancas_iniciais(casais)
         self._estabelecer_lacos_sociais()
         self._inicializar_mercado_de_trabalho()
 
@@ -257,7 +267,7 @@ class PopuladorDeMundo:
         geometria gerada cai no paliativo de espalhamento em raio."""
         print(f"🏙️  Importando geometria de {len(self.cidades_salvas)} cidade(s) do manifesto...")
         for cid in self.cidades_salvas:
-            resultado = _importar_locais_da_geometria(self.db, cid)
+            resultado = _importar_locais_da_geometria(self.db, cid, self.config)
             if resultado is None:
                 WorldLogger.warning(
                     f"[POPULATE] '{cid['nome']}' sem geometria gerada em {CIDADES_GEOJSON_DIR} "
@@ -347,9 +357,24 @@ class PopuladorDeMundo:
 
         return resultados
 
+    def _sortear_idade_e_estagio(self, faixas: list) -> tuple:
+        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): sorteia uma faixa etária por
+        peso, uma idade uniforme DENTRO dela, e DERIVA o estágio de vida da idade
+        (nunca sorteado à parte, ou os dois divergem no primeiro
+        `processar_crescimento`). Devolve `(idade_dias, estagio_vida)`."""
+        pesos = [f["peso"] for f in faixas]
+        faixa = random.choices(faixas, weights=pesos, k=1)[0]
+        idade_dias = random.randint(int(faixa["dias_min"]), int(faixa["dias_max"]))
+        return idade_dias, NPCUtils.estagio_vida_por_idade_dias(idade_dias, self.cfg_bio)
+
     def _criar_npcs(self, resultados: list) -> None:
         """P05: acumula e grava em UMA transação (executemany) em vez de um commit
-        por NPC — com centenas de NPCs em várias cidades, isso deixou de ser barato."""
+        por NPC — com centenas de NPCs em várias cidades, isso deixou de ser barato.
+
+        G01: só faixas NÃO dependentes (adulto jovem/adulto/idoso) — bebê/criança
+        entram depois, em `_gerar_criancas_iniciais`, presos a um pai/mãe."""
+        faixas_nao_dependentes = [f for f in cfg_get(self.cfg_pop, "distribuicao_etaria")
+                                   if f["faixa"] not in ("bebe", "crianca")]
         novos = []
         for params, dna in resultados:
             cidade_id, idx, genero_alvo, loc_trabalho, casa = params
@@ -372,15 +397,9 @@ class PopuladorDeMundo:
                 profissao = "Aldeão"
                 genero = genero_alvo
 
-            # Distribuir idades proporcionalmente (adultos reprodutores vs. idosos)
-            if random.random() < cfg_get(self.cfg_pop, "proporcao_adultos"):
-                idade_inicial_anos = random.randint(cfg_get(self.cfg_pop, "idade_adulto_min"), cfg_get(self.cfg_pop, "idade_adulto_max"))
-                estagio_vida = EstagioVida.ADULTO.value
-            else:
-                idade_inicial_anos = random.randint(cfg_get(self.cfg_pop, "idade_idoso_min"), cfg_get(self.cfg_pop, "idade_idoso_max"))
-                estagio_vida = EstagioVida.IDOSO.value
-
-            idade_inicial_dias = int((idade_inicial_anos / RelogioMundo.ANOS_DE_VIDA_DE_REFERENCIA) * self.limiar_morte)
+            # G01: idade espalhada pelo ciclo de vida inteiro (não mais uma janela
+            # estreita de 25 dias) — é o que resolve a coorte sincronizada do §1.
+            idade_inicial_dias, estagio_vida = self._sortear_idade_e_estagio(faixas_nao_dependentes)
             dt_nasc = RelogioMundo.EPOCA - timedelta(days=idade_inicial_dias)
 
             npc = NPC(
@@ -403,7 +422,8 @@ class PopuladorDeMundo:
                 background=background
             )
             novos.append(npc)
-            print(f"  ✅ Gerado: {nome} ({genero}) | Cidade: {cidade_id} | Idade: {idade_inicial_anos} anos | Cargo IA: {profissao}")
+            idade_anos = RelogioMundo.idade_em_anos(dt_nasc.isoformat(), RelogioMundo.EPOCA, self.limiar_morte)
+            print(f"  ✅ Gerado: {nome} ({genero}) | Cidade: {cidade_id} | Idade: {idade_anos} anos ({estagio_vida}) | Cargo IA: {profissao}")
 
         self.db.npcs.salvar_completo(novos)
         self.npcs_gerados.extend(novos)
@@ -414,13 +434,17 @@ class PopuladorDeMundo:
             agrupado.setdefault(n.cidade_id, []).append(n)
         return agrupado
 
-    def _formar_casais_iniciais(self) -> None:
+    def _formar_casais_iniciais(self) -> list:
         """P07: casais só entre habitantes da MESMA cidade — roda por cidade ativa, não
         sobre a população global (casamento entre cidades diferentes não faz sentido,
-        mesmo raciocínio de P04)."""
+        mesmo raciocínio de P04).
+
+        G01: devolve a lista de casais formados — `list[(m, f)]` — pra
+        `_gerar_criancas_iniciais` saber a quem atribuir cada criança."""
         print("\n❤️  Estabelecendo casais iniciais casados e coabitantes nas cidades...")
         npcs_por_cidade = self._npcs_por_cidade()
         alterados = []
+        casais = []
 
         for cid in self.cidades_ativas:
             cidade_id = cid['db_id']
@@ -450,10 +474,67 @@ class PopuladorDeMundo:
                 f.relacionamentos[m.id] = af
 
                 alterados.extend((m, f))
+                casais.append((m, f))
                 self.db.npcs.salvar_relacionamento(m.id, f.id, af, VinculoSocial.CONJUGE.value)
                 print(f"  ❤️  CASAL FORMADO: {m.nome} e {f.nome} morando na {casa_comum} (Afinidade: {af})!")
 
         self.db.npcs.salvar_completo(alterados)
+        return casais
+
+    def _gerar_criancas_iniciais(self, casais: list) -> None:
+        """G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): o povoamento inicial nascia
+        sem criança nenhuma (`proporcao_adultos` só dividia entre adulto/idoso) — a
+        população inteira se aposentava e morria junta (a coorte sincronizada do §1
+        do documento). Bebê/criança só entram AQUI, DEPOIS dos casais formados, com
+        `mae_id`/`pai_id` preenchidos — gerá-los no sorteio independente de
+        `_criar_npcs` deixaria dependente sem responsável na casa desde o dia zero
+        (invariante 6 de V05). Sem casal nenhum na cidade, ela simplesmente não
+        ganha criança agora (nascerão pela simulação, via `processar_concepcao`)."""
+        if not casais:
+            return
+        distribuicao = cfg_get(self.cfg_pop, "distribuicao_etaria")
+        faixas_dependentes = [f for f in distribuicao if f["faixa"] in ("bebe", "crianca")]
+        peso_dependente = sum(f["peso"] for f in faixas_dependentes)
+        peso_independente = sum(f["peso"] for f in distribuicao if f["faixa"] not in ("bebe", "crianca"))
+        if not faixas_dependentes or peso_dependente <= 0 or peso_independente <= 0:
+            return
+
+        # A população não-dependente já gerada representa a fração `peso_independente`
+        # do total final — o resto (`peso_dependente`) é quanta criança falta.
+        n_adultos = len(self.npcs_gerados)
+        n_filhos = round(n_adultos * (peso_dependente / peso_independente))
+
+        novos = []
+        for i in range(n_filhos):
+            pai, mae = random.choice(casais)
+            idade_dias, estagio_vida = self._sortear_idade_e_estagio(faixas_dependentes)
+            dt_nasc = RelogioMundo.EPOCA - timedelta(days=idade_dias)
+            genero = random.choice((Genero.MASCULINO.value, Genero.FEMININO.value))
+            sobrenome = mae.nome.split()[-1] if len(mae.nome.split()) > 1 else ""
+            prefixo = "Mestre" if genero == Genero.MASCULINO.value else "Senhorita"
+            nome = f"{prefixo} {random.randint(1, 99)} {sobrenome}".strip()
+
+            filho = NPC(
+                id=f"npc_{pai.cidade_id:02d}_filho_{i:04d}",
+                nome=nome,
+                profissao=PROFISSAO_DEPENDENTE,
+                profissao_id=ProfissaoID.OCIOSO.value,
+                cidade_id=pai.cidade_id,
+                casa_id=pai.casa_id,
+                local_trabalho_id="",
+                localizacao_atual_id=pai.casa_id,
+                dinheiro_total_pc=0,
+                genero=genero,
+                data_nascimento=dt_nasc.isoformat(),
+                estagio_vida=estagio_vida,
+                mae_id=mae.id,
+                pai_id=pai.id,
+            )
+            novos.append(filho)
+
+        self.db.npcs.salvar_completo(novos)
+        self.npcs_gerados.extend(novos)
+        print(f"  👶 {len(novos)} bebê(s)/criança(s) gerado(s) inicialmente, distribuídos entre {len(casais)} casal(is).")
 
     def _estabelecer_lacos_sociais(self) -> None:
         """P07: laço social só entre habitantes da MESMA cidade — por cidade ativa,
@@ -490,6 +571,9 @@ class PopuladorDeMundo:
 
     def _inicializar_mercado_de_trabalho(self) -> None:
         print("\n💼 Inicializando mercado de trabalho e preenchendo vagas...")
+        # P01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): sem `mundo` de propósito — é
+        # povoamento, antes de existir um `EstadoDoMundo`. `JobMarket` cai no caminho
+        # só-banco.
         market = JobMarket(self.db, get_config())
         market.bootstrap_market()
         market.processar_contratacoes()

@@ -26,7 +26,15 @@ class InfrastructureManager:
     """
     Gerenciador do ciclo de vida físico das construções.
     Toda parametrização lida via cfg_get — crash imediato se chave ausente no config.json.
+
+    X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `processar_desgaste`/
+    `processar_reparos_espontaneos` moravam em `run_simulation.py`, fora de
+    qualquer benchmark — duas chaves de hora (cada método tem a própria) porque as
+    outras mecânicas de `GameLoop._rotinas_diarias` só declaram uma.
     """
+    CADENCIA = "por_dia"
+    CADENCIA_HORA_CONFIG_DESGASTE = "desgaste_hora"
+    CADENCIA_HORA_CONFIG_REPAROS = "reparos_hora"
 
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo
@@ -58,33 +66,46 @@ class InfrastructureManager:
         """
         Aplica desgaste passivo e por uso a todos os locais ativos.
         Deve ser chamado uma vez por dia simulado.
+
+        V04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): a penalidade de superlotação era
+        O(locais × NPCs) — 1.319 ms medidos com 26.748 locais e 840 NPCs; ~88 s/dia
+        projetado com 25.000 NPCs, sozinho quase 3× o orçamento de 7 dias de D13.
+        `_contar_ocupacao_por_local` monta o mapa UMA vez (O(NPCs)), não por local.
         """
         cfg = self._cfg()
-        desgaste_por_tipo: dict  = cfg_get(cfg, "desgaste_por_tipo")
+        desgaste_por_categoria: dict = cfg_get(cfg, "desgaste_por_categoria")
         desgaste_padrao: float   = cfg_get(cfg, "desgaste_padrao")
         desgaste_excedente: float = cfg_get(cfg, "desgaste_por_excedente")
+        categorias_empregadoras = cfg_get(self._config, "urbanismo", "categorias_empregadoras")
+        ocupacao_por_local = self._contar_ocupacao_por_local()
 
         for local_id, local in list(self._mundo.locais.items()):
             # Ruínas e obras em andamento não decaem
             if local.tipo == TipoLocal.RUINA.value or local.status == 0:
                 continue
 
-            # Desgaste passivo pelo tipo de construção; usa desgaste_padrao se tipo não mapeado
-            taxa = desgaste_por_tipo.get(local.tipo, desgaste_padrao)
+            # Desgaste passivo pela categoria de sistema; usa desgaste_padrao se
+            # categoria não mapeada (V04: era por `tipo`, cobria só 2,3% dos locais)
+            taxa = desgaste_por_categoria.get(local.categoria, desgaste_padrao)
 
-            # Penalidade por superlotação (apenas locais de trabalho, não casas)
-            if local.tipo != TipoLocal.CASA.value:
-                ocupacao = sum(
-                    1 for npc in self._mundo.npcs
-                    if npc.local_trabalho_id == local_id and npc.esta_vivo()
-                )
-                excedente = max(0, ocupacao - local.capacidade)
+            # Penalidade por superlotação (só categorias empregadoras — a mesma
+            # lista de V02 — nunca residências)
+            if local.categoria in categorias_empregadoras:
+                excedente = max(0, ocupacao_por_local.get(local_id, 0) - local.capacidade)
                 taxa += excedente * desgaste_excedente
 
             local.integridade = max(0.0, local.integridade - taxa)
             self._mundo.registrar_local(local)
 
             self._aplicar_consequencias(local, local_id, cfg)
+
+    def _contar_ocupacao_por_local(self) -> dict:
+        """V04: um laço de N NPCs (vivos, com trabalho), não N × locais."""
+        ocupacao = {}
+        for npc in self._mundo.npcs:
+            if npc.esta_vivo() and npc.local_trabalho_id:
+                ocupacao[npc.local_trabalho_id] = ocupacao.get(npc.local_trabalho_id, 0) + 1
+        return ocupacao
 
     def _aplicar_consequencias(self, local: Local, local_id: str, cfg: dict):
         """Avalia o estado atual e aplica efeitos estruturais conforme os limiares."""

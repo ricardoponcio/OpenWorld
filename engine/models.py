@@ -152,6 +152,9 @@ class TipoEvento(Enum):
     IMPOSTO = "IMPOSTO"
     CRESCIMENTO = "CRESCIMENTO"
     MAIORIDADE = "MAIORIDADE"
+    # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): casamento era gravado como CONVERSA
+    # — indistinguível de um papo qualquer no log, exceto pelo texto.
+    UNIAO = "UNIAO"
     CONVERSA = "CONVERSA"
     DISCUSSAO = "DISCUSSAO"
     EXPANSAO_URBANA = "EXPANSAO_URBANA"

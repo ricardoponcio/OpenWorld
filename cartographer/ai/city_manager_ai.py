@@ -17,13 +17,17 @@ _TAMANHOS = ["pequeno", "medio", "grande"]
 _TIPOS = ["pesqueira", "agricola", "comercial", "fortaleza", "mistica", "mineira", "portuaria"]
 
 
-def _nome_procedural(rng):
+def nome_procedural_de_cidade(rng):
+    """Usado também por `cartographer/cities/generate_cities_metadata.py::
+    _garantir_nomes_unicos` (G05, docs/PLANO_MUNDO_CRIVEL.md) pra re-sortear um
+    nome de cidade que colidiu com outro já no manifesto — nome público (não mais
+    `_nome_procedural`) porque agora tem dois chamadores."""
     return rng.choice(_SILABAS_INICIO) + rng.choice(_SILABAS_MEIO) + rng.choice(_SILABAS_FIM)
 
 
 def _cidade_procedural(rng, biomas_disponiveis):
     return {
-        "nome": _nome_procedural(rng),
+        "nome": nome_procedural_de_cidade(rng),
         "tamanho": rng.choice(_TAMANHOS),
         "tipo": rng.choice(_TIPOS),
         "bioma_desejado": rng.choice(biomas_disponiveis),

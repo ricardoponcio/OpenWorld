@@ -54,20 +54,35 @@ class NPCMoodManager:
         """Aproxima gradualmente o humor do NPC do humor-alvo calculado a partir do
         seu bem-estar atual. Chamado uma vez por NPC vivo processado (A02, docs/
         PLANO_POPULACAO_E_ESCALA.md: `minutos` é quantos minutos se passaram desde a
-        última avaliação — cada um é uma tentativa independente de transição, capada
-        na distância até o alvo, já que o humor não pode passar dele)."""
+        última avaliação).
+
+        X01 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda faz o NPC ser
+        avaliado ~20-30 vezes por dia em vez de 1.440 — `minutos` pode ser 1 ou 240.
+        A versão antiga fazia `min(minutos, distancia)` TENTATIVAS de transição, o
+        que capava o número de tentativas ao número de PASSOS possíveis: com
+        `distancia<=4` (a escala tem 5 humores), nunca mais de 4 tentativas por
+        chamada, não importa se passaram 240 minutos — o humor ficou ~3x mais lento
+        que antes da agenda (P(transição no dia) caiu de 1,000 pra 0,352 medido).
+
+        `p_transicao` é a probabilidade de AO MENOS UMA transição ter acontecido no
+        intervalo inteiro de `minutos` (1.440 tentativas de 1 minuto viram uma só
+        fórmula, sem laço) — é o que faz o resultado ser o MESMO nos dois regimes
+        (1 chamada de 240 minutos ≈ 240 chamadas de 1 minuto)."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         alvo = NPCMoodManager._calcular_humor_alvo(npc, cfg_bio)
 
         if npc.humor == alvo:
             return
 
+        chance_transicao = cfg_get(cfg_bio, "humor_chance_transicao")
+        p_transicao = 1.0 - (1.0 - chance_transicao) ** minutos
+
         # NPC em Pânico/Medo (forçado externamente) não tem posição na escala
         # normal — qualquer transição o move direto para o alvo calculado,
         # trazendo-o de volta ao normal assim que a condição é reavaliada.
         escala = [h.value for h in HumorNPC.escala_normal()]
         if npc.humor not in escala:
-            if any(random.random() < cfg_get(cfg_bio, "humor_chance_transicao") for _ in range(minutos)):
+            if random.random() < p_transicao:
                 npc.humor = alvo
             return
 
@@ -76,7 +91,12 @@ class NPCMoodManager:
         distancia = abs(indice_alvo - indice_atual)
         direcao = 1 if indice_alvo > indice_atual else -1
 
-        chance_transicao = cfg_get(cfg_bio, "humor_chance_transicao")
-        passos = sum(1 for _ in range(min(minutos, distancia)) if random.random() < chance_transicao)
-        if passos:
-            npc.humor = escala[indice_atual + direcao * passos]
+        if random.random() < p_transicao:
+            # Nunca mais tentativas extras do que MINUTOS realmente dá direito —
+            # com `minutos=1` (o caso comum, tick a tick) isto é 0, e o humor
+            # sempre anda 1 passo por vez, nunca pula direto pro alvo (é a garantia
+            # que a "gradação" do humor promete, independente de quão grande
+            # `distancia` seja).
+            tentativas_extra = min(minutos, distancia) - 1
+            passos = 1 + sum(1 for _ in range(tentativas_extra) if random.random() < p_transicao)
+            npc.humor = escala[indice_atual + direcao * min(passos, distancia)]

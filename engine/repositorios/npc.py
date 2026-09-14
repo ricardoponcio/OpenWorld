@@ -18,10 +18,24 @@ class RepositorioNPC:
     def __init__(self, db):
         self.db = db
 
+    def _carregar_relacionamentos_por_npc(self, conn) -> dict:
+        """P03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): a tabela `relacionamentos` (tem
+        `vinculo`, e é o que `listar_relacionamentos_gerais`/o Mestre consultam) é a
+        fonte de verdade — não mais a coluna JSON de `npcs`, que `salvar_muitos` (fim
+        de tick) nunca escreve. UMA consulta pra todos os NPCs, agrupada em memória —
+        nunca uma por NPC."""
+        cursor = conn.cursor()
+        cursor.execute('SELECT npc_a_id, npc_b_id, afinidade FROM relacionamentos')
+        por_npc = {}
+        for row in cursor.fetchall():
+            por_npc.setdefault(row['npc_a_id'], {})[row['npc_b_id']] = row['afinidade']
+        return por_npc
+
     def carregar_todos(self) -> list:
         with self.db.connection() as conn:
             cursor = conn.cursor()
             try:
+                relacionamentos_por_npc = self._carregar_relacionamentos_por_npc(conn)
                 cursor.execute('SELECT * FROM npcs')
                 rows = cursor.fetchall()
                 npcs = []
@@ -50,7 +64,7 @@ class RepositorioNPC:
                         pai_id=r['pai_id'] or '',
                         mae_id=r['mae_id'] or '',
                         genealogia=_safe_json_load(r['genealogia'], []),
-                        relacionamentos=_safe_json_load(r['relacionamentos'], {}),
+                        relacionamentos=relacionamentos_por_npc.get(r['id'], {}),
                         memoria_eventos=_safe_json_load(r['memoria_eventos'], []),
                         gravidez_ticks=r['gravidez_ticks'] if r['gravidez_ticks'] is not None else 0)
 
@@ -78,8 +92,14 @@ class RepositorioNPC:
 
     # Colunas que mudam a cada minuto simulado, para todo NPC vivo — o que
     # `salvar_muitos` (a escrita de fim de tick) de fato precisa regravar.
+    # P02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc` e `gravidez_ticks`
+    # mudam a cada minuto simulado (trabalhar/comer/socializar; gestação) e ficaram de
+    # fora por engano quando N02 (doc 2) montou esta lista — o sintoma era o reload de
+    # `run_simulation.py` (a cada 5h) restaurar o dinheiro gravado no povoamento e
+    # travar toda gravidez em 0% (§4 do documento: um dia inteiro de trabalho desfeito
+    # três vezes, gravidez nunca chega aos 2880 ticks porque o reload some antes).
     _COLUNAS_QUENTES = ("energia", "fome", "social", "saude", "humor", "acao_atual",
-                        "localizacao_atual_id")
+                        "localizacao_atual_id", "dinheiro_total_pc", "gravidez_ticks")
 
     def salvar_completo(self, npcs: list) -> None:
         """N02 (docs/PLANO_POPULACAO_E_ESCALA.md): a linha INTEIRA, numa transação só —
@@ -88,7 +108,12 @@ class RepositorioNPC:
         casa, contratação, crescimento de estágio de vida. Chame este método NESSES
         pontos, nunca no corpo do tick — é também o único caminho correto para um NPC
         que ainda não existe no banco (`salvar_muitos`, por ser `UPDATE`, não cria
-        linha: ver o aviso no docstring dele)."""
+        linha: ver o aviso no docstring dele).
+
+        P03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): a coluna `relacionamentos` gravada
+        aqui é CÓPIA DE LEITURA (a poda de H05 e o dashboard leem ela), não fonte —
+        `carregar_todos` lê da tabela `relacionamentos` (que tem `vinculo`, e é o que
+        o Mestre consulta), nunca mais desta coluna."""
         if not npcs:
             return
         with self.db.connection() as conn:
@@ -127,9 +152,11 @@ class RepositorioNPC:
         with self.db.connection() as conn:
             conn.cursor().executemany(
                 '''UPDATE npcs SET energia = ?, fome = ?, social = ?, saude = ?, humor = ?,
-                   acao_atual = ?, localizacao_atual_id = ? WHERE id = ?''',
+                   acao_atual = ?, localizacao_atual_id = ?, dinheiro_total_pc = ?, gravidez_ticks = ?
+                   WHERE id = ?''',
                 [(npc.energia, npc.fome, npc.social, npc.saude, npc.humor,
-                  npc.acao_atual.value, npc.localizacao_atual_id, npc.id)
+                  npc.acao_atual.value, npc.localizacao_atual_id, npc.dinheiro_total_pc,
+                  npc.gravidez_ticks, npc.id)
                  for npc in npcs])
 
     def renomear(self, npc_id: str, novo_nome: str):
@@ -191,11 +218,50 @@ class RepositorioNPC:
             cursor.execute('SELECT id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks FROM npcs')
             return cursor.fetchall()
 
-    def listar_resumo_vivos(self) -> list:
+    def listar_resumo_vivos(self, cidade_id) -> list:
+        """M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade — o
+        contexto do Mestre listava os 840 NPCs do mundo inteiro sem filtro."""
         with self.db.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, nome, profissao, local_trabalho_id, casa_id FROM npcs WHERE saude > 0")
+            cursor.execute(
+                "SELECT id, nome, profissao, local_trabalho_id, casa_id FROM npcs WHERE saude > 0 AND cidade_id = ?",
+                (cidade_id,))
             return cursor.fetchall()
+
+    def contar_dependentes_sem_responsavel(self, cidade_id) -> int:
+        """M03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): quantos bebês/crianças da
+        cidade não têm pai NEM mãe vivo na MESMA casa — o invariante 6 de V05
+        (audit_mundo.py, fora do runtime), reimplementado aqui como consulta SQL
+        porque o Mestre roda no processo web, sem `EstadoDoMundo` vivo pra
+        reaproveitar a checagem em memória do script de diagnóstico."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            row = cursor.execute(
+                """SELECT COUNT(*) AS n FROM npcs d
+                   WHERE d.cidade_id = ? AND d.saude > 0
+                     AND d.estagio_vida IN ('bebe', 'crianca')
+                     AND NOT EXISTS (
+                       SELECT 1 FROM npcs p
+                       WHERE p.saude > 0 AND p.casa_id = d.casa_id
+                         AND p.id IN (d.mae_id, d.pai_id)
+                     )""",
+                (cidade_id,)).fetchone()
+            return row["n"] if row else 0
+
+    def grau_social_por_ids(self, ids: list) -> dict:
+        """M01: quantos vínculos não-neutros cada NPC tem — desempate pra priorizar
+        quem entra no contexto do Mestre quando a cidade tem mais gente que o teto
+        (`mestre.limite_npcs_contexto`)."""
+        if not ids:
+            return {}
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in ids)
+            rows = cursor.execute(
+                f"SELECT npc_a_id, COUNT(*) AS grau FROM relacionamentos "
+                f"WHERE npc_a_id IN ({placeholders}) AND afinidade != 0 GROUP BY npc_a_id",
+                ids).fetchall()
+            return {row["npc_a_id"]: row["grau"] for row in rows}
 
 
     # ------------------------------------------------------------------
@@ -222,7 +288,7 @@ class RepositorioNPC:
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"""
-                SELECT n.id, n.nome, n.profissao_id, p.categoria_local_id
+                SELECT n.id, n.nome, n.cidade_id, n.profissao_id, p.categoria_local_id
                 FROM npcs n
                 JOIN profissoes p ON n.profissao_id = p.id
                 WHERE n.saude > 0

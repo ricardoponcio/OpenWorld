@@ -28,7 +28,8 @@ class NPCLegacyManager:
                 
         if not herdeiros and npc.casa_id:
             parceiros = []
-            moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, npc.casa_id, apenas_vivos=True)
+            # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
+            moradores = self._mundo.npcs_por_casa.get(npc.casa_id, ())
             for n in moradores:
                 if n.id != npc.id:
                     afinidade = npc.relacionamentos.get(n.id, 0)

@@ -69,6 +69,26 @@ def test_salvar_muitos_atualiza_so_as_colunas_quentes(tmp_path):
     assert recarregado.profissao == "Ferreiro"
 
 
+def test_dinheiro_e_gravidez_sobrevivem_a_recarga(tmp_path):
+    """P02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco P): `dinheiro_total_pc`/
+    `gravidez_ticks` mudam a cada minuto simulado (trabalhar/comer/socializar;
+    gestação) e ficaram de fora de `_COLUNAS_QUENTES` por engano — o reload de
+    `run_simulation.py` (a cada 5h) restaurava os dois pro valor gravado no
+    povoamento, apagando um dia de trabalho e travando toda gravidez em 0%
+    (§4 do documento)."""
+    db = _db(tmp_path)
+    npc = _npc("npc_1", dinheiro_total_pc=500.0, gravidez_ticks=0)
+    db.npcs.salvar_completo([npc])
+
+    npc.dinheiro_total_pc = 1234.5
+    npc.gravidez_ticks = 1500
+    db.npcs.salvar_muitos([npc])
+
+    recarregado = db.npcs.carregar_todos()[0]
+    assert recarregado.dinheiro_total_pc == 1234.5
+    assert recarregado.gravidez_ticks == 1500
+
+
 def test_salvar_muitos_em_npc_inexistente_nao_cria_linha(tmp_path):
     """A armadilha que N02 documenta: `salvar_muitos` é UPDATE, não INSERT OR REPLACE
     — numa linha que não existe, não faz nada, silenciosamente."""

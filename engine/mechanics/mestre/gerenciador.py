@@ -35,21 +35,73 @@ class MestreManager:
         self._db = db
         self._config = config
 
-    def montar_contexto(self, limite_eventos: int = 10) -> dict:
-        """Coleta o retrato atual do mundo para alimentar o prompt da IA."""
-        npcs = self._db.npcs.listar_resumo_vivos()
-        locais = self._db.locais.listar_ativos_resumo()
+    def montar_contexto(self, cidade_id=None, limite_eventos: int = 10) -> dict:
+        """Coleta o retrato atual do mundo para alimentar o prompt da IA.
+
+        M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): filtrado pela CIDADE simulada
+        (`cidade_id=None` usa `MetaChave.CIDADE_SIMULADA`) — sem filtro nem teto,
+        840 NPCs já produziam 433.566 tokens medidos; com 25.000 seriam ~3 milhões.
+        Residências entram como contagem agregada, não lista (22.624 linhas não são
+        informação). M03: um bloco `avisos` com os invariantes de V05 quebrados
+        agora — barato (2 consultas), e evita a IA narrar um mundo que ela não
+        sabe que está quebrado."""
+        if cidade_id is None:
+            cidade_id = self._db.meta.carregar(MetaChave.CIDADE_SIMULADA)
+
+        npcs_todos = self._db.npcs.listar_resumo_vivos(cidade_id)
+        locais = self._db.locais.listar_ativos_resumo(cidade_id)
+        n_residencias = self._db.locais.contar_residencias_ativas(cidade_id)
         rels = self._db.npcs.listar_relacionamentos_gerais(limite=10)
         eventos = self._db.eventos.resumos_recentes(limite_eventos)
+        fofoca = self._db.eventos.resumos_recentes_de_fofoca(3)
         ativos = self._db.eventos.titulos_globais_ativos()
 
+        npcs, n_omitidos = self._selecionar_npcs_do_contexto(npcs_todos, cidade_id)
+        locais_txt = [f"{l['id']}: {l['nome']} ({l['tipo']})" for l in locais]
+        if n_residencias:
+            locais_txt.append(f"{n_residencias} residência(s)")
+
         return {
-            "npcs": [f"{n['id']}: {n['nome']} ({n['profissao']}) | Trab: {n['local_trabalho_id']} | Casa: {n['casa_id']}" for n in npcs],
-            "locais": [f"{l['id']}: {l['nome']} ({l['tipo']})" for l in locais],
+            "npcs": [f"{n['id']}: {n['nome']} ({n['profissao']}) | Trab: {n['local_trabalho_id']} | Casa: {n['casa_id']}" for n in npcs]
+                    + ([f"+ {n_omitidos} outro(s) habitante(s) não listado(s)"] if n_omitidos else []),
+            "locais": locais_txt,
             "relacionamentos": [f"{r['npc_a_id']} e {r['npc_b_id']} são {r['vinculo']} (Af:{r['afinidade']})" for r in rels],
             "ultimos_fatos": [e['resumo_estruturado'] for e in eventos],
+            "fofoca_recente": [f['resumo_estruturado'] for f in fofoca],
             "eventos_ativos": [a['titulo'] for a in ativos],
+            "avisos": self._avisos_do_mundo(cidade_id),
         }
+
+    def _selecionar_npcs_do_contexto(self, npcs_todos: list, cidade_id) -> tuple:
+        """M01: sem teto, devolve todo mundo. Acima do teto, prioriza quem
+        apareceu num evento recente da cidade, depois quem tem mais grau social —
+        devolve `(npcs_selecionados, quantos_ficaram_de_fora)`."""
+        limite = cfg_get(self._config, "mestre", "limite_npcs_contexto")
+        if len(npcs_todos) <= limite:
+            return npcs_todos, 0
+
+        recentes = self._db.eventos.ids_envolvidos_recentes_na_cidade(cidade_id, limite * 3)
+        grau = self._db.npcs.grau_social_por_ids([n['id'] for n in npcs_todos])
+
+        prioritarios = [n for n in npcs_todos if n['id'] in recentes]
+        resto = sorted((n for n in npcs_todos if n['id'] not in recentes),
+                        key=lambda n: grau.get(n['id'], 0), reverse=True)
+
+        selecionados = (prioritarios + resto)[:limite]
+        return selecionados, len(npcs_todos) - len(selecionados)
+
+    def _avisos_do_mundo(self, cidade_id) -> list:
+        """M03: invariantes de V05 quebrados AGORA, nesta cidade — as duas
+        checagens mais baratas e mais relevantes pra narração (dependente
+        abandonado, cidade sem vida social); as outras 7 de V05 são bugs
+        estruturais, não estado transitório que a IA precisa saber pra narrar."""
+        avisos = []
+        sem_responsavel = self._db.npcs.contar_dependentes_sem_responsavel(cidade_id)
+        if sem_responsavel:
+            avisos.append(f"{sem_responsavel} dependente(s) sem responsável vivo na mesma casa.")
+        if not self._db.locais.cidade_tem_local_social(cidade_id):
+            avisos.append("Esta cidade não tem nenhum local social ativo (taverna/praça).")
+        return avisos
 
     def ultimo_rowid_eventos(self) -> int:
         """Marca o ponto atual do histórico de eventos, para depois coletar só o que é novo."""

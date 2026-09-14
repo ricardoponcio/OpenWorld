@@ -8,6 +8,22 @@ from .kingdom import KingdomManager
 from ..mundo import EstadoDoMundo
 from . import agenda
 
+
+def salario_por_minuto(npc: NPC, locais: dict, cfg_acoes: dict) -> float:
+    """N02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): o salário vem do `Local` de
+    trabalho (`salario_base`, 50 a 110 PC conforme o edifício, gravado pelo
+    cartógrafo) — `salario_divisor_minutos` (config `acoes.trabalhar`, 600 = minutos
+    de um expediente de 10h) é só o CONVERSOR pra PC por minuto, não mais o salário
+    em si. Chamado tanto por `NPCActionManager._executar_trabalhar` quanto por
+    `GameLoop._aplicar_efeito_continuo` (H04) — a MESMA conta nas duas, ou elas
+    divergem em silêncio (armadilha 12, docs/PLANO_POPULACAO_E_ESCALA.md). NPC sem
+    `local_trabalho_id` válido (fallback/em obra) ganha 0."""
+    local = locais.get(npc.local_trabalho_id) if npc.local_trabalho_id else None
+    salario_diario = local.salario_base if local is not None else 0
+    divisor = cfg_get(cfg_acoes, "trabalhar", "salario_divisor_minutos")
+    return salario_diario / divisor
+
+
 class NPCActionManager:
     """Executa a ação já escolhida pela Utility AI. Recebe o mundo e a config, não a
     engine (R-F01). Movimento e políticas do reino são colaboradores de domínio e
@@ -76,7 +92,6 @@ class NPCActionManager:
         cfg = cfg_get(cfg_get(self._config, "acoes"), "comer")
         custo_base   = cfg_get(cfg, "custo_pc")
         fome_rec_max = cfg_get(cfg, "fome_perda")
-        multiplicador_por_dependente = cfg_get(cfg, "multiplicador_por_dependente")
         parcelas_refeicao = float(cfg_get(cfg, "parcelas_refeicao"))
 
         pagador = npc
@@ -86,24 +101,32 @@ class NPCActionManager:
         if is_dependent:
             # Encontrar pai/mãe na mesma casa para pagar a conta
             pais_elegiveis = []
-            moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, npc.casa_id, apenas_vivos=True)
+            # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice mantido
+            # incrementalmente (A04) em vez de varrer `mundo.npcs` — caminho por
+            # minuto, por NPC.
+            moradores = self._mundo.npcs_por_casa.get(npc.casa_id, ())
             for n in moradores:
                 if n.id != npc.id and n.id in (npc.mae_id, npc.pai_id):
                     pais_elegiveis.append(n)
             if pais_elegiveis:
                 pais_elegiveis.sort(key=lambda p: p.dinheiro_total_pc, reverse=True)
                 pagador = pais_elegiveis[0]
-        elif npcs_por_casa is not None:
-            num_dependentes = NPCUtils.contar_dependentes_na_casa_agrupado(npc, npcs_por_casa)
         else:
-            num_dependentes = NPCUtils.contar_dependentes_na_casa(self._mundo.npcs, npc)
+            # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): `npcs_por_casa` já é
+            # `mundo.npcs_por_casa` (A04) quando o chamador não passa o próprio —
+            # nunca mais o fallback O(NPCs) de `contar_dependentes_na_casa`.
+            num_dependentes = NPCUtils.contar_dependentes_na_casa_agrupado(
+                npc, npcs_por_casa if npcs_por_casa is not None else self._mundo.npcs_por_casa)
 
-        multiplicador = 1.0 + (multiplicador_por_dependente * num_dependentes)
-        custo_final = custo_base * multiplicador
-
+        # N03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): cada NPC — dependente ou não —
+        # come uma refeição de `custo_pc`, ponto. `multiplicador_por_dependente`
+        # cobrava a refeição do adulto MAIS a de cada filho, separadamente — uma
+        # família com 3 filhos pagava a refeição do adulto majorada em 2,4× (0,8 ×
+        # 3) E as 3 refeições dos filhos por cima. O custo familiar já cresce com o
+        # número de filhos porque cada um come a própria refeição.
         # Comer progressivo (a refeição inteira leva N ticks de 1 minuto, ver "parcelas_refeicao").
         # Dinheiro é fracionário desde a Frente 4 — sem arredondar/forçar piso de 1 PC por tick.
-        custo_do_tick = custo_final / parcelas_refeicao
+        custo_do_tick = custo_base / parcelas_refeicao
         fome_rec_do_tick = fome_rec_max / parcelas_refeicao
         energia_ganho_do_tick = cfg_get(cfg, "energia_ganho") / parcelas_refeicao
         return pagador, is_dependent, num_dependentes, custo_do_tick, fome_rec_do_tick, energia_ganho_do_tick
@@ -176,17 +199,30 @@ class NPCActionManager:
         self._movimento.mover_para_trabalho(npc)
 
         cfg = cfg_get(cfg_acoes, "trabalhar")
-        salario       = cfg_get(cfg, "salario_pc")
         perda_energia = cfg_get(cfg, "energia_perda")
+        salario = salario_por_minuto(npc, self._mundo.locais, cfg_acoes)
 
         npc.energia -= perda_energia
         npc.dinheiro_total_pc += salario
 
         if WorldLogger.deve_logar_amostra(self._mundo.tick_count, self._config):
-            WorldLogger.debug(f"💼 [TRABALHO] {npc.nome} trabalhou e ganhou {salario} PC (Dinheiro: {npc.dinheiro_total_pc} PC | Energia: {npc.energia:.1f})", npc=npc)
+            WorldLogger.debug(f"💼 [TRABALHO] {npc.nome} trabalhou e ganhou {salario:.2f} PC (Dinheiro: {npc.dinheiro_total_pc} PC | Energia: {npc.energia:.1f})", npc=npc)
 
     def _executar_socializar(self, npc: NPC, cfg_acoes: dict):
+        """N01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): `custo_pc` é cobrado por
+        VISITA, não por minuto — 1,33 PC/min dava 136,9 PC/dia, a maior despesa de
+        toda classe (71% da renda do trabalhador, 3,4× a pensão do idoso).
+
+        `chegou_agora` é `localizacao_atual_id` tendo mudado nesta chamada —
+        `mover_para_social` (N01) fica no mesmo local social entre ticks, então "não
+        mudou" só acontece continuando uma visita já paga. ⚠️ Não cobre o caso raro
+        de um NPC que já estava, por coincidência, parado num local social (ex.:
+        `mover_aleatoriamente`) no exato tick em que a decisão vira SOCIALIZAR — ele
+        entra de graça; aceito (erro sempre a favor do NPC, nunca o inverso do bug
+        que esta tarefa corrige)."""
+        localizacao_antes = npc.localizacao_atual_id
         self._movimento.mover_para_social(npc)
+        chegou_agora = npc.localizacao_atual_id != localizacao_antes
 
         cfg  = cfg_get(cfg_acoes, "socializar")
         custo = cfg_get(cfg, "custo_pc")
@@ -202,12 +238,15 @@ class NPCActionManager:
         # do bem-estar (energia/fome/social), recalculado a cada tick por
         # NPCMoodManager. Socializar continua afetando `social` normalmente, que
         # já alimenta esse cálculo. Ver docs/ROADMAP.md, Frente 3.
-        if npc.dinheiro_total_pc >= custo_real:
-            if custo_real > 0:
-                npc.dinheiro_total_pc -= custo_real
+        if custo_real == 0 or not chegou_agora:
+            # Local público (sempre grátis), ou visita já paga na chegada — o ganho
+            # social continua todo tick, sem cobrar de novo.
+            npc.social += ganho_pago
+        elif npc.dinheiro_total_pc >= custo_real:
+            npc.dinheiro_total_pc -= custo_real
             npc.social += ganho_pago
         else:
-            # Se não tem dinheiro (e tentou ir a um local pago), tenta socializar de graça mas com menos ganho
+            # Sem dinheiro pra entrar: socializa de graça, com ganho menor.
             npc.social += ganho_gratis
 
     def _executar_cuidar_prole(self, npc: NPC, cfg_bio: dict):
@@ -215,7 +254,8 @@ class NPCActionManager:
         self._movimento.mover_para_casa(npc)
 
         # Interage e reduz a fome/cansaço dos bebês/crianças na mesma casa
-        moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, npc.casa_id, apenas_vivos=True)
+        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
+        moradores = self._mundo.npcs_por_casa.get(npc.casa_id, ())
         criancas = [m for m in moradores if m.id != npc.id and (m.mae_id == npc.id or m.pai_id == npc.id) and m.estagio_vida in (EstagioVida.BEBE.value, EstagioVida.CRIANCA.value)]
 
         ganho_social_filho = cfg_get(cfg_bio, "cuidar_prole_ganho_social")
@@ -273,7 +313,11 @@ class NPCActionManager:
             dono = next((n for n in self._mundo.npcs if n.id == obra.dono_npc_id), None) or npc
             obra.nome = f"Residência {dono.nome.split()[-1]}"
 
-            moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, dono.casa_id, apenas_vivos=True)
+            # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura —
+            # mas `list(...)` faz uma CÓPIA: o laço abaixo chama `mudar_casa`, que
+            # muta a MESMA lista que `npcs_por_casa` guarda (remove `m` do balde de
+            # `dono.casa_id`) — iterar direto sobre o balde vivo pularia elementos.
+            moradores = list(self._mundo.npcs_por_casa.get(dono.casa_id, ()))
             for m in moradores:
                 eh_proprio = (m.id == dono.id)
                 eh_conjuge = (dono.conjuge_id and m.id == dono.conjuge_id)

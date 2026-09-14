@@ -55,7 +55,10 @@ class NPCReproductionManager:
     def processar_concepcao(self):
         """Varredura noturna para concepção em casais que dividem a mesma casa e têm alta afinidade."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
-        por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
+        # não recalculado por varredura — este laço não muda de casa ninguém, o
+        # dict vivo é seguro de iterar direto.
+        por_casa = self._mundo.npcs_por_casa
             
         for casa_id, moradores in por_casa.items():
             # Verifica apenas quem está na mesma casa de madrugada, independente se estão dormindo ou ociosos
@@ -72,8 +75,10 @@ class NPCReproductionManager:
             for h in homens:
                 for m in mulheres:
                     afinidade = h.relacionamentos.get(m.id, 0)
-                    afinidade_minima = cfg_get(cfg_bio, "concepcao_afinidade_minima")
-                    if afinidade >= afinidade_minima:
+                    # G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): checagem completa —
+                    # inclui `sao_parentes`, que este caminho nunca chamava (2 filhos
+                    # de pais consanguíneos num mundo real de 25 dias, §5.2).
+                    if NPCUtils.pode_conceber(h, m, afinidade, cfg_bio):
                         # Sorteio de probabilidade de gravidez dependendo da superlotação
                         chance_gravidez = cfg_get(cfg_bio, "concepcao_chance_superlotacao") if casa_superlotada else cfg_get(cfg_bio, "concepcao_chance")
                         if random.random() < chance_gravidez:
@@ -104,7 +109,8 @@ class NPCReproductionManager:
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         # 1. Encontrar o pai (o morador masculino com quem a mãe tem maior afinidade)
         pai = None
-        moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, mae.casa_id, apenas_vivos=True)
+        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.
+        moradores = self._mundo.npcs_por_casa.get(mae.casa_id, ())
         # Excluir a própria mãe da lista
         moradores = [n for n in moradores if n.id != mae.id]
         homens = [m for m in moradores if m.genero == Genero.MASCULINO.value and m.is_adulto()]

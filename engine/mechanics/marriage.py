@@ -41,11 +41,13 @@ class NPCMarriageManager:
         """
         Verifica se dois NPCs atendem a todos os critérios biológicos, sociais
         e morais para serem elegíveis ao casamento.
-        """
-        # Critérios Biológicos e de Sobrevivência
-        if not n1.esta_vivo() or not n1.pode_procriar():
-            return False
-        if not n2.esta_vivo() or not n2.pode_procriar():
+
+        G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): a parte biológica (vivo, fértil,
+        não-parente, afinidade mínima) é `NPCUtils.pode_conceber` — a MESMA checagem
+        que `processar_concepcao` usa, pro mesmo motivo não divergir duas vezes
+        (armadilha 12)."""
+        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
+        if not NPCUtils.pode_conceber(n1, n2, afinidade, cfg_bio):
             return False
 
         # Impedir uniões do mesmo gênero ou que já morem juntos
@@ -56,17 +58,29 @@ class NPCMarriageManager:
         if NPCUtils.tem_conjuge(n1) or NPCUtils.tem_conjuge(n2):
             return False
 
-        # Evitar casamentos incestuosos
-        if NPCUtils.sao_parentes(n1, n2):
-            return False
-
-        # Verificar afinidade mínima requerida
-        cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
-        limiar_uniao = cfg_get(cfg_bio, "concepcao_afinidade_minima")
-        if afinidade < limiar_uniao:
-            return False
-
         return True
+
+    def _filhos_para_mudar(self, pai_ou_mae: NPC, casa_origem: str, casa_destino: str) -> list:
+        """G04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): dependentes de `pai_ou_mae`
+        que ficariam sozinhos na casa de origem se ele/ela se mudar sem eles — sem
+        isto, o bebê ficava na casa antiga, virando o próprio pagador da refeição
+        com 0 PC (§5.2 do documento, 10 casos num mundo real de 25 dias). Vazio se
+        não muda de casa (`casa_origem == casa_destino`) ou não tinha casa."""
+        if not casa_origem or casa_origem == casa_destino:
+            return []
+        moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, casa_origem, apenas_vivos=True)
+        return [m for m in moradores if m.id != pai_ou_mae.id and m.eh_dependente()
+                and (m.mae_id == pai_ou_mae.id or m.pai_id == pai_ou_mae.id)]
+
+    def _ocupacao_apos_casamento(self, casa_destino: str, n1: NPC, n2: NPC, filhos: list) -> int:
+        """G04: quantos moradores vivos a casa de destino teria DEPOIS do casamento
+        — residentes atuais (exceto o próprio casal, que pode já morar lá) mais o
+        casal e os filhos que vêm junto. Precisa contar os filhos ANTES de decidir
+        se a casa está cheia — senão o destino parece ter espaço que some assim que
+        a família chega inteira."""
+        atuais = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, casa_destino, apenas_vivos=True)
+        ids_exceto_casal = {m.id for m in atuais} - {n1.id, n2.id}
+        return len(ids_exceto_casal) + 2 + len(filhos)
 
     def realizar_casamento(self, n1: NPC, n2: NPC, casa_escolhida: str, surpresa: bool = False) -> bool:
         """
@@ -79,35 +93,48 @@ class NPCMarriageManager:
         n2.estado_civil = EstadoCivil.CASADO.value
         n2.conjuge_id = n1.id
 
-        # Verificar se a casa de destino está cheia
+        # G04: quem vai casa de origem de cada um, capturado ANTES de qualquer
+        # mudança — depois de mudar_casa, `n.casa_id` já é o destino.
+        casa_origem_n1, casa_origem_n2 = n1.casa_id, n2.casa_id
+        filhos_n1 = self._filhos_para_mudar(n1, casa_origem_n1, casa_escolhida)
+        filhos_n2 = self._filhos_para_mudar(n2, casa_origem_n2, casa_escolhida)
+
+        # Verificar se a casa de destino ficaria cheia — DEPOIS de contar os
+        # filhos que vêm junto, não antes (G04).
         casa_obj = self._mundo.locais.get(casa_escolhida)
-        casa_cheia = NPCUtils.is_casa_superlotada(self._mundo.locais, self._mundo.npcs, casa_escolhida)
+        capacidade = casa_obj.capacidade if casa_obj else 0
+        casa_cheia = self._ocupacao_apos_casamento(casa_escolhida, n1, n2, filhos_n1 + filhos_n2) > capacidade
 
         teve_nova_casa = False
+        casa_final = casa_escolhida
         if casa_cheia:
             # 1. Procurar uma casa totalmente vazia na cidade
             casas_vazias = NPCUtils.obter_casas_vazias(self._mundo, n1.cidade_id, ignorar_id=casa_escolhida)
 
             if casas_vazias:
                 casa_alvo = random.choice(casas_vazias)
-                
-                self._mundo.mudar_casa(n1, casa_alvo.id)
-                self._mundo.mover_npc(n1, casa_alvo.id)
-                self._mundo.mudar_casa(n2, casa_alvo.id)
-                self._mundo.mover_npc(n2, casa_alvo.id)
-                casa_escolhida = casa_alvo.id
+                casa_final = casa_alvo.id
                 teve_nova_casa = True
                 casa_obj = casa_alvo # Atualiza para o log abaixo
-                
+                # Casa vazia — recalcula quem vem junto (a origem não é mais
+                # `casa_escolhida`, é a casa vazia nova, então TODOS os filhos de
+                # cada origem original vêm, sem exceção).
+                filhos_n1 = self._filhos_para_mudar(n1, casa_origem_n1, casa_final)
+                filhos_n2 = self._filhos_para_mudar(n2, casa_origem_n2, casa_final)
+
                 prefixo = "SURPRESA" if surpresa else "PLANEJADO"
                 WorldLogger.evento_mundo(
                     f"🏠 [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} mudaram-se para {casa_alvo.nome} que tinha espaço disponível!",
                     npc=n1
                 )
             else:
-                # 2. Se não tem casa com espaço, tenta construir uma nova obra
+                # 2. Se não tem casa com espaço, tenta construir uma nova obra —
+                # ninguém se muda ainda (mora onde já está até a obra terminar),
+                # então nenhum filho muda de casa nesta rodada.
                 if self._habitacao.iniciar_obra_para_casal(n1, n2):
                     teve_nova_casa = True
+                    casa_final = None
+                    filhos_n1, filhos_n2 = [], []
                     prefixo = "SURPRESA" if surpresa else "PLANEJADO"
                     WorldLogger.evento_mundo(
                         f"🏗️ [NOVO LAR {prefixo}] Recém-casados {n1.nome} e {n2.nome} iniciaram a "
@@ -121,6 +148,21 @@ class NPCMarriageManager:
             self._mundo.mover_npc(n1, casa_escolhida)
             self._mundo.mudar_casa(n2, casa_escolhida)
             self._mundo.mover_npc(n2, casa_escolhida)
+        elif casa_final:
+            self._mundo.mudar_casa(n1, casa_final)
+            self._mundo.mover_npc(n1, casa_final)
+            self._mundo.mudar_casa(n2, casa_final)
+            self._mundo.mover_npc(n2, casa_final)
+
+        # G04: os filhos vão junto — pelas mesmas portas (`mudar_casa`/`mover_npc`),
+        # nunca atribuição direta (os índices desincronizam em silêncio).
+        if casa_final:
+            for filho in filhos_n1 + filhos_n2:
+                self._mundo.mudar_casa(filho, casa_final)
+                self._mundo.mover_npc(filho, casa_final)
+                self._mundo.db.npcs.salvar(filho)
+                self._mundo.acordar(filho)
+            casa_escolhida = casa_final
 
         # Salvar NPCs no banco
         self._mundo.db.npcs.salvar(n1)
@@ -147,7 +189,7 @@ class NPCMarriageManager:
             timestamp=timestamp_rpg,
             local_id=casa_escolhida,
             envolvidos=[n1.id, n2.id],
-            tipo_evento=TipoEvento.CONVERSA.value,
+            tipo_evento=TipoEvento.UNIAO.value,
             modificador_afinidade=bonus_afinidade,
             resumo_estruturado=resumo
         )
@@ -191,25 +233,35 @@ class NPCMarriageManager:
         # acumulada, e afinidade só existe entre quem já se encontrou —
         # `n1.relacionamentos` já é exatamente esse conjunto, e é pequeno. Percorrê-lo
         # em vez da cidade inteira troca O(N²) por O(N × conhecidos).
+        # G03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): no máximo UM casamento
+        # planejado por CIDADE por dia — cada cidade processada independente das
+        # outras (antes desta tarefa, um `return` saía do método inteiro no
+        # primeiro casamento de QUALQUER cidade: bug herdado de quando a rotina
+        # rodava por tick, não design — desde H02 (doc 3) mudou a cadência pra
+        # diária, isso tinha virado "1 casamento no mundo inteiro por dia").
         for solteiros in solteiros_por_cidade.values():
-            indice_solteiros = {n.id: n for n in solteiros}
-            ordem = list(solteiros)
-            # O laço termina no primeiro casamento — sem embaralhar, o primeiro
-            # solteiro da lista teria prioridade permanente sobre todos os outros.
-            random.shuffle(ordem)
-            for n1 in ordem:
-                for id_conhecido, afinidade in n1.relacionamentos.items():
-                    n2 = indice_solteiros.get(id_conhecido)
-                    if n2 is None:
-                        continue
+            self._tentar_casamento_na_cidade(solteiros, chance_uniao)
 
-                    # A validação biológica completa e de consanguinidade é delegada à função central
-                    if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
-                        if random.random() < chance_uniao:
-                            casa_escolhida = n1.casa_id or n2.casa_id
-                            if casa_escolhida:
-                                # Realizar casamento completo e atômico
-                                self.realizar_casamento(n1, n2, casa_escolhida, surpresa=False)
+    def _tentar_casamento_na_cidade(self, solteiros: list, chance_uniao: float) -> bool:
+        """A varredura de uma única cidade — para no primeiro casal que casar
+        (`break` da própria cidade, não do mundo). Devolve True se casou alguém."""
+        indice_solteiros = {n.id: n for n in solteiros}
+        ordem = list(solteiros)
+        # Sem embaralhar, o primeiro solteiro da lista teria prioridade permanente
+        # sobre todos os outros.
+        random.shuffle(ordem)
+        for n1 in ordem:
+            for id_conhecido, afinidade in n1.relacionamentos.items():
+                n2 = indice_solteiros.get(id_conhecido)
+                if n2 is None:
+                    continue
 
-                                # Retorna para evitar processar mais de uma união no mesmo tick
-                                return
+                # A validação biológica completa e de consanguinidade é delegada à função central
+                if self.verificar_elegibilidade_casamento(n1, n2, afinidade):
+                    if random.random() < chance_uniao:
+                        casa_escolhida = n1.casa_id or n2.casa_id
+                        if casa_escolhida:
+                            # Realizar casamento completo e atômico
+                            self.realizar_casamento(n1, n2, casa_escolhida, surpresa=False)
+                            return True
+        return False

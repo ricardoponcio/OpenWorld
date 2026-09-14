@@ -22,7 +22,8 @@ from .consultas_npc import NPCUtils
 from .config_loader import cfg_get
 from .tempo import RelogioMundo
 from .mundo import EstadoDoMundo
-from .mechanics import NPCBrain, NPCActionManager
+from .mechanics import NPCBrain, NPCActionManager, JobMarket, InfrastructureManager
+from .mechanics.actions import salario_por_minuto
 from .mechanics.reproduction import NPCReproductionManager
 from .mechanics.lifecycle import NPCLifecycleManager
 from .mechanics.housing import NPCHousingManager
@@ -74,6 +75,11 @@ class GameLoop:
         self._social = NPCSocialManager(mundo, config, casamento=self._casamento)
         self._eventos_globais = GlobalEventManager(mundo)
         self._humor = NPCMoodManager(config)
+        # X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket`/`InfrastructureManager`
+        # moravam em `run_simulation.py`, fora de qualquer benchmark — 21% do custo
+        # real por dia simulado nunca tinha sido medido (armadilha 16).
+        self._mercado = JobMarket(mundo.db, config, mundo)
+        self._infra = InfrastructureManager(mundo, config)
 
         # A06 (docs/PLANO_POPULACAO_E_ESCALA.md): cada mecânica declara a própria
         # cadência (`CADENCIA`/`CADENCIA_HORA_CONFIG`, ver as classes) — acrescentar
@@ -90,6 +96,9 @@ class GameLoop:
             (self._reino.CADENCIA_HORA_CONFIG, self._reino.processar_pagamentos_reino),
             (self._casamento.CADENCIA_HORA_CONFIG, self._casamento.processar_coabitacao),
             (self._social.CADENCIA_HORA_CONFIG, self._social.processar_poda_de_relacionamentos),
+            (self._mercado.CADENCIA_HORA_CONFIG, self._mercado.processar_contratacoes),
+            (InfrastructureManager.CADENCIA_HORA_CONFIG_DESGASTE, self._infra.processar_desgaste),
+            (InfrastructureManager.CADENCIA_HORA_CONFIG_REPAROS, self._infra.processar_reparos_espontaneos),
             ("eventos_poda_hora", self._podar_eventos_antigos),
         ]
 
@@ -277,7 +286,10 @@ class GameLoop:
         elif npc.acao_atual == Acao.TRABALHAR:
             cfg = cfg_get(cfg_acoes, "trabalhar")
             npc.energia -= cfg_get(cfg, "energia_perda") * minutos
-            npc.dinheiro_total_pc += cfg_get(cfg, "salario_pc") * minutos
+            # N02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): mesma conta de
+            # `NPCActionManager._executar_trabalhar` — duplicar divergiria em
+            # silêncio (armadilha 12, docs/PLANO_POPULACAO_E_ESCALA.md).
+            npc.dinheiro_total_pc += salario_por_minuto(npc, self._mundo.locais, cfg_acoes) * minutos
         elif npc.acao_atual == Acao.OCIOSO:
             cfg = cfg_get(cfg_acoes, "ocioso")
             npc.social -= cfg_get(cfg, "social_perda") * minutos

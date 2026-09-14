@@ -1,9 +1,22 @@
 """
 Testes de `GerenciadorUrbanismo` — docs/PLANO_CIDADE_VIVA.md O02.
 """
-from engine.mechanics.urbanismo import GerenciadorUrbanismo
+from engine.mechanics.urbanismo import GerenciadorUrbanismo, tipo_local_de_categoria
+from engine.models import TipoLocal, CategoriaLocal
+from config import get_config
 
 from tests.mundo_sintetico import adulto, casa, mundo_de
+
+
+def test_todo_local_tem_tipo_do_enum():
+    """V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V): `tipo_local_por_categoria` cobre
+    TODAS as `CategoriaLocal`, e cada valor está em `TipoLocal` — sem isto, `tipo`
+    virava cópia exata de `tipo_local` em 26.748 de 26.748 locais medidos."""
+    config = get_config()
+    tipos_validos = {t.value for t in TipoLocal}
+    for cat in CategoriaLocal:
+        tipo = tipo_local_de_categoria(cat.value, config)
+        assert tipo in tipos_validos, f"{cat.value} -> {tipo!r} não está em TipoLocal"
 
 
 def _config_urbanismo(**overrides):
@@ -22,7 +35,15 @@ def _config_urbanismo(**overrides):
         "arrabalde_comprimento_max_m": 520,
     }
     base.update(overrides)
-    return {"urbanismo": base}
+    return {
+        "urbanismo": base,
+        # V01 (docs/PLANO_MUNDO_CRIVEL.md): `abrir_obra` deriva `tipo` daqui.
+        "geracao_urbana": {"tipo_local_por_categoria": {
+            "residencia": "Casa", "forja": "Oficina", "mercado": "Loja",
+            "taverna": "Social", "publico": "Social", "quartel": "Defesa",
+            "universidade": "Magia", "fazenda": "Campo", "generic": "Outro",
+        }},
+    }
 
 
 def test_abre_estabelecimento_quando_ha_deficit_e_dinheiro():

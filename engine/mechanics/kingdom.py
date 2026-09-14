@@ -22,23 +22,43 @@ class KingdomManager:
     def __init__(self, mundo: EstadoDoMundo, config: dict):
         self._mundo = mundo
         self._config = config
+        # N04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): `dict[cidade_id] -> rações de
+        # sopão restantes HOJE` — zerado 1x/dia em `processar_pagamentos_reino`,
+        # decrementado só dentro de `fornecer_sopao` (que só roda quando um NPC
+        # tenta comer sem dinheiro). Nenhuma varredura extra por tick.
+        self._racoes_sopao_restantes = {}
 
     def processar_pagamentos_reino(self):
-        """Varredura diária (ex: 08:00) para pagar aposentadorias do reino aos idosos."""
+        """Varredura diária (ex: 08:00) para pagar aposentadorias do reino aos idosos
+        E reabastecer a cota diária de sopão (N04) — a MESMA passada pelos NPCs vivos
+        serve às duas coisas (população por cidade sai de graça de quem já paga
+        pensão), sem laço extra."""
         cfg_reino = cfg_get(self._config, "reino")
         pensao_diaria = cfg_get(cfg_reino, "pensao_aposentadoria")
+        racoes_por_habitante = cfg_get(cfg_reino, "sopao_racoes_por_habitante_dia")
 
         pagos = 0
+        populacao_por_cidade = {}
         for npc in self._mundo.npcs:
-            if npc.esta_vivo() and npc.is_idoso():
+            if not npc.esta_vivo():
+                continue
+            populacao_por_cidade[npc.cidade_id] = populacao_por_cidade.get(npc.cidade_id, 0) + 1
+            if npc.is_idoso():
                 npc.dinheiro_total_pc += pensao_diaria
                 pagos += 1
+
+        self._racoes_sopao_restantes = {
+            cidade_id: racoes_por_habitante * populacao
+            for cidade_id, populacao in populacao_por_cidade.items()
+        }
 
         if pagos > 0:
             WorldLogger.info(f"👑 [REINO] O Rei pagou aposentadoria de {pensao_diaria} PC para {pagos} anciões da vila.")
 
     def fornecer_sopao(self, npc: NPC, fome_rec_do_tick: float, energia_ganho_do_tick: float):
-        """Fornece alimento gratuito para cidadãos na miséria."""
+        """Fornece alimento gratuito para cidadãos na miséria — até a cota diária da
+        cidade (N04) acabar. Sem cota restante, devolve `False` e a inanição
+        acontece de verdade (decisão ❶: é o objetivo)."""
         cfg_reino = cfg_get(self._config, "reino")
         if not cfg_get(cfg_reino, "fornecer_sopao"):
             return False
@@ -49,6 +69,11 @@ class KingdomManager:
         extremamente_pobre = npc.dinheiro_total_pc <= 0 and npc.fome > limiar_miseria
         if not npc.is_idoso() and not extremamente_pobre:
             return False
+
+        restante = self._racoes_sopao_restantes.get(npc.cidade_id, 0.0)
+        if restante <= 0:
+            return False
+        self._racoes_sopao_restantes[npc.cidade_id] = restante - 1
 
         npc.fome -= (fome_rec_do_tick * fator)  # Sopão alimenta menos que refeição paga
         npc.energia += (energia_ganho_do_tick * fator)

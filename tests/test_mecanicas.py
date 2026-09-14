@@ -14,8 +14,8 @@ import pytest
 
 from engine.config_loader import carregar_config_global, cfg_get
 from engine.models import (
-    Cidade, Acao, EstagioVida, Genero, EstadoCivil, HumorNPC,
-    TipoLocal, VinculoSocial,
+    Cidade, NPC, Acao, EstagioVida, Genero, EstadoCivil, HumorNPC,
+    TipoLocal, CategoriaLocal, VinculoSocial,
 )
 from engine.mechanics.kingdom import KingdomManager
 from engine.mechanics.mood import NPCMoodManager
@@ -78,6 +78,34 @@ def test_humor_caminha_um_passo_por_vez_na_escala(config, monkeypatch):
     escala = [h.value for h in HumorNPC.escala_normal()]
     assert sofrido.humor != HumorNPC.NEUTRO.value
     assert abs(escala.index(sofrido.humor) - escala.index(HumorNPC.NEUTRO.value)) == 1
+
+
+def test_humor_mesma_taxa_em_1_e_240_minutos(config):
+    """X01 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda avalia um NPC
+    ~20-30 vezes por dia em vez de 1.440 — `minutos` pode ser 1 ou 240. Antes desta
+    correção, `min(minutos, distancia)` capava as tentativas de transição em
+    ~4 (o tamanho da escala), então 240 chamadas de 1 minuto tinham MUITO mais
+    chance de transição total que 1 chamada de 240 minutos de uma vez (P=1,000 vs
+    P=0,352 medido no mundo real, §armadilha 17 do documento). As duas devem
+    produzir, estatisticamente, a MESMA taxa de "saiu do humor inicial"."""
+    amostras = 300
+
+    def _rodar(passos_minutos):
+        saiu_do_neutro = 0
+        for i in range(amostras):
+            npc = adulto(f"npc_{i}", "Sofrido", energia=0.0, fome=100.0, social=0.0,
+                        humor=HumorNPC.NEUTRO.value)
+            gerente = NPCMoodManager(config)
+            for minutos in passos_minutos:
+                gerente.processar_humor(npc, minutos=minutos)
+            if npc.humor != HumorNPC.NEUTRO.value:
+                saiu_do_neutro += 1
+        return saiu_do_neutro / amostras
+
+    taxa_1_min = _rodar([1] * 240)      # 240 chamadas de 1 minuto (regime antigo)
+    taxa_240_min = _rodar([240])        # 1 chamada de 240 minutos (regime da agenda)
+
+    assert abs(taxa_1_min - taxa_240_min) < 0.12
 
 
 # ----------------------------------------------------------------------
@@ -221,6 +249,24 @@ def test_casamento_usa_a_habitacao_injetada_quando_a_casa_esta_cheia(config):
     assert noivo.estado_civil == EstadoCivil.CASADO.value
 
 
+def test_casamento_leva_os_filhos(config):
+    """G04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): sem isto, o casal se mudava e o
+    dependente ficava sozinho na casa antiga, virando o próprio pagador da
+    refeição com 0 PC (§5.2 do documento, 10 casos num mundo real de 25 dias)."""
+    noivo = adulto("npc_1", "Rolf Noivo", casa_id="casa_1")
+    noiva = adulto("npc_2", "Ilse Noiva", casa_id="casa_2", genero=Genero.FEMININO.value)
+    bebe = NPC(id="npc_3", nome="Bebê de Ilse", profissao="dependente",
+               local_trabalho_id="", localizacao_atual_id="casa_2", casa_id="casa_2",
+               cidade_id=1, estagio_vida=EstagioVida.BEBE.value, mae_id="npc_2")
+    mundo = mundo_de(npcs=[noivo, noiva, bebe],
+                     locais=[casa("casa_1", capacidade=4), casa("casa_2", capacidade=4)])
+
+    NPCMarriageManager(mundo, config).realizar_casamento(noivo, noiva, "casa_1")
+
+    assert bebe.casa_id == "casa_1"
+    assert bebe.localizacao_atual_id == "casa_1"
+
+
 def test_coabitacao_so_roda_na_cadencia_diaria_nao_a_cada_tick(config, monkeypatch):
     """H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` deixou de ser
     chamada de dentro de `NPCSocialManager.processar_interacoes` (a cada tick) e
@@ -287,7 +333,11 @@ def test_interacao_social_grava_afinidade_mutua_e_vinculo(config):
     assert a.relacionamentos["npc_2"] == b.relacionamentos["npc_1"]
     assert len(mundo.db.npcs.relacionamentos) == 1
     assert mundo.db.npcs.relacionamentos[0][3] in [v.value for v in VinculoSocial]
-    assert len(mundo.db.eventos.salvos) == 1
+    # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): o relacionamento é SEMPRE gravado
+    # (linhas acima), mas o EVENTO só quando o vínculo muda de FAIXA — afinidade
+    # 0 -> pequena ainda é "Conhecido" nos dois lados, então nenhum evento nasce
+    # aqui (era 99,1% "tiveram uma conversa" no log medido do mundo real).
+    assert len(mundo.db.eventos.salvos) == 0
 
 
 def test_vinculo_inimigo_e_alcancavel(config):
@@ -454,6 +504,24 @@ def test_concepcao_ignora_casa_com_um_unico_morador(config, monkeypatch):
     assert sozinha.gravidez_ticks == 0
 
 
+def test_concepcao_recusa_parentes(config, monkeypatch):
+    """G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): mãe e filho adulto na mesma casa
+    têm afinidade 100 automática (`parto_afinidade_inicial_pais`) — sem checar
+    parentesco, isso engravidava em 6 de 200 noites testadas (§5.2 do documento;
+    2 casos num mundo real de 25 dias). `processar_concepcao` agora usa
+    `NPCUtils.pode_conceber`, que inclui `sao_parentes`."""
+    monkeypatch.setattr("engine.mechanics.reproduction.random.random", lambda: 0.0)
+    mae = adulto("npc_mae", "Mãe", genero=Genero.FEMININO.value,
+                 relacionamentos={"npc_filho": 1000})
+    filho = adulto("npc_filho", "Filho Adulto", mae_id="npc_mae",
+                   relacionamentos={"npc_mae": 1000})
+    mundo = mundo_de(npcs=[mae, filho], locais=[casa(capacidade=4)])
+
+    NPCReproductionManager(mundo, config).processar_concepcao()
+
+    assert mae.gravidez_ticks == 0
+
+
 # ----------------------------------------------------------------------
 # NPCActionManager e NPCMovementManager
 # ----------------------------------------------------------------------
@@ -482,6 +550,30 @@ def test_sem_local_de_trabalho_o_npc_fica_ocioso(config):
 
     assert desempregado.acao_atual == Acao.OCIOSO
     assert movimento.destinos == []
+
+
+def test_socializar_cobra_uma_vez_por_visita(config):
+    """N01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): `custo_pc` era cobrado por
+    MINUTO — 136,9 PC/dia, a maior despesa de TODA classe (71% da renda do
+    trabalhador, 3,4x a pensão do idoso, §5.1 do documento). Agora só na chegada;
+    ficar no mesmo local social não cobra de novo. Usa o `NPCMovementManager`
+    REAL (não o dublê) — é `mover_para_social` ficando no mesmo lugar (N01) que
+    faz `chegou_agora` virar `False` na segunda chamada."""
+    frequentador = adulto("npc_1", "Bram Frequentador", dinheiro_total_pc=100.0,
+                          acao_atual=Acao.SOCIALIZAR, num_dependentes=0)
+    taverna = casa("loc_taverna", nome="Taverna", tipo=TipoLocal.SOCIAL.value,
+                   categoria=CategoriaLocal.TAVERNA.value, capacidade=10)
+    mundo = mundo_de(npcs=[frequentador], locais=[casa(), taverna])
+
+    acoes = NPCActionManager(mundo, config)
+    acoes.executar_acao(frequentador)
+    assert frequentador.localizacao_atual_id == "loc_taverna"
+    saldo_apos_chegada = frequentador.dinheiro_total_pc
+    assert saldo_apos_chegada < 100.0  # cobrou na chegada
+
+    acoes.executar_acao(frequentador)  # continua no mesmo local social
+    assert frequentador.localizacao_atual_id == "loc_taverna"
+    assert frequentador.dinheiro_total_pc == saldo_apos_chegada  # não cobrou de novo
 
 
 def test_dependente_nunca_sai_de_casa(config):

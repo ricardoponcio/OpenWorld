@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import zlib
+import random
 import numpy as np
 try:
     from scipy.ndimage import distance_transform_edt
@@ -12,13 +14,35 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
-from cartographer.ai.city_manager_ai import CityManagerAIClient
+from cartographer.ai.city_manager_ai import CityManagerAIClient, nome_procedural_de_cidade
 from cartographer.math.climate import Bioma
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
 
 MANIFEST_PATH = "database/world_manifest.json"
 NPZ_PATH = "database/mapa_composto.npz"
+
+
+def _garantir_nomes_unicos(cidades: list, manifest: dict, cont: dict) -> None:
+    """G05 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): o nome da cidade é a chave que
+    tudo a jusante usa — o slug do arquivo GeoJSON e os ids de lote/local
+    (armadilha 3) — duas cidades com o mesmo nome compartilham namespace, e uma
+    delas fica com ZERO locais pra sempre (achado real: duas "Cidade dos Ventos"
+    no mesmo manifesto). Re-sorteia qualquer colisão contra as cidades JÁ no
+    manifesto (outros continentes, cada um gerado num processo anterior deste
+    mesmo `reset_cartography.sh`) e contra as deste MESMO continente — sempre
+    determinístico (`zlib.crc32`, nunca `hash()`, D2 doc 1)."""
+    nomes_em_uso = {
+        c["nome"] for outro in manifest.get("continentes", []) if outro is not cont
+        for c in outro.get("cidades", [])
+    }
+    for indice, cidade in enumerate(cidades):
+        tentativa = 0
+        while cidade["nome"] in nomes_em_uso:
+            seed = zlib.crc32(f"{cont['nome']}_{indice}_{tentativa}".encode("utf-8"))
+            cidade["nome"] = nome_procedural_de_cidade(random.Random(seed))
+            tentativa += 1
+        nomes_em_uso.add(cidade["nome"])
 
 
 def _pontuar_sitio(sub_alt, sub_bioma, is_terra, bioma_id, nivel_mar, nivel_montanha, cfg, tipo=None):
@@ -179,7 +203,8 @@ def gerar_metadados_cidades(uuid_ou_nome: str):
 
         print(f" -> 🏰 {cid['nome']} [{cid['tamanho']}, {cid['tipo']}] -> Fixada em ({x_global}, {y_global}) | Bioma de interesse: {bioma_str} (ID: {bioma_id}) | score={score[iy,ix]:.2f}")
 
-    # 7. Persistir as cidades no Manifesto do Mundo
+    # 7. G05: nome de cidade é único antes de persistir — nunca depois.
+    _garantir_nomes_unicos(cidades, manifest, cont)
     cont["cidades"] = cidades
 
     # 8. Também podemos instanciar as tabelas/metadados no banco sqlite futuramente.

@@ -76,7 +76,12 @@ class NPCHousingManager:
         - Deve existir ao menos um casal de ADULTOS com cônjuge.
         - NENHUM morador da casa deve já ter uma obra em andamento.
         """
-        por_casa = NPCUtils.agrupar_por_casa(self._mundo.npcs)
+        # X04 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 19): índice já mantido (A04),
+        # não recalculado por varredura — `dict(...)` é só uma cópia RASA da
+        # estrutura externa (protege contra `RuntimeError` se uma obra nova
+        # adicionar uma casa ao índice no meio deste laço); as listas de moradores
+        # continuam sendo as mesmas do índice vivo.
+        por_casa = dict(self._mundo.npcs_por_casa)
 
         for casa_id, moradores in por_casa.items():
             if casa_id not in self._mundo.locais:

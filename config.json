@@ -29,15 +29,16 @@
             "fome_ganho": 0.5
         },
         "comer": {
+            "_comentario_n03": "N03 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N, 2026-09-14): `multiplicador_por_dependente` REMOVIDO — cobrava a refeição do adulto majorada por dependente E a refeição de cada dependente separadamente (dupla cobrança). Cada NPC, dependente ou não, come uma refeição de `custo_pc`; o dependente debita do pai/mãe.",
             "fome_perda": 40.0,
             "energia_ganho": 1.0,
             "custo_pc": 15,
-            "multiplicador_por_dependente": 0.8,
             "parcelas_refeicao": 45
         },
         "trabalhar": {
+            "_comentario_n02": "N02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N, 2026-09-14): `salario_pc` deixou de ser o salário — virou `salario_divisor_minutos`, o divisor que converte o `salario_base` do Local de trabalho (50-110 PC, gravado pelo cartógrafo) em PC por minuto. 600 = minutos de um expediente de 10h (600min = 10h × 60). O salário agora varia por edifício, não é mais uma constante global igual pro ferreiro e o guarda — ver `engine/mechanics/actions.py::salario_por_minuto`.",
             "energia_perda": 0.12,
-            "salario_pc": 0.333333
+            "salario_divisor_minutos": 600
         },
         "socializar": {
             "energia_perda": 0.106667,
@@ -115,6 +116,10 @@
         "pagamento_reino_hora": 8,
         "eventos_poda_hora": 2,
         "relacionamentos_poda_hora": 3,
+        "_comentario_x03": "X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽, 2026-09-14): `desgaste_hora`/`reparos_hora`/`mercado_trabalho_hora` — as três rotinas que moravam em `run_simulation.py::processar_gatilhos_periodicos`, fora de qualquer benchmark (armadilha 16: 21% do custo real por dia simulado nunca foi medido). Agora entram em `GameLoop._rotinas_diarias` como as outras. `mercado_trabalho_hora` é uma mudança de cadência disclosed: rodava a cada 5h (0,5,10,15,20); agora roda 1x/dia, como toda outra rotina diária do laço — P01 já faz o NPC contratado reavaliar na hora (`acordar`), então o atraso médio até a próxima contratação sobe, mas nunca mais que um dia.",
+        "desgaste_hora": 2,
+        "reparos_hora": 2,
+        "mercado_trabalho_hora": 7,
         "crescimento_dias_bebe_para_crianca": 5,
         "crescimento_dias_crianca_para_adulto": 15,
         "crescimento_dias_adulto_para_idoso": 75,
@@ -150,12 +155,16 @@
         "humor_chance_transicao": 0.01078
     },
     "reino": {
-        "pensao_aposentadoria": 40,
+        "_comentario_n05": "N05 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N, 2026-09-14): 40 -> 75 (decisão ❷) — o idoso fechava o dia em -207,9 PC medido; com N01 (socializar por visita) sobra -33,5, e com a pensão a 75 fecha em +1,5. As seis refeições/dia do idoso ficam como estão: comportamento aceito, não bug (não mexer em bonus_nao_interromper_refeicao/bonus_persistencia por causa disto).",
+        "pensao_aposentadoria": 75,
         "fornecer_sopao": true,
+        "_comentario_custo_sopao_ao_reino": "❾ (docs/PLANO_MUNDO_CRIVEL.md): NÃO existe finança do reino, e não vai existir tão cedo — o tick já está no limite. Esta chave fica SEM LEITOR, reservada pra quando existir; o único limitador da inanição é `sopao_racoes_por_habitante_dia`, abaixo. Não ligue esta chave em nada.",
         "custo_sopao_ao_reino": 5,
         "_comentario_sopao": "Anexo 1 do PLANO_REFATORACAO.md: gatilho (fome mínima pra qualificar como 'extrema miséria') e potência (fração da refeição/energia normal que o sopão dá) do sopão comunitário — antes literais soltos em kingdom.py.",
-        "sopao_fome_limiar_miseria": 60.0,
-        "sopao_fator_potencia": 0.5
+        "_comentario_n04": "N04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N, 2026-09-14, decisão ❶/❾): sopão era incondicional, grátis e ilimitado — 0 NPCs famintos em 25 dias simulados mesmo com 10% da população a zero PC. `sopao_fome_limiar_miseria` sobe de 60 pra 80 (o sopão é rede de emergência, não almoço) e `sopao_racoes_por_habitante_dia` (estimativa, ajustar pela guarda 3 de D25/T02) é o ÚNICO limitador — um teto diário de rações por cidade, zerado 1x/dia em `processar_pagamentos_reino`, lido só dentro de `fornecer_sopao`. Sem débito em moeda: o reino não tem tesouro (❾).",
+        "sopao_fome_limiar_miseria": 80.0,
+        "sopao_fator_potencia": 0.5,
+        "sopao_racoes_por_habitante_dia": 0.15
     },
     "infraestrutura": {
         "_comentario": "Sistema de decadência e manutenção de construções. Valores de integridade em pontos (0-100).",
@@ -163,15 +172,16 @@
         "limiar_deteriorado": 50,
         "limiar_critico": 25,
         "limiar_ruina": 10,
-        "desgaste_por_tipo": {
-            "Oficina": 0.30,
-            "Campo":   0.20,
-            "Mar":     0.25,
-            "Defesa":  0.15,
-            "Magia":   0.20,
-            "Loja":    0.20,
-            "Social":  0.10,
-            "Casa":    0.15
+        "_comentario_v04": "V04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V, 2026-09-14): `desgaste_por_tipo` (chave TipoLocal) virou `desgaste_por_categoria` (chave CategoriaLocal) — o de tipo só cobria 617 de 26.748 locais (2,3%), porque `tipo` tinha virado cópia de `tipo_local` (V01). Taxas por categoria herdadas 1:1 das taxas por tipo, via `tipo_local_por_categoria` (geracao_urbana): forja=Oficina, mercado=Loja, taverna/publico=Social, quartel=Defesa, universidade=Magia, fazenda=Campo, residencia=Casa. `TipoLocal.MAR` não tinha `CategoriaLocal` equivalente (nunca foi emitido pelo cartógrafo) — a taxa 0,25 não migrou; generic usa desgaste_padrao, como Outro/generic já usava.",
+        "desgaste_por_categoria": {
+            "forja":        0.30,
+            "fazenda":      0.20,
+            "quartel":      0.15,
+            "universidade": 0.20,
+            "mercado":      0.20,
+            "taverna":      0.10,
+            "publico":      0.10,
+            "residencia":   0.15
         },
         "desgaste_padrao": 0.20,
         "desgaste_por_excedente": 0.10,
@@ -197,7 +207,14 @@
         "locais_raio_px": 3.0,
 
         "_comentario_r_d06": "R-D06 (2026-09-11): `LocationUtils.is_local_publico` (engine/consultas_local.py) classificava locais públicos por substring do nome quando a categoria não bastava — um paliativo consciente enquanto não há um campo estrutural de 'é área pública' nos dados de cidade gerados; a lista de palavras-chave estava hardcoded no código e agora vive aqui.",
-        "palavras_chave_local_publico": ["praça", "praca", "parque", "jardim", "rua", "largo", "campo", "arena"]
+        "palavras_chave_local_publico": ["praça", "praca", "parque", "jardim", "rua", "largo", "campo", "arena"],
+
+        "_comentario_tipo_local_por_categoria": "V01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V, 2026-09-14): `categoria` (CategoriaLocal) é o vocabulário do cartógrafo; `tipo` (TipoLocal) é o papel funcional que a engine lê — vaga de emprego, índice social/passeio, chave de desgaste; `tipo_local` é só o nome de sabor dentro da categoria (ex.: 'Padaria de Bairro'). Os três divergiram até `tipo` virar cópia exata de `tipo_local` (26.748 de 26.748 locais medidos) — esta tabela é o único lugar que deriva `tipo` a partir de `categoria`, em `engine/mechanics/urbanismo.py::tipo_local_de_categoria`, usado tanto na importação (builder/populador.py) quanto em `abrir_obra` (edifício novo em runtime).",
+        "tipo_local_por_categoria": {
+          "residencia": "Casa", "forja": "Oficina", "mercado": "Loja",
+          "taverna": "Social", "publico": "Social", "quartel": "Defesa",
+          "universidade": "Magia", "fazenda": "Campo", "generic": "Outro"
+        }
     },
     "geracao_populacao": {
         "_comentario": "Parâmetros do povoamento inicial (builder/populate.py). Migrado de literais soltos na Frente 1 (2026-09-09).",
@@ -208,11 +225,14 @@
         "cidades_ativas": "todas",
         "casas_minimo": 5,
         "casas_divisor_por_npc": 2,
-        "proporcao_adultos": 0.85,
-        "idade_adulto_min": 18,
-        "idade_adulto_max": 35,
-        "idade_idoso_min": 55,
-        "idade_idoso_max": 70,
+        "_comentario_g01": "G01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G, 2026-09-14): `proporcao_adultos` (0,85 adulto / 0,15 idoso, sorteados numa janela de 25 dias de vida) sorteava a população inteira numa faixa estreita — 686 de 714 adultos cruzavam o limiar de velhice juntos, nos mesmos 30 dias simulados (a coorte sincronizada do §1 do documento). `distribuicao_etaria` substitui: pesos por faixa sobre o CICLO DE VIDA INTEIRO (0 a `crescimento_dias_idoso_para_morte` dias, mesmos limiares de `NPCLifecycleManager`). `dias_min`/`dias_max` de cada faixa batem com os limiares de `crescimento_dias_*` (biologia_e_sociedade) por construção — mudou um lá, mude aqui. `data_nascimento` sorteia uniforme DENTRO da faixa; `estagio_vida` é DERIVADO dela (`NPCUtils.estagio_vida_por_idade_dias`), nunca sorteado à parte. Bebê/criança (faixa='bebe'/'crianca') só entram via `_gerar_criancas_iniciais` — DEPOIS dos casais formados, presos a um pai/mãe — nunca no sorteio independente principal (senão nascem sem responsável na casa, quebrando o invariante 6 de V05 no dia zero).",
+        "distribuicao_etaria": [
+            {"faixa": "bebe", "dias_min": 0, "dias_max": 4, "peso": 0.08},
+            {"faixa": "crianca", "dias_min": 5, "dias_max": 14, "peso": 0.17},
+            {"faixa": "adulto_jovem", "dias_min": 15, "dias_max": 40, "peso": 0.30},
+            {"faixa": "adulto", "dias_min": 41, "dias_max": 74, "peso": 0.33},
+            {"faixa": "idoso", "dias_min": 75, "dias_max": 89, "peso": 0.12}
+        ],
         "dinheiro_inicial_min": 300,
         "dinheiro_inicial_max": 1500,
         "casal_afinidade_min": 85,
@@ -232,7 +252,9 @@
         "nome_padrao_por_categoria": {"taverna": "Taverna", "mercado": "Mercado", "forja": "Ferraria", "universidade": "Escola", "quartel": "Guarnição"},
         "capacidade_padrao_estabelecimento": 15,
         "salario_padrao_estabelecimento": 95,
-        "_comentario_expansao": "X01: gatilho de auto-expansão — cidade satura quando os lotes livres caem abaixo do piso absoluto OU fracionário (o `or` importa: o absoluto protege a vila pequena, o fracionário protege a capital).",
+        "_comentario_categorias_empregadoras": "V02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco V, 2026-09-14): categorias de `CategoriaLocal` que oferecem vaga de emprego — todas, menos 'residencia' (a causa de 87,4% das vagas do mundo medido serem casas) e 'generic' (sem profissão mapeada em database/seed_dominio.json). Único lugar que filtra vaga por categoria — nunca por `tipo` de novo.",
+  "categorias_empregadoras": ["fazenda", "quartel", "taverna", "universidade", "forja", "mercado", "publico"],
+  "_comentario_expansao": "X01: gatilho de auto-expansão — cidade satura quando os lotes livres caem abaixo do piso absoluto OU fracionário (o `or` importa: o absoluto protege a vila pequena, o fracionário protege a capital).",
         "lotes_livres_minimo": 8,
         "fracao_livre_minima": 0.03,
         "arrabalde_comprimento_m": 180,
@@ -546,5 +568,9 @@
         "tile_max_native_zoom": 11,
         "mapa_features_zoom_min_por_tamanho": {"pequeno": 4, "medio": 2, "grande": 0},
         "mapa_features_tooltip_zoom_min": 5
+    },
+    "mestre": {
+        "_comentario_m01": "M01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M, 2026-09-14): teto de NPCs no contexto que vai pro prompt da IA — 840 NPCs sem filtro nem teto já produziam 433.566 tokens medidos (1,7 MB); com 25.000 seriam ~3 milhões. `limite_npcs_contexto` (200) é uma ESTIMATIVA (10.1 do documento) — o critério real é o contexto ficar abaixo de 30 mil tokens; ajuste este número até bater, não o contrário.",
+        "limite_npcs_contexto": 200
     }
 }

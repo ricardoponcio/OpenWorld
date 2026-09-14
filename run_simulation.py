@@ -1,7 +1,7 @@
 import time
 from engine.core import SimulationEngine
 from engine.logger import WorldLogger
-from engine.mechanics import JobMarket, InfrastructureManager
+from engine.mechanics import JobMarket
 from engine.mechanics.mestre import MestreManager
 from engine.models import MetaChave
 
@@ -32,29 +32,22 @@ def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
     for resultado in mestre.drenar_e_aplicar(engine.mundo):
         WorldLogger.evento_mundo(f"🎭 [MESTRE] {resultado}")
 
-def processar_gatilhos_periodicos(engine, market, infra):
-    """Gatilhos baseados no relógio do jogo (não em contagem de ticks — ver Frente 4)."""
-    hora = engine.mundo.data_simulada.hour
-    minuto = engine.mundo.data_simulada.minute
-    if minuto == 0:
-        if hora % 5 == 0:
-            # A cada 5h de jogo: mercado de trabalho e recarga de habitantes
-            market.processar_contratacoes()
-            engine.recarregar_habitantes()
-        if hora == 2:
-            # 1x por dia de jogo: decadência e reparos de infraestrutura
-            infra.processar_desgaste()
-            infra.processar_reparos_espontaneos()
-
 def start_simulation():
     # Este é o ponto de entrada: é aqui que as dependências são construídas, uma vez
     # por processo (ARQUITETURA.md Seção 7). Os gerenciadores recebem o `EstadoDoMundo`
     # e a config, nunca a engine inteira (R-F01).
+    #
+    # X03 (docs/PLANO_MUNDO_CRIVEL.md, decisão ❽): `JobMarket.processar_contratacoes`
+    # e `InfrastructureManager.processar_desgaste`/`processar_reparos_espontaneos`
+    # SAÍRAM daqui — moravam num `processar_gatilhos_periodicos` próprio, fora de
+    # qualquer benchmark (armadilha 16: 21% do custo real por dia simulado nunca
+    # tinha sido medido). Agora são rotinas de `GameLoop._rotinas_diarias`,
+    # construídas e despachadas por `engine.tick()` sozinho. `bootstrap_market` é a
+    # exceção — roda uma vez no boot, não por tick, então continua aqui, com um
+    # `JobMarket` só pra isso (sem `mundo`: não aplica nada em memória).
     engine = SimulationEngine()
-    market = JobMarket(engine.mundo.db, engine.config)
-    infra = InfrastructureManager(engine.mundo, engine.config)
+    JobMarket(engine.mundo.db, engine.config).bootstrap_market()
     mestre = MestreManager(engine.mundo.db, engine.config)
-    market.bootstrap_market()
 
     print(f"🌍 Mundo carregado com {len(engine.mundo.npcs)} habitantes e {len(engine.mundo.locais)} locais.")
     print("Simulação em tempo real 1:1 (1 min de jogo = 1 min real na velocidade 1x).")
@@ -86,7 +79,6 @@ def start_simulation():
 
                 if restante > 0:
                     engine.tick()
-                    processar_gatilhos_periodicos(engine, market, infra)
                     engine.mundo.db.meta.salvar(MetaChave.AVANCAR_MINUTOS, str(restante - 1))
                     continue  # roda o mais rápido possível, sem o sleep de ritmo normal
 
@@ -94,7 +86,6 @@ def start_simulation():
                 continue
 
             engine.tick()
-            processar_gatilhos_periodicos(engine, market, infra)
 
             if velocidade > 1.0:
                 print(f"⏩ Velocidade: {velocidade}x")
