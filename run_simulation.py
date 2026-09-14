@@ -58,6 +58,25 @@ def atualizar_estatisticas(engine, coletor: ColetorDeEstatisticas, config: dict,
         estado_console["ultimo_console_s"] = agora
 
 
+def checkpoint_wal_se_devido(engine, config: dict, estado_wal: dict) -> None:
+    """O04 (docs/16_PLANO_PAINEL_E_IA.md): força o checkpoint do WAL a cada
+    `wal_checkpoint_a_cada_ticks` — sem isto o arquivo só cresce enquanto o painel
+    segura leitores (checkpoint starvation, medido 1,19 GB). Três `ocupado`
+    seguidos vira um único warning (não um por tentativa)."""
+    cadencia = cfg_get(cfg_get(config, "simulacao"), "wal_checkpoint_a_cada_ticks")
+    if engine.mundo.tick_count % cadencia != 0:
+        return
+    ocupado, _, _ = engine.mundo.db.checkpoint_wal()
+    if ocupado:
+        estado_wal["ocupado_seguidas"] += 1
+        if estado_wal["ocupado_seguidas"] == 3:
+            WorldLogger.warning(
+                "[WAL] checkpoint não completou 3 vezes seguidas — algum leitor está "
+                "segurando um snapshot antigo (o painel lendo o banco inteiro?).")
+    else:
+        estado_wal["ocupado_seguidas"] = 0
+
+
 def start_simulation():
     # Este é o ponto de entrada: é aqui que as dependências são construídas, uma vez
     # por processo (11_ARQUITETURA.md Seção 7). Os gerenciadores recebem o `EstadoDoMundo`
@@ -76,6 +95,7 @@ def start_simulation():
     mestre = MestreManager(engine.mundo.db, engine.config)
     coletor_estatisticas = ColetorDeEstatisticas(engine.mundo, engine.config)
     estado_console = {"ultimas": None, "ultimo_console_s": time.time()}
+    estado_wal = {"ocupado_seguidas": 0}
 
     print(f"🌍 Mundo carregado com {len(engine.mundo.npcs)} habitantes e {len(engine.mundo.locais)} locais.")
     print("Simulação em tempo real 1:1 (1 min de jogo = 1 min real na velocidade 1x).")
@@ -109,6 +129,7 @@ def start_simulation():
                     engine.tick()
                     engine.mundo.db.meta.salvar(MetaChave.AVANCAR_MINUTOS, str(restante - 1))
                     atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
+                    checkpoint_wal_se_devido(engine, engine.config, estado_wal)
                     continue  # roda o mais rápido possível, sem o sleep de ritmo normal
 
                 time.sleep(1.0)
@@ -119,6 +140,7 @@ def start_simulation():
             # O01 (docs/16_PLANO_PAINEL_E_IA.md): o print por tick saiu — o resumo
             # periódico do coletor de estatísticas (O03) substitui isso.
             atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
+            checkpoint_wal_se_devido(engine, engine.config, estado_wal)
             time.sleep(espera)
 
     except KeyboardInterrupt:

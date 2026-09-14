@@ -9,7 +9,9 @@
         "eventos_retencao_dias_simulados": 30,
         "_comentario_relacionamentos": "H05 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): não é o que trava D13 (medido: mediana de relacionamentos/NPC é 0, máximo 14 num dia) — mas npc.relacionamentos só cresce, nunca decai, e num mundo que roda meses isso vira memória e custo em salvar_completo. relacionamentos_max_por_npc (150) é o número de Dunbar. relacionamentos_decaimento_por_dia anda cada afinidade não-protegida 1 ponto em direção a zero por dia; a entrada some ao chegar em zero. NUNCA descartados/decaídos: cônjuge, pais, filhos, e quem estiver com afinidade >= vinculo_limiar_amigo (vínculo forte). `relacionamentos_poda_hora` (a hora do gatilho diário) mora em `biologia_e_sociedade`, não aqui — é onde `GameLoop._executar_rotinas_agendadas` procura toda chave `*_hora`.",
         "relacionamentos_max_por_npc": 150,
-        "relacionamentos_decaimento_por_dia": 1
+        "relacionamentos_decaimento_por_dia": 1,
+        "_comentario_wal_checkpoint": "O04 (docs/16_PLANO_PAINEL_E_IA.md): a cada N ticks, run_simulation.py força um checkpoint TRUNCATE do WAL — sem isto, medido 1,19 GB de WAL com o painel aberto (checkpoint starvation: o painel lê o banco inteiro a cada segundo e quase nunca deixa o checkpoint automático completar).",
+        "wal_checkpoint_a_cada_ticks": 60
     },
     "metabolismo": {
         "_comentario_1_1": "Frente 4 (2026-09-09): valores divididos por 15 — o tick virou 1 minuto real (era 15). O efeito total por hora de jogo é o mesmo de antes, só que distribuído em passos 15x menores. Ver docs/05_ROADMAP.md.",

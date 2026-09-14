@@ -81,3 +81,17 @@ def test_npc_nascido_durante_o_tick_sobrevive_a_reabertura_do_banco(tmp_path, mo
 
     mae_reaberta = npcs_reabertos["npc_mae"]
     assert mae_reaberta.gravidez_ticks == 0
+
+
+def test_checkpoint_wal_devolve_tupla_de_tres_inteiros(tmp_path):
+    """O04 (docs/16_PLANO_PAINEL_E_IA.md): banco de verdade em `tmp_path` (nunca
+    `:memory:`, que não usa WAL) — grava algo e confirma o formato da tupla que
+    `PRAGMA wal_checkpoint(TRUNCATE)` devolve."""
+    db = DatabaseManager(db_path=str(tmp_path / "teste.db"), pool_size=2)
+    db.meta.salvar("chave_de_teste", "valor")
+
+    ocupado, paginas_wal, paginas_copiadas = db.checkpoint_wal()
+
+    assert ocupado in (0, 1)
+    assert isinstance(paginas_wal, int)
+    assert isinstance(paginas_copiadas, int)

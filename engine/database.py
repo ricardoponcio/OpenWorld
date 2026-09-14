@@ -15,6 +15,13 @@ class DatabaseManager:
     (NPCs, locais, eventos, meta, mundo, mestre), o que o tornava o ponto de maior
     acoplamento do projeto."""
 
+    # O04 (docs/16_PLANO_PAINEL_E_IA.md): teto do arquivo WAL depois de um checkpoint.
+    # Sem isto o arquivo nunca encolhe — medido 1,19 GB com o painel aberto (o painel
+    # lê o banco inteiro a cada segundo, então quase nunca existe um instante sem
+    # leitor segurando um snapshot antigo, e o checkpoint automático do SQLite não
+    # completa: *checkpoint starvation*).
+    LIMITE_WAL_BYTES = 64 * 1024 * 1024
+
     # R-E03: colunas que `schema.sql` já declara hoje, mas que uma vez foram
     # adicionadas depois da criação original das tabelas — `CREATE TABLE IF NOT
     # EXISTS` não recria uma tabela já existente, então um banco criado antes dessas
@@ -74,6 +81,17 @@ class DatabaseManager:
         finally:
             self._pool.put(conn)
 
+    def checkpoint_wal(self) -> tuple:
+        """O04 (docs/16_PLANO_PAINEL_E_IA.md): força um checkpoint TRUNCATE. Devolve
+        `(ocupado, paginas_wal, paginas_copiadas)` — `ocupado == 1` significa que um
+        leitor segurou o snapshot e o checkpoint não completou (quem chama decide se
+        loga; ver `run_simulation.py`). Infraestrutura de WAL, não SQL de domínio
+        (ARQUITETURA §8: `DatabaseManager` já é quem cuida disso)."""
+        with self.connection() as conn:
+            ocupado, paginas_wal, paginas_copiadas = conn.execute(
+                "PRAGMA wal_checkpoint(TRUNCATE);").fetchone()
+        return ocupado, paginas_wal, paginas_copiadas
+
     def _init_db(self):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
@@ -84,6 +102,7 @@ class DatabaseManager:
             # Habilita o modo WAL para altíssima concorrência leitura/escrita
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
+            conn.execute(f"PRAGMA journal_size_limit={self.LIMITE_WAL_BYTES};")
             self._pool.put(conn)
 
         # Cria as tabelas se não existirem
