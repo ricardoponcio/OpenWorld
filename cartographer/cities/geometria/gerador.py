@@ -17,6 +17,19 @@ from config import cfg_get
 from . import lotes, quad
 from .distribuicao import DistribuicaoMixin
 
+# C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mesmo piso de `distribuicao.py`
+# (ARESTA_MINIMA_FOOTPRINT_M) — um lote pode ter área "razoável" (o corte de canto
+# produz um quase-triângulo com a base larga) e ainda assim ter dois vértices a
+# menos de ~1,6 cm um do outro em metros locais, que colapsam no MESMO ponto depois
+# do arredondamento pra GeoJSON (`quad.aresta_minima`, já documentado lá). Isso NÃO
+# é pego por `e_quad_simples` (colinearidade/aresta de comprimento zero conta como
+# "não cruza", de propósito — ver o docstring de `segmentos_cruzam`) nem pelo piso
+# de ÁREA de `_lotes_da_faixa` (a área do quase-triângulo pode ser grande). Só
+# ficou visível ao destravar bandas mais profundas (C02); achado ao rodar
+# `tests/test_cidades.py` depois de subir o teto de anéis, não algo que a auditoria
+# de cidades reais (que não passa por essa combinação exata de banda/aresta) pegava.
+ARESTA_MINIMA_LOTE_M = 0.1
+
 # Q01/armadilha 3 (docs/PLANO_CIDADE_VIVA.md): o que a distribuição de edifícios
 # (distribuicao.py) precisa saber de cada lote emitido. `id` é o id ESTÁVEL do lote
 # (posição na malha, não ordem de emissão) — o edifício que nasce nele reusa o mesmo id.
@@ -184,6 +197,8 @@ class GeradorCidade(DistribuicaoMixin):
                 poligono = info["poligono"]
                 if not quad.e_quad_simples(poligono):
                     continue  # G02: quarteirão côncavo pode gerar um corte que auto-intersecta
+                if quad.aresta_minima(poligono) < ARESTA_MINIMA_LOTE_M:
+                    continue  # C02: quase-triângulo com vértice duplicado — não é um lote real
                 # Armadilha 3: o id vem da POSIÇÃO na malha (quarteirão + índice no
                 # anel), não de um contador global — estável mesmo se outra quadra for
                 # descartada antes desta.

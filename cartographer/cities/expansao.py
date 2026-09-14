@@ -15,6 +15,7 @@ from config import cfg_get
 
 from .escala import zoom_min_por_camada
 from .geometria import lotes, quad
+from .geometria.gerador import ARESTA_MINIMA_LOTE_M
 from .modelos.base import distancia_faixa_dominio, gerar_fileiras_de_quadras
 
 # Penalidades de pontuação de direção — internos do algoritmo, não config (mesmo
@@ -259,6 +260,8 @@ def _gerar_features_e_lotes(eixo_pontos, banda_arrabalde, bairro, numero_arrabal
             poligono = info["poligono"]
             if not quad.e_quad_simples(poligono):
                 continue
+            if quad.aresta_minima(poligono) < ARESTA_MINIMA_LOTE_M:
+                continue  # C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mesmo guard de gerador.py
             lote_id = f"{slug}_{quarteirao_id_str}_l{info['indice_no_anel']:02d}"
             _add("Polygon", poligono, "lote", {
                 "bairro": quadra.bairro, "banda": quadra.banda, "quarteirao_id": quarteirao_id_str,

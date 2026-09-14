@@ -208,8 +208,18 @@ class RadialModelo(ModeloCidade):
         # partir dela — garante por construção que a praça caiba dentro do núcleo.
         centro_praca = self._melhor_centro_praca(self.raios_base[0])
         raio_banda0 = self.raios_base[0]
+        # C02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md), achado ao destravar bandas mais
+        # profundas: o anel do núcleo é CONCÊNTRICO NA ORIGEM, mas `centro_praca` pode
+        # estar deslocado dela (`_melhor_centro_praca`) — o vértice do anel do núcleo
+        # mais perto da praça de verdade é o que fica na direção de `centro_praca`, a
+        # `raio_nucleo - hypot(centro_praca)` da origem, ANTES de perturbar. Sem reservar
+        # `amplitude_m` aqui, a perturbação (±amplitude_m, mesma de todo vértice de anel)
+        # podia empurrar esse vértice pra DENTRO da praça — a margem de
+        # `_distancia_faixa_dominio` sozinha não sobrava pra isso. Só ficou visível com
+        # bandas mais estreitas (mais anéis no mesmo raio_m); não é uma regressão de C02,
+        # é uma lacuna que sempre existiu nesta fórmula.
         raio_nucleo_candidato = (math.hypot(*centro_praca) + self.praca_raio +
-                                  self._distancia_faixa_dominio("anel"))
+                                  self._distancia_faixa_dominio("anel") + amplitude_m)
         # G01: o anel do núcleo usa a MESMA amplitude_m que os demais (perturbação
         # absoluta), então o vão real até raios_base[0] precisa caber as duas
         # amplitudes somadas — mesmo raciocínio de FRACAO_VAO_MAXIMA_SEGURA, só que

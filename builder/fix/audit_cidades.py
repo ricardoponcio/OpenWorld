@@ -29,6 +29,7 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.insert(0, raiz)
 
+from config import cfg_get
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.escala import metros_por_pixel_mundo
 
@@ -186,6 +187,90 @@ def _razao_largura_profundidade(quarteiroes, metros_por_px):
     return statistics.median(razoes) if razoes else None
 
 
+_FAIXA_FRENTE_POR_BANDA = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_lote_frente_m_faixa_por_banda")
+
+# C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): violação dura se mais que esta fração das
+# quadras da cidade estiver fora da tolerância — uma quadra degenerada isolada num
+# canto não é bug; muitas quadras discordando do próprio alvo de frente é.
+TOLERANCIA_LOTES_POR_QUADRA_PCT = 0.25
+FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA = 0.05
+
+
+def _lotes_vs_frente_alvo(features, metros_por_px):
+    """C01: substitui o invariante ABSOLUTO de L04 (mediana de lotes/quadra em
+    [4, 30] — furado por uma quadra quadrada de 95 m sozinha, sem bug nenhum) por
+    uma AUTO-CONSISTÊNCIA: cada quadra comparada consigo mesma,
+    `lotes_na_quadra ≈ perímetro_urbanizável / frente_alvo_da_banda` dentro de
+    ±25%. Funciona em qualquer tamanho de quadra, em qualquer modelo.
+
+    'Perímetro urbanizável' aqui é a soma só das arestas que DE FATO têm lote (via
+    a propriedade `aresta` de cada feature `lote`) — isso cobre duas exceções sem
+    precisar de dois caminhos: a quadra SEM PÁTIO (linear raso, lotes só nos dois
+    lados do eixo médio) e uma aresta 'sem_via' (L02) nunca têm lote nas arestas
+    que não contam, então já ficam de fora da soma sozinhas.
+
+    Uma TERCEIRA exceção precisa de um caminho à parte de verdade:
+    `gerar_lotes_do_quarteirao` (Q01, Passo 2) corta recursivamente uma quadra
+    "funda demais" em DUAS, cada metade com sua própria contagem de aresta
+    0-3 — os mesmos 4 índices reaparecem apontando pra segmentos físicos
+    DIFERENTES das duas metades, e a malha plana do GeoJSON não guarda qual lote
+    veio de qual metade. Reconstruir o perímetro certo exigiria a árvore de corte,
+    que não sobrevive à exportação. Detectável de fora: uma quadra cortada sempre
+    tem pelo menos um lote com `classe_frente == 'servico'` (a aresta nova, do
+    corte) — essas são contadas à parte (`cortadas`), não entram no numerador nem
+    no denominador da fração fora de tolerância.
+
+    Devolve `(fração de quadras fora da tolerância, quantas foram avaliadas,
+    quantas foram puladas por terem sido cortadas)`."""
+    quarteiroes_por_id = {}
+    for f in features:
+        p = f["properties"]
+        if p.get("camada") == "quarteirao" and p.get("quarteirao_id"):
+            quarteiroes_por_id[p["quarteirao_id"]] = f
+
+    lotes_por_quadra = collections.defaultdict(list)
+    for f in features:
+        p = f["properties"]
+        if p.get("camada") == "lote" and p.get("quarteirao_id"):
+            lotes_por_quadra[p["quarteirao_id"]].append(p)
+
+    avaliadas = 0
+    fora = 0
+    cortadas = 0
+    for quarteirao_id, lotes_da_quadra in lotes_por_quadra.items():
+        if any(l.get("classe_frente") == "servico" for l in lotes_da_quadra):
+            cortadas += 1
+            continue
+
+        feat_quadra = quarteiroes_por_id.get(quarteirao_id)
+        if feat_quadra is None:
+            continue
+        pontos = _achatar_anel(feat_quadra["geometry"]["coordinates"])
+        if len(pontos) != 4:
+            continue
+
+        banda = feat_quadra["properties"].get("banda", 0)
+        faixa = _FAIXA_FRENTE_POR_BANDA.get(str(banda), _FAIXA_FRENTE_POR_BANDA["_default"])
+        frente_alvo_m = (faixa[0] + faixa[1]) / 2.0
+        if frente_alvo_m <= 0:
+            continue
+
+        arestas_com_lote = {p["aresta"] for p in lotes_da_quadra if "aresta" in p}
+        perimetro_considerado_m = sum(
+            math.dist(pontos[k], pontos[(k + 1) % 4]) * metros_por_px
+            for k in arestas_com_lote
+        )
+        if perimetro_considerado_m <= 0:
+            continue
+
+        lotes_estimados = perimetro_considerado_m / frente_alvo_m
+        avaliadas += 1
+        if abs(len(lotes_da_quadra) - lotes_estimados) / lotes_estimados > TOLERANCIA_LOTES_POR_QUADRA_PCT:
+            fora += 1
+
+    return (fora / avaliadas if avaliadas else 0.0), avaliadas, cortadas
+
+
 def _densidade_lotes_por_raio2(num_lotes, raio_m):
     if not raio_m:
         return None
@@ -233,6 +318,8 @@ def auditar_cidade(caminho, metros_por_px):
 
     pior_invasao = _pior_invasao_muralha(features)
     sem_frente_pct = _percentual_sem_frente(features, metros_por_px)
+    fracao_fora_frente_alvo, quadras_avaliadas_frente_alvo, quadras_cortadas = \
+        _lotes_vs_frente_alvo(features, metros_por_px)
 
     raio_m = props_topo.get("raio_m", 0.0)
     vao_m = raio_m / (num_aneis + 1) if num_aneis > 0 else None
@@ -248,8 +335,14 @@ def auditar_cidade(caminho, metros_por_px):
         "bowtie_quarteirao": bowtie_quarteirao,
         "bowtie_lote": bowtie_lote,
         "cruzamentos_anel": setores_cruzados,
+        # C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): mediana/máximo continuam aqui como
+        # COLUNA DE RELATÓRIO (o número continua útil de olhar) — só deixaram de ser
+        # PORTA; quem barra o script agora é `fracao_fora_frente_alvo`.
         "l_quadra_mediana": statistics.median(contagens),
         "l_quadra_max": max(contagens),
+        "fracao_fora_frente_alvo": fracao_fora_frente_alvo,
+        "quadras_avaliadas_frente_alvo": quadras_avaliadas_frente_alvo,
+        "quadras_cortadas": quadras_cortadas,
         "sem_frente_pct": sem_frente_pct,
         "fora_muro_m": pior_invasao,
         "area_lote_mediana_m2": statistics.median(areas_lote_m2) if areas_lote_m2 else 0.0,
@@ -258,13 +351,6 @@ def auditar_cidade(caminho, metros_por_px):
         "largura_profundidade": _razao_largura_profundidade(quarteiroes, metros_por_px),
         "lotes_por_raio2": _densidade_lotes_por_raio2(len(lotes), raio_m),
     }
-
-
-# L04: mediana de lotes por quadra fora de [4, 30] é violação dura, mesmo critério que
-# bowtie/anel/muro/frente — S01 (docs/PLANO_POPULACAO_E_ESCALA.md) existe pra manter a
-# quadra "quase quadrada" dentro dessa faixa.
-LOTES_POR_QUADRA_MEDIANA_MIN = 4
-LOTES_POR_QUADRA_MEDIANA_MAX = 30
 
 
 def _viola_invariantes(linha):
@@ -276,8 +362,11 @@ def _viola_invariantes(linha):
         return True
     if linha["sem_frente_pct"] > TOLERANCIA_SEM_FRENTE_PCT:
         return True
-    mediana = linha["l_quadra_mediana"]
-    if not (LOTES_POR_QUADRA_MEDIANA_MIN <= mediana <= LOTES_POR_QUADRA_MEDIANA_MAX):
+    # C01 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): substitui o teto absoluto de L04 (mediana
+    # em [4, 30]) pela fração de quadras fora da AUTO-CONSISTÊNCIA (ver
+    # _lotes_vs_frente_alvo) — uma quadra degenerada isolada não derruba o script,
+    # muitas discordando do próprio alvo de frente sim.
+    if linha["fracao_fora_frente_alvo"] > FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA:
         return True
     return False
 
@@ -299,7 +388,7 @@ def main():
 
     cabecalho = (f"{'cidade':<22} {'modelo':<10} {'aneis':>5} {'vao_m':>6} {'quadras':>7} "
                  f"{'lotes':>6} {'ocup%':>6} {'bowtie_q':>8} {'bowtie_l':>8} {'anel_x':>6} "
-                 f"{'l/quadra':>9} {'max/qd':>7} {'sem_front%':>10} {'fora_muro':>9} "
+                 f"{'l/quadra':>9} {'max/qd':>7} {'fora_alvo%':>10} {'sem_front%':>10} {'fora_muro':>9} "
                  f"{'area_med_m2':>11} {'larg/prof':>9} {'lotes/raio2':>11}")
     print(cabecalho)
     print("-" * len(cabecalho))
@@ -314,6 +403,7 @@ def main():
               f"{_fmt(linha['ocupacao_pct'], 0):>6} {_fmt(linha['bowtie_quarteirao']):>8} "
               f"{_fmt(linha['bowtie_lote']):>8} {_fmt(linha['cruzamentos_anel']):>6} "
               f"{_fmt(linha['l_quadra_mediana'], 1):>9} {_fmt(linha['l_quadra_max']):>7} "
+              f"{_fmt(100.0 * linha['fracao_fora_frente_alvo'], 1):>10} "
               f"{_fmt(linha['sem_frente_pct'], 1):>10} "
               f"{_fmt(linha['fora_muro_m'], 1) if linha['fora_muro_m'] is not None else '-':>9} "
               f"{_fmt(linha['area_lote_mediana_m2'], 1):>11} "
@@ -322,8 +412,9 @@ def main():
 
     if algum_violado:
         print("\n❌ Um ou mais invariantes violados (bowtie, anéis cruzados, muro, lote sem "
-              f"frente, ou mediana de lotes/quadra fora de [{LOTES_POR_QUADRA_MEDIANA_MIN}, "
-              f"{LOTES_POR_QUADRA_MEDIANA_MAX}]).")
+              f"frente, ou mais de {FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA:.0%} das quadras "
+              f"fora de ±{TOLERANCIA_LOTES_POR_QUADRA_PCT:.0%} do próprio alvo de frente — C01, "
+              "docs/PLANO_AVANCO_E_CALIBRAGEM.md).")
         sys.exit(1)
     print("\n✅ Nenhum invariante violado nas cidades auditadas.")
 
