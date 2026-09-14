@@ -1698,7 +1698,7 @@ dinheiro sem origem e o sopão é limitado por cota.
 | P01 | 2026-09-14 | `JobMarket` recebe `mundo` opcional; contratação/demissão aplicam no NPC vivo (`salvar_completo` em LOTE — ver X02) e chamam `mundo.acordar`. Caminho só-banco preservado para `populador.py`. | Nenhuma. |
 | P02 | 2026-09-14 | `recarregar_habitantes()` removido de `run_simulation.py::processar_gatilhos_periodicos` (a função inteira foi removida — as 3 rotinas que ela despachava migraram pro `GameLoop` em X03). `_COLUNAS_QUENTES` ganhou `dinheiro_total_pc`/`gravidez_ticks`. Teste `test_dinheiro_e_gravidez_sobrevivem_a_recarga` (T01) cobre o round-trip. | Nenhuma. |
 | P03 | 2026-09-14 | `carregar_todos` lê `relacionamentos` da TABELA (1 `SELECT` agrupado em memória para todos os NPCs), não mais da coluna JSON — que continua sendo escrita por `salvar_completo` como cópia de leitura, documentado no docstring. | Nenhuma. |
-| **Parada 2** | 2026-09-14 | Ver linha "Validação P/N/G" abaixo — rodada num mundo de 60.549 NPCs (grande, ver nota de G01), 3 dias simulados. | — |
+| **Parada 2** | 2026-09-14 | Sonda dedicada, 3 dias simulados (4.320 ticks), mundo real de 50.496 NPCs, log silenciado só pra velocidade (mecânica intocada). **(a)** 193 nascimentos em 3 dias ✅. **(b)** saldo de um trabalhador amostrado de hora em hora: nunca reverte pra um valor anterior (o reload que causava isso foi removido em P02 — estruturalmente impossível de acontecer agora); trajetória 1.364 PC (dia 1, 07h) → 1.408 PC (dia 4, 06h), com altos (salário) e baixos (comida/social) normais, inclusive exatamente nas fronteiras de 10h/15h/20h (ex.: 1.474,96→1.459,29 às 15h do dia 3) — são despesas reais, não reset ✅. **(c)** total de relacionamentos por dia: 500.094 → 622.275 → 715.288, monotonicamente crescente, nunca cai ✅. | — |
 | N01 | 2026-09-14 | `_executar_socializar` cobra `custo_pc` só quando `localizacao_atual_id` muda nesta chamada; `mover_para_social` (movement.py) passou a ficar no mesmo local se já é um local social ativo — sem isso, o resorteio por tick cobraria de novo mesmo sem o NPC "ir" a lugar nenhum. Teste dedicado em T01. | `mover_para_social` ganhou um comportamento novo (não re-sorteia se já está num local social) que não estava explicitamente pedido no texto da tarefa, mas é pré-requisito mecânico pra N01 funcionar — documentado no código. |
 | N02 | 2026-09-14 | `salario_por_minuto(npc, locais, cfg_acoes)` extraída e usada por `_executar_trabalhar` E `GameLoop._aplicar_efeito_continuo` (mesma conta, armadilha 12). `acoes.trabalhar.salario_pc` (0,333333, constante global) virou `salario_divisor_minutos` (600). | Não medi a renda por dia pós-N01+N02 num mundo de 840 NPCs "de referência" (o mundo real desta sessão é o de 60 mil, calibração diferente) — a tabela projetada do doc (§N02) não foi confirmada com números reais desta sessão. |
 | N03 | 2026-09-14 | `multiplicador_por_dependente` removido de `encontrar_pagador_e_parcela` e do config; cada NPC (dependente ou não) paga `custo_pc` cheio, uma vez. | Nenhuma. |
@@ -1719,9 +1719,34 @@ dinheiro sem origem e o sopão é limitado por cota.
 | X04 | 2026-09-14 | 8 pontos de `NPCUtils.obter_moradores_da_casa`/`agrupar_por_casa` trocados por `mundo.npcs_por_casa` — direto onde seguro, `list(...)`/`dict(...)` (cópia) onde o laço muda de casa alguém no meio (mutar o balde vivo durante a iteração quebraria/pularia elementos — `_executar_construir` e `NPCHousingManager.processar_habitacao`). | Nenhuma. |
 | X05 | 2026-09-14 | `logic.py::decidir_acao`: a rede de segurança de habitação trocou `locais.items()` (mundo inteiro) por `indice.residencias_ativas(npc.cidade_id)` — mesmo padrão de `movement.py` (P04, doc 1). Sem casa na cidade, `casa_id` fica como está, com `WorldLogger.warning`. | Nenhuma. |
 | T01 | 2026-09-14 | 8 testes escritos: `test_todo_local_tem_tipo_do_enum`, `test_vaga_nunca_e_residencia_nem_outra_cidade`, `test_contratado_nunca_fica_desempregado`, `test_dinheiro_e_gravidez_sobrevivem_a_recarga`, `test_socializar_cobra_uma_vez_por_visita`, `test_concepcao_recusa_parentes`, `test_casamento_leva_os_filhos`, `test_humor_mesma_taxa_em_1_e_240_minutos`. Suíte completa: **176 passed** (168 pré-existentes + 8 novos), estável em 3 execuções repetidas dos novos. | Nenhuma. |
-| T02 | *(não executada)* | **Não rodei `--ate-renovacao`.** O mundo real desta sessão tem 50.496-60.549 NPCs (ver nota em G01) — muito maior que o mundo de referência do doc (840 NPCs). Uma sonda de 3 dias nesse mundo grande (ver "Validação P/N/G" abaixo) já levou vários minutos de tempo real com avanço rápido ativado, dominada pelo volume de eventos de inanição (WARNING nunca é suprimido por `ativar_modo_avanco_rapido`, por design do projeto). Rodar até 200 dias (teto de segurança) nesta escala é impraticável no tempo desta sessão. | **Pendência explícita pro dono do projeto**: rode `venv/bin/python builder/fix/audit_mundo.py --db <copia> --ate-renovacao` — idealmente num mundo com população mais próxima de 22-28 mil (ajustando `npcs_por_familia_faixa`/`distribuicao_etaria` primeiro, ou aceitando o mundo maior e esperando mais tempo real). |
+| T02 | *(não executada)* | **Não rodei `--ate-renovacao`.** O mundo real desta sessão tem 50.496-60.549 NPCs (ver nota em G01) — muito maior que o mundo de referência do doc (840 NPCs). A sonda de 3 dias da Parada 2, nesse mesmo mundo grande, levou ~10 minutos de tempo real mesmo com o log silenciado e o avanço rápido ativado — dominado pelo custo genuíno de simular a população, não só log (WARNING de inanição nunca é suprimido por `ativar_modo_avanco_rapido`, por design do projeto, mas mesmo com warning/info totalmente mudos a sonda ainda levou minutos). Rodar até 200 dias (teto de segurança) nesta escala projeta horas de tempo real — impraticável no tempo desta sessão. | **Pendência explícita pro dono do projeto**: rode `venv/bin/python builder/fix/audit_mundo.py --db <copia> --ate-renovacao` — idealmente num mundo com população mais próxima de 22-28 mil (ajustando `npcs_por_familia_faixa`/`distribuicao_etaria` primeiro, ou aceitando o mundo maior e esperando mais tempo real). |
 
 ### Decisões pendentes para quando você voltar
 
-_(deixe vazio até ter alguma; quando tiver, descreva o problema e as opções, não só o
-sintoma)_
+**1. O mundo gerado nesta sessão tem 50-60 mil NPCs, não 22-28 mil (D7, doc 2).**
+G01 (crianças) soma ~25-33% de população em cima da variância de tamanho de mundo
+já documentada no doc 2 (city-size-mix não-determinístico do `[AI-CITY-STRATEGY]`).
+Nenhuma das duas causas é nova nesta sessão, mas a combinação ficou mais visível:
+com o mundo grande, a economia (Bloco N) fica sob pressão muito maior do que os
+números de referência do doc foram calibrados pra aguentar (840 NPCs). Duas
+opções, não escolhi nenhuma: **(a)** reduzir `npcs_por_familia_faixa`/os pesos de
+`distribuicao_etaria` até a população ficar mais previsível; **(b)** aceitar a
+variância e recalibrar N02/N04/N05 contra mundos maiores.
+
+**2. Parada 3 (25 dias) e T02 (`--ate-renovacao`, até 200 dias) não rodaram.** A
+escala do mundo (acima) tornou isso impraticável no tempo desta sessão — a sonda
+de 3 dias da Parada 2 já levou ~10 minutos reais com o log inteiro silenciado.
+Preciso que você rode isso depois, numa sessão com mais tempo dedicado (ou num
+mundo menor, se a decisão 1 for por reduzir a população).
+
+**3. G03 (`casamento_chance_coabitacao`) e N02 (renda por dia) não foram
+recalibrados contra medição real.** O texto do plano pedia números medidos depois
+da implementação — não tive uma corrida de 25 dias limpa pra tirar esses números
+com confiança (é a mesma limitação do item 2). O código está certo pelo que a
+lógica exige; os NÚMEROS de calibração (a % de casamento deliberado, a renda
+líquida diária) ainda são os projetados no texto do plano, não medidos.
+
+**4. `builder/populador.py` já estava acima do limite de 400 linhas antes desta
+sessão (495) e G01 acrescentou ~84 linhas (579 agora).** Não fiz o split em
+pacote (`populador.py` → `populador/`) porque não fazia parte do que foi pedido
+e um split malfeito é pior que não fazer — mas fica registrado como dívida.
