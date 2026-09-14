@@ -24,6 +24,7 @@ from cartographer.cities.geometria import quad
 from cartographer.cities.geometria import lotes as lotes_mod
 from cartographer.cities.modelos import SitioCidade, MODELOS
 from cartographer.cities.modelos.base import ModeloCidade, Quadra, Malha
+from cartographer.cities.escala import corrigir_raio_por_newton, faixa_raio_m
 from config import cfg_get
 
 _CIDADE_TESTE = {"nome": "Aurora Vales", "tamanho": "medio", "tipo": "residencial",
@@ -451,3 +452,55 @@ def test_id_de_lote_estavel_quando_uma_quadra_e_removida():
         assert lotes_sem_meio.get(quarteirao_id) == ids_completo, (
             f"quarteirão {quarteirao_id}: ids de lote mudaram depois de remover outra "
             f"quadra ({id_removido_str}) da lista")
+
+
+def _lotes_reais_em(nome_modelo, tamanho, raio_m, indice_semente):
+    """Mesma técnica de `builder/fix/calibrar_densidade.py`: uma cidade-semente por
+    índice (nome/coordenada diferentes -> seed e sequência de rng diferentes), raio
+    FORÇADO pra medir a densidade real num raio escolhido, não sorteado."""
+    cidade = {"nome": f"TesteNewton {nome_modelo} {tamanho} {raio_m:.0f} #{indice_semente}",
+              "tamanho": tamanho, "tipo": "residencial",
+              "x_global": 350.0 + indice_semente, "y_global": 350.0 + indice_semente}
+    sitio = SitioCidade.medir(cidade, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    rng = random.Random(sitio.seed)
+    modelo = MODELOS[nome_modelo](sitio, CARTOGRAPHER_CONFIG, rng, raio_m_forcado=raio_m)
+    geo = GeradorCidade(modelo).gerar()
+    return sum(1 for f in geo["features"] if f["properties"]["camada"] == "lote")
+
+
+@pytest.mark.parametrize("nome_modelo", ["grade", "linear", "radial", "organica"])
+def test_raio_derivado_dos_domicilios(nome_modelo):
+    """W01/R02 (docs/PLANO_POPULACAO_E_ESCALA.md): pra um `lotes_alvo` dado (longe dos
+    dois grampos de sanidade — R04 mostrou que cidade_geo_densidade_lote_por_modelo
+    prevê bem os dois pontos que `calibrar_densidade.py` mediu, mas a curva de
+    potência não extrapola perfeitamente pro raio inteiro; testar bem no piso/teto
+    testaria o grampo, não a fórmula), a MEDIANA de várias cidades-semente geradas no
+    raio devolvido por `escala.raio_para_lotes` (com a correção de Newton de UMA
+    tentativa, R02 Ação 5, quando a primeira desvia >15%) fica dentro de 15% do alvo.
+
+    Mediana, não cidade única, pelo mesmo motivo de `calibrar_densidade.py`: terreno e
+    ocupação por quadra variam cidade a cidade — olhar uma amostra só mediria ruído de
+    geração, não a calibragem. `grade`/`linear` isolados tiveram mediana de amostra
+    única acima de 15% ANTES da correção de Newton nesta mesma configuração (achado
+    de R04/Newton) — é exatamente o caso que este teste cobre."""
+    tamanho = "medio"
+    piso, teto = faixa_raio_m(CARTOGRAPHER_CONFIG, tamanho)
+    raio_interior = piso + (teto - piso) * 0.5  # longe dos dois grampos, de propósito
+    k, e = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_densidade_lote_por_modelo")[nome_modelo]
+    lotes_alvo = k * raio_interior ** e
+
+    finais = []
+    for i in range(9):
+        n1 = _lotes_reais_em(nome_modelo, tamanho, raio_interior, i)
+        raio_corrigido, precisa = corrigir_raio_por_newton(
+            CARTOGRAPHER_CONFIG, nome_modelo, tamanho, raio_interior, lotes_alvo, n1)
+        if precisa and raio_corrigido != raio_interior:
+            finais.append(_lotes_reais_em(nome_modelo, tamanho, raio_corrigido, i))
+        else:
+            finais.append(n1)
+
+    mediana = statistics.median(finais)
+    desvio = abs(mediana - lotes_alvo) / lotes_alvo
+    assert desvio <= 0.15, (
+        f"modelo {nome_modelo}: mediana de lotes reais = {mediana:.0f} contra alvo "
+        f"{lotes_alvo:.0f} (desvio {desvio:.1%}, amostras {finais})")

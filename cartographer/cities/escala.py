@@ -100,6 +100,32 @@ def raio_para_lotes(config, modelo_nome: str, lotes_alvo_valor: float, tamanho: 
     return raio_final, raio_final != raio_bruto
 
 
+def corrigir_raio_por_newton(config, modelo_nome: str, tamanho: str, raio_usado: float,
+                              lotes_alvo_valor, lotes_reais: int):
+    """R02, Ação 5: `lotes = k * raio^e` (medido, não deduzido — Ação 2) é só uma
+    ESTIMATIVA; a geometria real de uma cidade específica (terreno, praça, portões)
+    pode desviar dela mais do que os 15% aceitáveis. Depois de gerar de verdade e
+    CONTAR os lotes reais, se o desvio passar de 15%, recalcula o raio uma vez só —
+    `raio_novo = raio_usado * (alvo/real)^(1/e)`, extrapolando LOCALMENTE a partir do
+    ponto medido agora (não a fórmula k/raio^e inteira, que já provou não bater aqui)
+    — e regrampeia em `faixa_raio_m`. Nunca mais de uma correção (T5 do documento:
+    "nunca mais de uma vez" — evita um laço que persegue o próprio ruído de geração).
+
+    `lotes_alvo_valor is None` quando o raio veio de `raio_m_forcado` (calibração,
+    `calibrar_densidade.py`) — aí não há alvo pra comparar, e não corrige.
+    Devolve `(raio_m, precisa_regerar)`."""
+    if lotes_alvo_valor is None or lotes_reais == 0:
+        return raio_usado, False
+    desvio = abs(lotes_reais - lotes_alvo_valor) / lotes_alvo_valor
+    if desvio <= 0.15:
+        return raio_usado, False
+    _, e = cfg_get(config, "cidade_geo_densidade_lote_por_modelo")[modelo_nome]
+    raio_bruto = raio_usado * (lotes_alvo_valor / lotes_reais) ** (1.0 / e)
+    piso, teto = faixa_raio_m(config, tamanho)
+    raio_corrigido = max(piso, min(teto, raio_bruto))
+    return raio_corrigido, True
+
+
 def diametro_px_de_mundo(config, raio_m):
     """Diâmetro da cidade em px de MUNDO, a partir do raio REAL da cidade em metros.
 

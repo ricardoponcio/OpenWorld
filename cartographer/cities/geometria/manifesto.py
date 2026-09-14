@@ -11,6 +11,7 @@ from datetime import datetime
 
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.modelos import SitioCidade, MODELOS, escolher_modelo
+from cartographer.cities.escala import corrigir_raio_por_newton
 
 from .gerador import GeradorCidade
 
@@ -57,6 +58,24 @@ def gerar_geometria_para_manifesto(nome_filtro=None):
 
             gerador = GeradorCidade(modelo)
             geojson = gerador.gerar()
+
+            # R02, Ação 5: `lotes = k*raio^e` é medido, não deduzido — mas continua uma
+            # ESTIMATIVA; se a geometria real desta cidade especificamente desviar mais
+            # de 15% do alvo, corrige o raio UMA vez (nunca em laço) e regera.
+            n_lotes_reais = sum(1 for f in geojson["features"] if f["properties"].get("camada") == "lote")
+            raio_corrigido, precisa_regerar = corrigir_raio_por_newton(
+                CARTOGRAPHER_CONFIG, nome_modelo, sitio.tamanho, modelo.raio_m,
+                modelo.lotes_alvo, n_lotes_reais)
+            if precisa_regerar and raio_corrigido != modelo.raio_m:
+                print(f"  🔧 {cidade['nome']}: {n_lotes_reais} lote(s) reais desviaram "
+                      f">15% do alvo ({modelo.lotes_alvo:.0f}) — corrigindo raio de "
+                      f"{modelo.raio_m:.0f}m pra {raio_corrigido:.0f}m e regerando uma vez.")
+                rng = random.Random(sitio.seed)
+                modelo = MODELOS[nome_modelo](sitio, CARTOGRAPHER_CONFIG, rng,
+                                               raio_m_forcado=raio_corrigido)
+                gerador = GeradorCidade(modelo)
+                geojson = gerador.gerar()
+
             slug = cidade["nome"].lower().replace(" ", "_")
             caminho = os.path.join(OUTPUT_DIR, f"{slug}.geojson")
             with open(caminho, "w", encoding="utf-8") as f:
