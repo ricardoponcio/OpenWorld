@@ -21,7 +21,7 @@ from .marriage import NPCMarriageManager
 
 
 class NPCSocialManager:
-    # H05 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): cadência diária (A06) — não é o que
+    # H05 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): cadência diária (A06) — não é o que
     # trava D13 (medido: mediana de relacionamentos/NPC é 0, máximo 14 num dia), mas
     # `npc.relacionamentos` só cresce, nunca decai, e num mundo que roda meses vira
     # memória e custo em `salvar_completo`.
@@ -38,13 +38,13 @@ class NPCSocialManager:
         Varre todos os locais do mapa à procura de NPCs presentes e gera eventos
         de interação social ativa e romance dinâmico entre eles.
 
-        E01 (docs/PLANO_POPULACAO_E_ESCALA.md): computa todas as interações do tick
+        E01 (docs/13_PLANO_POPULACAO_E_ESCALA.md): computa todas as interações do tick
         SEM gravar (`_computar_interacao`), e grava eventos/relacionamentos numa
         transação só no final — antes cada interação abria a própria conexão duas
         vezes (evento + relacionamento), ~170 interações/tick com 25.000 NPCs
         (~340 commits/tick medidos).
 
-        H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): usa o índice mantido
+        H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): usa o índice mantido
         `mundo.npcs_por_localizacao` (A04) em vez de `NPCUtils.
         agrupar_npcs_por_localizacao(mundo.npcs, ...)`, que reconstruía um dicionário
         do zero varrendo os 25.000 NPCs todo tick (~12% do piso medido) pra um
@@ -57,7 +57,12 @@ class NPCSocialManager:
 
         eventos = []
         pares_de_relacionamento = []
-        for loc_id, moradores in self._mundo.npcs_por_localizacao.items():
+        # C01 (docs/16_PLANO_PAINEL_E_IA.md, Armadilha 20): o corpo do laço pode
+        # casar dois NPCs (romance surpresa) e mover um deles pra uma casa nova, o
+        # que faz `mundo.mover_npc` criar uma chave nova neste MESMO dicionário —
+        # iterar a view viva quebrava com "dictionary changed size during
+        # iteration". `list(...)` copia as entradas antes do laço começar.
+        for loc_id, moradores in list(self._mundo.npcs_por_localizacao.items()):
             if len(moradores) < 2:
                 continue
             acordados = [n for n in moradores if n.acao_atual != Acao.DORMIR]
@@ -72,7 +77,7 @@ class NPCSocialManager:
         self._mundo.db.eventos.salvar_muitos(eventos)
         self._mundo.db.npcs.salvar_relacionamentos_muitos(pares_de_relacionamento)
 
-        # H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` NÃO é mais
+        # H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` NÃO é mais
         # chamada daqui — ganhou cadência diária própria (A06) e é despachada por
         # `GameLoop._rotinas_diarias`. As duas chamadas coexistindo casariam o dobro
         # do calibrado (a rotina roda cadenciada E aqui de novo, todo tick).
@@ -112,7 +117,7 @@ class NPCSocialManager:
         vinculo_novo = NPCSocialManager._classificar_vinculo(nova_afinidade, cfg_bio)
         vinculo = vinculo_novo.value
 
-        # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): só vira LINHA NO BANCO se o
+        # M02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): só vira LINHA NO BANCO se o
         # vínculo mudou de FAIXA — com `interacao_chance=0,0452`, 5.758 eventos/dia
         # (840 NPCs) eram 99,1% "tiveram uma conversa", ruído que enterrava os 10
         # últimos fatos de `resumos_recentes` embaixo de fofoca. A afinidade em
@@ -142,7 +147,7 @@ class NPCSocialManager:
         return evento, (n1.id, n2.id, nova_afinidade, vinculo)
 
     def processar_poda_de_relacionamentos(self):
-        """H05 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): decai afinidades não protegidas
+        """H05 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): decai afinidades não protegidas
         em direção a zero (esquecendo quem não foi reencontrado) e, se ainda assim
         passar do teto (`relacionamentos_max_por_npc`, número de Dunbar), descarta
         as mais fracas primeiro. NUNCA descarta/decai cônjuge, pais, filhos, ou quem

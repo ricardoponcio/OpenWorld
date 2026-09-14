@@ -1,6 +1,6 @@
 """
-Testes de injeção dos gerenciadores de mecânica — docs/PLANO_REFATORACAO.md, R-F01
-e docs/ARQUITETURA.md, Seção 7 ("Classes: estático, instância ou função") e Seção 13
+Testes de injeção dos gerenciadores de mecânica — docs/10_PLANO_REFATORACAO.md, R-F01
+e docs/11_ARQUITETURA.md, Seção 7 ("Classes: estático, instância ou função") e Seção 13
 ("O teste que a injeção de dependência habilita").
 
 Cada gerenciador de `engine/mechanics/` recebe um `EstadoDoMundo` e a config, nunca a
@@ -10,6 +10,8 @@ destes testes consegue ser construído. O banco é um dublê em memória que só
 que foi salvo — não há arquivo, schema, nem pool de conexões em lugar nenhum. Os dublês
 e as fábricas de mundo moram em tests/mundo_sintetico.py.
 """
+import copy
+
 import pytest
 
 from engine.config_loader import carregar_config_global, cfg_get
@@ -81,7 +83,7 @@ def test_humor_caminha_um_passo_por_vez_na_escala(config, monkeypatch):
 
 
 def test_humor_mesma_taxa_em_1_e_240_minutos(config):
-    """X01 (docs/PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda avalia um NPC
+    """X01 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 17): a agenda avalia um NPC
     ~20-30 vezes por dia em vez de 1.440 — `minutos` pode ser 1 ou 240. Antes desta
     correção, `min(minutos, distancia)` capava as tentativas de transição em
     ~4 (o tamanho da escala), então 240 chamadas de 1 minuto tinham MUITO mais
@@ -134,7 +136,7 @@ def test_ruina_e_obra_nao_decaem(config):
 
 
 def test_colapso_para_ruina_libera_o_lote(config):
-    """T04 (docs/PLANO_CIDADE_VIVA.md): quando um Local entra em colapso, o LOTE
+    """T04 (docs/12_PLANO_CIDADE_VIVA.md): quando um Local entra em colapso, o LOTE
     (mesmo id, armadilha 3) volta a 'livre' — pronto pra receber obra nova."""
     casa_caindo = casa("loc_1", nome="Casa", integridade=1)
     mundo = mundo_de(locais=[casa_caindo])
@@ -179,7 +181,7 @@ def test_obra_nao_duplica_para_casal_que_ja_constroi(config):
 
 
 def test_obra_reserva_um_lote_real(config):
-    """O01 (docs/PLANO_CIDADE_VIVA.md): a obra nasce no lote livre mais próximo da
+    """O01 (docs/12_PLANO_CIDADE_VIVA.md): a obra nasce no lote livre mais próximo da
     casa atual do casal — não mais numa coordenada sorteada em terra firme. O id do
     Local É o id do lote (armadilha 3), e o lote passa a 'obra'."""
     solteiro = adulto("npc_1", "Kai Solitário")
@@ -201,7 +203,7 @@ def test_obra_reserva_um_lote_real(config):
 
 def test_obra_sem_lote_livre_nao_constroi_e_nao_quebra(config):
     """O01: sem lote livre na cidade, `iniciar_obra_para_casal` devolve False (não
-    levanta exceção — estado normal de cidade saturada, ARQUITETURA.md P5)."""
+    levanta exceção — estado normal de cidade saturada, 11_ARQUITETURA.md P5)."""
     solteiro = adulto("npc_1", "Kai Solitário")
     mundo = mundo_de(npcs=[solteiro], locais=[casa()])
 
@@ -250,7 +252,7 @@ def test_casamento_usa_a_habitacao_injetada_quando_a_casa_esta_cheia(config):
 
 
 def test_casamento_leva_os_filhos(config):
-    """G04 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): sem isto, o casal se mudava e o
+    """G04 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): sem isto, o casal se mudava e o
     dependente ficava sozinho na casa antiga, virando o próprio pagador da
     refeição com 0 PC (§5.2 do documento, 10 casos num mundo real de 25 dias)."""
     noivo = adulto("npc_1", "Rolf Noivo", casa_id="casa_1")
@@ -268,7 +270,7 @@ def test_casamento_leva_os_filhos(config):
 
 
 def test_coabitacao_so_roda_na_cadencia_diaria_nao_a_cada_tick(config, monkeypatch):
-    """H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` deixou de ser
+    """H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` deixou de ser
     chamada de dentro de `NPCSocialManager.processar_interacoes` (a cada tick) e
     passou a ser despachada por `GameLoop._rotinas_diarias`, uma vez por dia
     simulado, na hora de `casamento_hora`. Prova as duas metades: NENHUM casamento
@@ -312,7 +314,7 @@ def test_coabitacao_so_roda_na_cadencia_diaria_nao_a_cada_tick(config, monkeypat
 
 class CasamentoDuble:
     """Deixa a interação social medir só a afinidade, sem romance surpresa no meio.
-    H02 (docs/PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` não é mais
+    H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): `processar_coabitacao` não é mais
     chamada por `NPCSocialManager` (ganhou cadência diária própria), então este
     dublê não precisa mais simulá-la."""
 
@@ -333,7 +335,7 @@ def test_interacao_social_grava_afinidade_mutua_e_vinculo(config):
     assert a.relacionamentos["npc_2"] == b.relacionamentos["npc_1"]
     assert len(mundo.db.npcs.relacionamentos) == 1
     assert mundo.db.npcs.relacionamentos[0][3] in [v.value for v in VinculoSocial]
-    # M02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco M): o relacionamento é SEMPRE gravado
+    # M02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): o relacionamento é SEMPRE gravado
     # (linhas acima), mas o EVENTO só quando o vínculo muda de FAIXA — afinidade
     # 0 -> pequena ainda é "Conhecido" nos dois lados, então nenhum evento nasce
     # aqui (era 99,1% "tiveram uma conversa" no log medido do mundo real).
@@ -347,9 +349,41 @@ def test_vinculo_inimigo_e_alcancavel(config):
         -1000, cfg_get(config, "biologia_e_sociedade")) == VinculoSocial.INIMIGO
 
 
+def test_romance_surpresa_para_casa_nova_nao_quebra_a_iteracao(config):
+    """C01 (docs/16_PLANO_PAINEL_E_IA.md, Armadilha 20): `processar_interacoes` itera
+    `mundo.npcs_por_localizacao` — um índice VIVO. Um romance surpresa que termine em
+    `realizar_casamento` chama `mundo.mover_npc`, que faz `setdefault(casa_nova, [])`
+    no mesmo dicionário: se `casa_nova` nunca teve morador, o dicionário cresce no
+    meio do laço e o Python levanta `RuntimeError: dictionary changed size during
+    iteration`. Reproduzido: 2 crashes em 240 ticks numa run real (Seção 2.4)."""
+    cfg = copy.deepcopy(config)
+    cfg_bio = cfg_get(cfg, "biologia_e_sociedade")
+    cfg_bio["interacao_chance"] = 1.0
+    cfg_bio["casamento_chance_romance_fisico"] = 1.0
+
+    n1 = adulto("npc_1", "Pretendente", genero=Genero.MASCULINO.value,
+                localizacao_atual_id="t1", casa_id="c1")
+    n2 = adulto("npc_2", "Pretendida", genero=Genero.FEMININO.value,
+                localizacao_atual_id="t1", casa_id="c2")
+    # Afinidade inicial bem acima do limiar de concepção (usado pela elegibilidade
+    # de casamento) — sobra folga mesmo depois do `mod` aleatório da interação.
+    afinidade_alta = cfg_get(cfg_bio, "concepcao_afinidade_minima") + 500
+    n1.relacionamentos[n2.id] = afinidade_alta
+    n2.relacionamentos[n1.id] = afinidade_alta
+
+    taverna = casa("t1", nome="Taverna", tipo=TipoLocal.SOCIAL.value)
+    # Nenhum NPC tem `localizacao_atual_id == "c1"` — é isso que faz "c1" ser uma
+    # chave NOVA em `npcs_por_localizacao` quando o casamento move alguém pra lá.
+    mundo = mundo_de(npcs=[n1, n2], locais=[taverna, casa("c1"), casa("c2")])
+
+    NPCSocialManager(mundo, cfg).processar_interacoes()  # não deve levantar RuntimeError
+
+    assert n1.casa_id == n2.casa_id == "c1"
+
+
 # ----------------------------------------------------------------------
 # NPCSocialManager.processar_poda_de_relacionamentos (H05, docs/
-# PLANO_AVANCO_E_CALIBRAGEM.md)
+# 14_PLANO_AVANCO_E_CALIBRAGEM.md)
 # ----------------------------------------------------------------------
 
 def test_poda_nunca_descarta_familia(config):
@@ -505,7 +539,7 @@ def test_concepcao_ignora_casa_com_um_unico_morador(config, monkeypatch):
 
 
 def test_concepcao_recusa_parentes(config, monkeypatch):
-    """G02 (docs/PLANO_MUNDO_CRIVEL.md, Bloco G): mãe e filho adulto na mesma casa
+    """G02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco G): mãe e filho adulto na mesma casa
     têm afinidade 100 automática (`parto_afinidade_inicial_pais`) — sem checar
     parentesco, isso engravidava em 6 de 200 noites testadas (§5.2 do documento;
     2 casos num mundo real de 25 dias). `processar_concepcao` agora usa
@@ -553,7 +587,7 @@ def test_sem_local_de_trabalho_o_npc_fica_ocioso(config):
 
 
 def test_socializar_cobra_uma_vez_por_visita(config):
-    """N01 (docs/PLANO_MUNDO_CRIVEL.md, Bloco N): `custo_pc` era cobrado por
+    """N01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco N): `custo_pc` era cobrado por
     MINUTO — 136,9 PC/dia, a maior despesa de TODA classe (71% da renda do
     trabalhador, 3,4x a pensão do idoso, §5.1 do documento). Agora só na chegada;
     ficar no mesmo local social não cobra de novo. Usa o `NPCMovementManager`
@@ -599,7 +633,7 @@ def test_local_inativo_manda_o_npc_de_volta_para_casa(config):
 
 
 def test_mover_para_social_nunca_atravessa_cidade(config):
-    """P04 (docs/PLANO_CIDADE_VIVA.md): dois NPCs em cidades diferentes, cada uma com
+    """P04 (docs/12_PLANO_CIDADE_VIVA.md): dois NPCs em cidades diferentes, cada uma com
     seu próprio local social — mover_para_social nunca coloca um NPC num local de
     cidade_id diferente do dele."""
     social_1 = casa("social_1", nome="Taverna 1", tipo=TipoLocal.SOCIAL.value, cidade_id=1)
