@@ -197,7 +197,10 @@
         "log_acao_a_cada_n_ticks": 4,
         "_comentario_niveis": "O01 (docs/16_PLANO_PAINEL_E_IA.md): níveis mínimos por destino. Com 30 mil NPCs, DEBUG no arquivo gerava ~29 MB/min (725 MB em 25 min medidos). Valores aceitos: DEBUG, INFO, WARNING, ERROR.",
         "log_arquivo_nivel": "INFO",
-        "log_console_nivel": "WARNING"
+        "log_console_nivel": "WARNING",
+        "_comentario_estatisticas": "O03 (docs/16_PLANO_PAINEL_E_IA.md): o coletor roda no processo da simulação a cada N ticks e grava um JSON em mundo_meta (MetaChave.ESTATISTICAS) — o painel só lê essa linha, nunca agrega NPCs por conta própria. O console imprime uma linha de resumo a cada N segundos REAIS.",
+        "estatisticas_a_cada_ticks": 60,
+        "console_resumo_a_cada_s_reais": 10
     },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",

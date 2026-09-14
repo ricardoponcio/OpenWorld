@@ -1,7 +1,10 @@
+import json
 import time
+from engine.config_loader import cfg_get
 from engine.core import SimulationEngine
 from engine.logger import WorldLogger
 from engine.mechanics import JobMarket
+from engine.mechanics.estatisticas import ColetorDeEstatisticas, formatar_resumo_console
 from engine.mechanics.mestre import MestreManager
 from engine.models import MetaChave
 
@@ -32,6 +35,29 @@ def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
     for resultado in mestre.drenar_e_aplicar(engine.mundo):
         WorldLogger.evento_mundo(f"🎭 [MESTRE] {resultado}")
 
+
+def atualizar_estatisticas(engine, coletor: ColetorDeEstatisticas, config: dict,
+                            velocidade: float, estado_console: dict) -> None:
+    """O03 (docs/16_PLANO_PAINEL_E_IA.md): monta o retrato do mundo a cada
+    `estatisticas_a_cada_ticks` e grava em `MetaChave.ESTATISTICAS` — o painel só lê
+    essa chave (Armadilha 24). O console imprime o último retrato a cada
+    `console_resumo_a_cada_s_reais` REAIS, não simulados (senão em velocidade alta
+    seria uma linha por tick de novo). `desempenho` ainda não tem `ms_por_tick`/
+    `velocidade_efetiva` — D03 entrega essas duas chaves."""
+    cfg_obs = cfg_get(config, "observabilidade")
+    if engine.mundo.tick_count % cfg_get(cfg_obs, "estatisticas_a_cada_ticks") == 0:
+        stats = coletor.montar()
+        stats["desempenho"] = {"velocidade_pedida": velocidade}
+        estado_console["ultimas"] = stats
+        engine.mundo.db.meta.salvar(MetaChave.ESTATISTICAS, json.dumps(stats, ensure_ascii=False))
+
+    agora = time.time()
+    intervalo = cfg_get(cfg_obs, "console_resumo_a_cada_s_reais")
+    if estado_console["ultimas"] is not None and agora - estado_console["ultimo_console_s"] >= intervalo:
+        print(formatar_resumo_console(estado_console["ultimas"]))
+        estado_console["ultimo_console_s"] = agora
+
+
 def start_simulation():
     # Este é o ponto de entrada: é aqui que as dependências são construídas, uma vez
     # por processo (11_ARQUITETURA.md Seção 7). Os gerenciadores recebem o `EstadoDoMundo`
@@ -48,6 +74,8 @@ def start_simulation():
     engine = SimulationEngine()
     JobMarket(engine.mundo.db, engine.config).bootstrap_market()
     mestre = MestreManager(engine.mundo.db, engine.config)
+    coletor_estatisticas = ColetorDeEstatisticas(engine.mundo, engine.config)
+    estado_console = {"ultimas": None, "ultimo_console_s": time.time()}
 
     print(f"🌍 Mundo carregado com {len(engine.mundo.npcs)} habitantes e {len(engine.mundo.locais)} locais.")
     print("Simulação em tempo real 1:1 (1 min de jogo = 1 min real na velocidade 1x).")
@@ -80,6 +108,7 @@ def start_simulation():
                 if restante > 0:
                     engine.tick()
                     engine.mundo.db.meta.salvar(MetaChave.AVANCAR_MINUTOS, str(restante - 1))
+                    atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
                     continue  # roda o mais rápido possível, sem o sleep de ritmo normal
 
                 time.sleep(1.0)
@@ -89,6 +118,7 @@ def start_simulation():
 
             # O01 (docs/16_PLANO_PAINEL_E_IA.md): o print por tick saiu — o resumo
             # periódico do coletor de estatísticas (O03) substitui isso.
+            atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
             time.sleep(espera)
 
     except KeyboardInterrupt:

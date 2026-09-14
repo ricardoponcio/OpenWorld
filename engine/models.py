@@ -188,6 +188,10 @@ class MetaChave(Enum):
     # `engine.recarregar_locais()` quando muda, em vez de recarregar 24 mil locais
     # todo tick só pra descobrir que nada mudou.
     LOCAIS_VERSAO       = "locais_versao"
+    # O03 (docs/16_PLANO_PAINEL_E_IA.md): retrato do mundo (ColetorDeEstatisticas),
+    # em JSON, gravado por run_simulation.py a cada `estatisticas_a_cada_ticks`. O
+    # painel só LÊ esta chave — nunca agrega NPCs por conta própria (Armadilha 24).
+    ESTATISTICAS        = "estatisticas_json"
 
 
 class ContadorMundo(Enum):
