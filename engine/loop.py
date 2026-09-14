@@ -374,6 +374,12 @@ class GameLoop:
         if not self._mundo.ha_falecidos_pendentes:
             return
         self._mundo.npcs = [n for n in self._mundo.npcs if n.saude > 0]
+        # D01 (docs/16_PLANO_PAINEL_E_IA.md): a morte já marcou a casa certa suja em
+        # `EstadoDoMundo.remover_npc` (Armadilha 23) — sem esta linha, a troca de
+        # identidade de `mundo.npcs` acima faz `_atualizar_dependentes` achar que a
+        # lista foi RECARREGADA (como `recarregar_habitantes()` faz) e recalcular
+        # todas as casas a cada morte: 766.300 recálculos em 60 ticks (~55 ms/tick).
+        self._ultima_lista_de_npcs = self._mundo.npcs
         self._mundo.ha_falecidos_pendentes = False
 
     def _podar_eventos_antigos(self):

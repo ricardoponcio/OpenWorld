@@ -11,7 +11,9 @@ SQLite de verdade (cobre também a persistência, N02/W03)."""
 from datetime import datetime, timedelta
 
 from engine.config_loader import carregar_config_global, cfg_get
+from engine.consultas_npc import NPCUtils
 from engine.loop import GameLoop
+from engine.mechanics.lifecycle import NPCLifecycleManager
 from engine.models import EstagioVida, Genero
 
 from tests.mundo_sintetico import adulto, casa, mundo_de
@@ -100,3 +102,35 @@ def test_crescer_para_adulto_suja_a_casa_sem_passar_pelas_portas_de_mundo():
     mae_atual = next(n for n in mundo.npcs if n.id == "npc_mae")
     assert filho_atual.estagio_vida == EstagioVida.ADULTO.value
     assert mae_atual.num_dependentes == 0
+
+
+def test_morte_nao_recalcula_todas_as_casas(monkeypatch):
+    """D01 (docs/16_PLANO_PAINEL_E_IA.md): `_remover_falecidos` recriava
+    `mundo.npcs` (uma lista NOVA) sempre que alguém morria no tick, e a troca de
+    IDENTIDADE fazia `_atualizar_dependentes` tratar isso como "recarregou do
+    banco" e recalcular TODAS as casas — 766.300 recálculos em 60 ticks (~55
+    ms/tick) numa run real. A casa do morto já foi marcada suja por
+    `EstadoDoMundo.remover_npc`; não precisa de mais nenhuma."""
+    config = _config()
+    npcs, locais = [], []
+    for i in range(50):
+        casa_id = f"casa_{i}"
+        locais.append(casa(casa_id, capacidade=4))
+        npcs.append(adulto(f"npc_{i}_a", f"Morador {i}A", casa_id=casa_id,
+                            localizacao_atual_id=casa_id))
+        npcs.append(adulto(f"npc_{i}_b", f"Morador {i}B", casa_id=casa_id,
+                            localizacao_atual_id=casa_id))
+    mundo = mundo_de(npcs=npcs, locais=locais)
+    loop = GameLoop(mundo, config)
+    loop.executar_tick()  # estabiliza — o primeiro tick sempre recalcula tudo
+
+    chamadas = []
+    monkeypatch.setattr(NPCUtils, "recalcular_dependentes_da_casa",
+                        lambda moradores: chamadas.append(moradores))
+
+    vitima = next(n for n in mundo.npcs if n.id == "npc_0_a")
+    NPCLifecycleManager(mundo, config).processar_morte(vitima)
+    loop.executar_tick()
+
+    assert len(chamadas) <= 2, (
+        "a morte de um único NPC não devia recalcular quase todas as 50 casas")
