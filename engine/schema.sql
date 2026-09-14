@@ -100,6 +100,11 @@ CREATE TABLE IF NOT EXISTS npcs (
     FOREIGN KEY(profissao_id) REFERENCES profissoes(id)
 );
 
+-- D04 (docs/16_PLANO_PAINEL_E_IA.md): filtros do painel paginado (P02) e da camada de
+-- NPCs do mapa (M04). Sem índice, cada requisição varre a tabela inteira.
+CREATE INDEX IF NOT EXISTS idx_npcs_cidade_saude ON npcs(cidade_id, saude);
+CREATE INDEX IF NOT EXISTS idx_npcs_localizacao ON npcs(localizacao_atual_id);
+
 -- Tabela de Relacionamentos (SOCIAL)
 CREATE TABLE IF NOT EXISTS relacionamentos (
     npc_a_id TEXT,
