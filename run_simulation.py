@@ -1,3 +1,4 @@
+import collections
 import json
 import time
 from engine.config_loader import cfg_get
@@ -7,6 +8,52 @@ from engine.mechanics import JobMarket
 from engine.mechanics.estatisticas import ColetorDeEstatisticas, formatar_resumo_console
 from engine.mechanics.mestre import MestreManager
 from engine.models import MetaChave
+
+
+class RitmoDoLaco:
+    """D03 (docs/16_PLANO_PAINEL_E_IA.md): mede a duração REAL de cada ciclo do
+    laço (tick + espera) numa janela deslizante — sem isto, o laço dormia
+    `max(0.005, 60/velocidade)` DEPOIS do tick sem descontar quanto ele já tinha
+    levado (5 ms inúteis por tick em velocidade alta), e ninguém media a
+    velocidade de fato entregue (Armadilha 22: pedida != efetiva).
+
+    Vive aqui, não em `engine/` — é função de TEMPO REAL do processo (perf_counter,
+    sleep), não de domínio da simulação."""
+
+    def __init__(self, janela_ticks: int):
+        self._duracoes_s = collections.deque(maxlen=janela_ticks)
+
+    def registrar_tick(self, duracao_s: float) -> None:
+        self._duracoes_s.append(duracao_s)
+
+    @staticmethod
+    def espera_s(velocidade_pedida: float, duracao_ultimo_tick_s: float) -> float:
+        """Quanto dormir pra que este ciclo, no total, dure `60/velocidade_pedida`
+        segundos reais — descontando o que o tick JÁ levou. Nunca negativo: em
+        velocidade alta o tick sozinho já estoura o orçamento, e não dá pra
+        "dormir menos que zero" pra compensar."""
+        return max(0.0, 60.0 / velocidade_pedida - duracao_ultimo_tick_s)
+
+    def velocidade_efetiva(self) -> float:
+        """Minutos simulados por segundo real × 60 — a partir da duração REAL de
+        cada ciclo (tick + espera), não da velocidade pedida (Armadilha 22)."""
+        media_s = self._media_s()
+        return 60.0 / media_s if media_s > 0 else 0.0
+
+    def ms_por_tick_medio(self) -> float:
+        return self._media_s() * 1000.0
+
+    def ms_por_tick_p95(self) -> float:
+        if not self._duracoes_s:
+            return 0.0
+        ordenado = sorted(self._duracoes_s)
+        indice = min(len(ordenado) - 1, int(len(ordenado) * 0.95))
+        return ordenado[indice] * 1000.0
+
+    def _media_s(self) -> float:
+        if not self._duracoes_s:
+            return 0.0
+        return sum(self._duracoes_s) / len(self._duracoes_s)
 
 
 def sincronizar_locais_se_mudou(engine, ultima_versao_vista: str) -> str:
@@ -37,17 +84,21 @@ def drenar_acoes_do_mestre(engine, mestre: MestreManager) -> None:
 
 
 def atualizar_estatisticas(engine, coletor: ColetorDeEstatisticas, config: dict,
-                            velocidade: float, estado_console: dict) -> None:
-    """O03 (docs/16_PLANO_PAINEL_E_IA.md): monta o retrato do mundo a cada
+                            velocidade: float, ritmo: "RitmoDoLaco", estado_console: dict) -> None:
+    """O03/D03 (docs/16_PLANO_PAINEL_E_IA.md): monta o retrato do mundo a cada
     `estatisticas_a_cada_ticks` e grava em `MetaChave.ESTATISTICAS` — o painel só lê
     essa chave (Armadilha 24). O console imprime o último retrato a cada
     `console_resumo_a_cada_s_reais` REAIS, não simulados (senão em velocidade alta
-    seria uma linha por tick de novo). `desempenho` ainda não tem `ms_por_tick`/
-    `velocidade_efetiva` — D03 entrega essas duas chaves."""
+    seria uma linha por tick de novo)."""
     cfg_obs = cfg_get(config, "observabilidade")
     if engine.mundo.tick_count % cfg_get(cfg_obs, "estatisticas_a_cada_ticks") == 0:
         stats = coletor.montar()
-        stats["desempenho"] = {"velocidade_pedida": velocidade}
+        stats["desempenho"] = {
+            "velocidade_pedida": velocidade,
+            "velocidade_efetiva": ritmo.velocidade_efetiva(),
+            "ms_por_tick_medio": ritmo.ms_por_tick_medio(),
+            "ms_por_tick_p95": ritmo.ms_por_tick_p95(),
+        }
         estado_console["ultimas"] = stats
         engine.mundo.db.meta.salvar(MetaChave.ESTATISTICAS, json.dumps(stats, ensure_ascii=False))
 
@@ -94,6 +145,7 @@ def start_simulation():
     JobMarket(engine.mundo.db, engine.config).bootstrap_market()
     mestre = MestreManager(engine.mundo.db, engine.config)
     coletor_estatisticas = ColetorDeEstatisticas(engine.mundo, engine.config)
+    ritmo = RitmoDoLaco(cfg_get(cfg_get(engine.config, "simulacao"), "janela_medicao_ritmo_ticks"))
     estado_console = {"ultimas": None, "ultimo_console_s": time.time()}
     estado_wal = {"ocupado_seguidas": 0}
 
@@ -114,8 +166,6 @@ def start_simulation():
             status_pausa = engine.mundo.db.meta.carregar(MetaChave.SIMULACAO_PAUSADA)
             v_str = engine.mundo.db.meta.carregar(MetaChave.VELOCIDADE)
             velocidade = float(v_str) if v_str else 1.0
-            # 60s reais = 1 min de jogo na velocidade 1x (tempo real de verdade) — Frente 4.
-            espera = max(0.005, 60.0 / velocidade)
 
             if status_pausa == "1":
                 # Modo Mestre de IA (Frente 5): mesmo pausado, o jogador pode pedir pra
@@ -126,22 +176,36 @@ def start_simulation():
                 restante = int(restante_str) if restante_str else 0
 
                 if restante > 0:
+                    inicio = time.perf_counter()
                     engine.tick()
+                    # D03: sem espera de ritmo aqui de propósito ("roda o mais rápido
+                    # possível") — só registra o custo real do tick pras estatísticas.
+                    ritmo.registrar_tick(time.perf_counter() - inicio)
                     engine.mundo.db.meta.salvar(MetaChave.AVANCAR_MINUTOS, str(restante - 1))
-                    atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
+                    atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, ritmo, estado_console)
                     checkpoint_wal_se_devido(engine, engine.config, estado_wal)
                     continue  # roda o mais rápido possível, sem o sleep de ritmo normal
 
                 time.sleep(1.0)
                 continue
 
+            # D03 (docs/16_PLANO_PAINEL_E_IA.md): descontar quanto o tick já levou do
+            # tempo de espera — o laço antigo dormia 60/velocidade cheio, sempre, mesmo
+            # em velocidade alta onde isso é 5 ms desperdiçados por tick à toa.
+            inicio_ciclo = time.perf_counter()
             engine.tick()
+            duracao_tick = time.perf_counter() - inicio_ciclo
+            espera = ritmo.espera_s(velocidade, duracao_tick)
+            if espera > 0:
+                time.sleep(espera)
+            # Ciclo completo (tick + espera) — é isso que "velocidade efetiva" mede
+            # (Armadilha 22: a pedida não é a entregue).
+            ritmo.registrar_tick(time.perf_counter() - inicio_ciclo)
 
             # O01 (docs/16_PLANO_PAINEL_E_IA.md): o print por tick saiu — o resumo
             # periódico do coletor de estatísticas (O03) substitui isso.
-            atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, estado_console)
+            atualizar_estatisticas(engine, coletor_estatisticas, engine.config, velocidade, ritmo, estado_console)
             checkpoint_wal_se_devido(engine, engine.config, estado_wal)
-            time.sleep(espera)
 
     except KeyboardInterrupt:
         print("\nSimulação pausada. Até logo, Mestre!")

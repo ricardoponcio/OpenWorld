@@ -11,7 +11,9 @@
         "relacionamentos_max_por_npc": 150,
         "relacionamentos_decaimento_por_dia": 1,
         "_comentario_wal_checkpoint": "O04 (docs/16_PLANO_PAINEL_E_IA.md): a cada N ticks, run_simulation.py força um checkpoint TRUNCATE do WAL — sem isto, medido 1,19 GB de WAL com o painel aberto (checkpoint starvation: o painel lê o banco inteiro a cada segundo e quase nunca deixa o checkpoint automático completar).",
-        "wal_checkpoint_a_cada_ticks": 60
+        "wal_checkpoint_a_cada_ticks": 60,
+        "_comentario_ritmo": "D03 (docs/16_PLANO_PAINEL_E_IA.md): janela (em ticks) usada por RitmoDoLaco pra calcular ms/tick médio, p95 e a velocidade EFETIVA (Armadilha 22: a pedida não é a entregue) — run_simulation.py mede a duração real de cada ciclo (tick + espera) e alimenta essa janela.",
+        "janela_medicao_ritmo_ticks": 120
     },
     "metabolismo": {
         "_comentario_1_1": "Frente 4 (2026-09-09): valores divididos por 15 — o tick virou 1 minuto real (era 15). O efeito total por hora de jogo é o mesmo de antes, só que distribuído em passos 15x menores. Ver docs/05_ROADMAP.md.",
