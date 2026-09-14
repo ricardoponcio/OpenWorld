@@ -156,6 +156,10 @@ class NPCActionManager:
 
         (pagador, is_dependent, num_dependentes, custo_do_tick,
          fome_rec_do_tick, energia_ganho_do_tick) = self.encontrar_pagador_e_parcela(npc, npcs_por_casa)
+        # O05 (docs/16_PLANO_PAINEL_E_IA.md): um saldo abaixo desta fração mínima
+        # conta como zero — medido pagador com 1,37e-13 PC (resíduo de ponto
+        # flutuante) preso pra sempre no ramo "parcial" em vez de cair no sopão.
+        saldo_residual = cfg_get(cfg_get(cfg_acoes, "comer"), "saldo_residual_pc")
 
         if pagador.dinheiro_total_pc >= custo_do_tick:
             npc.fome -= fome_rec_do_tick
@@ -171,7 +175,7 @@ class NPCActionManager:
                 else:
                     dep_str = f" com {num_dependentes} dependentes" if num_dependentes > 0 else ""
                     WorldLogger.debug(f"🍔 [ALIMENTAÇÃO PROGRESSIVA] {npc.nome} comeu uma porção{dep_str}. Custo: {custo_do_tick} PC (Dinheiro restante: {pagador.dinheiro_total_pc} PC | Fome: {npc.fome:.1f})", npc=npc)
-        elif pagador.dinheiro_total_pc > 0:
+        elif pagador.dinheiro_total_pc > saldo_residual:
             # Comer parcial do tick (subnutrido)
             proporcao = pagador.dinheiro_total_pc / custo_do_tick
             fome_rec = fome_rec_do_tick * proporcao
@@ -185,6 +189,11 @@ class NPCActionManager:
             # por tick — vira estatística agregada, lida pelo coletor (O03).
             self._mundo.contar(ContadorMundo.REFEICAO_PARCIAL)
         else:
+            # O05: saldo residual (abaixo de saldo_residual, incluindo 0) zera antes
+            # do sopão — sem isto, o resíduo de ponto flutuante nunca chega a "zero
+            # de verdade" e o pagador ficaria preso no ramo parcial pra sempre.
+            if pagador.dinheiro_total_pc > 0:
+                pagador.dinheiro_total_pc = 0
             # NPC tentou comer mas não tinha dinheiro
             sopao_ok = self._reino.fornecer_sopao(npc, fome_rec_do_tick, energia_ganho_do_tick)
 

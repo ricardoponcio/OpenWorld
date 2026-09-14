@@ -35,7 +35,9 @@
             "fome_perda": 40.0,
             "energia_ganho": 1.0,
             "custo_pc": 15,
-            "parcelas_refeicao": 45
+            "parcelas_refeicao": 45,
+            "_comentario_o05": "O05 (docs/16_PLANO_PAINEL_E_IA.md): saldo abaixo desta fração conta como zero — medido um pagador com 1,37e-13 PC (resíduo de ponto flutuante) preso pra sempre no ramo de refeição parcial em vez de cair no sopão. Não é recalibração de fome/preço/sopão, só o que já é zero na prática ser tratado como zero.",
+            "saldo_residual_pc": 0.01
         },
         "trabalhar": {
             "_comentario_n02": "N02 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco N, 2026-09-14): `salario_pc` deixou de ser o salário — virou `salario_divisor_minutos`, o divisor que converte o `salario_base` do Local de trabalho (50-110 PC, gravado pelo cartógrafo) em PC por minuto. 600 = minutos de um expediente de 10h (600min = 10h × 60). O salário agora varia por edifício, não é mais uma constante global igual pro ferreiro e o guarda — ver `engine/mechanics/actions.py::salario_por_minuto`.",

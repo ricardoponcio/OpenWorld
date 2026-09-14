@@ -16,7 +16,7 @@ import pytest
 
 from engine.config_loader import carregar_config_global, cfg_get
 from engine.models import (
-    Cidade, NPC, Acao, EstagioVida, Genero, EstadoCivil, HumorNPC,
+    Cidade, NPC, Acao, ContadorMundo, EstagioVida, Genero, EstadoCivil, HumorNPC,
     TipoLocal, CategoriaLocal, VinculoSocial,
 )
 from engine.mechanics.kingdom import KingdomManager
@@ -583,6 +583,20 @@ def test_bebe_nasce_na_cidade_da_mae(config, monkeypatch):
 # ----------------------------------------------------------------------
 # NPCActionManager e NPCMovementManager
 # ----------------------------------------------------------------------
+
+def test_saldo_residual_vai_para_o_sopao_e_nao_para_refeicao_parcial(config):
+    """O05 (docs/16_PLANO_PAINEL_E_IA.md): saldo abaixo de `saldo_residual_pc`
+    (resíduo de ponto flutuante — medido 1,37e-13 PC numa run real) conta como
+    zero: cai no ramo do sopão, nunca fica preso em REFEICAO_PARCIAL pra sempre."""
+    pagador = adulto("npc_1", "Quase Sem Nada", acao_atual=Acao.COMER,
+                     dinheiro_total_pc=1e-13, fome=80.0)
+    mundo = mundo_de(npcs=[pagador], locais=[casa()])
+
+    NPCActionManager(mundo, config).executar_acao(pagador)
+
+    assert mundo.contadores[ContadorMundo.REFEICAO_PARCIAL] == 0
+    assert pagador.dinheiro_total_pc == 0
+
 
 def test_trabalhar_paga_salario_e_gasta_energia(config):
     ferreiro = adulto("npc_1", "Dorn Ferreiro", local_trabalho_id="loc_forja",
