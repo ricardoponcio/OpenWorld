@@ -1,7 +1,6 @@
-import time
-import random
 from datetime import datetime
 from ..models import NPC, Evento, Acao, EstagioVida, TipoEvento
+from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 
@@ -53,7 +52,7 @@ class NPCLegacyManager:
                 WorldLogger.info(f"💰 [HERANÇA] {resumo_heranca}", npc=npc)
                 
                 evt_heranca = Evento(
-                    id=f"evt_heranca_{int(time.time())}_{random.randint(0,999)}",
+                    id=novo_id(PrefixoId.EVENTO_HERANCA),
                     timestamp=timestamp_rpg,
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id] + [h.id for h in herdeiros],
@@ -67,7 +66,7 @@ class NPCLegacyManager:
                 WorldLogger.info(f"👑 [REINO] {resumo_heranca}", npc=npc)
                 
                 evt_reino = Evento(
-                    id=f"evt_reino_{int(time.time())}_{random.randint(0,999)}",
+                    id=novo_id(PrefixoId.EVENTO_REINO),
                     timestamp=timestamp_rpg,
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id],

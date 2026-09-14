@@ -1,7 +1,6 @@
-import time
-import random
 from datetime import datetime
 from ..models import NPC, Evento, EstagioVida, TipoEvento, Acao
+from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
 from ..tempo import RelogioMundo
@@ -48,7 +47,7 @@ class NPCLifecycleManager:
                 WorldLogger.info(f"🌱 [CRESCIMENTO] {resumo}", npc=npc)
                 
                 evento = Evento(
-                    id=f"evt_crescer_{int(time.time())}_{random.randint(0,999)}",
+                    id=novo_id(PrefixoId.EVENTO_CRESCER),
                     timestamp=timestamp_rpg,
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id],
@@ -77,7 +76,7 @@ class NPCLifecycleManager:
                 WorldLogger.info(f"🌱 [MAIORIDADE] {resumo}", npc=npc)
 
                 evento = Evento(
-                    id=f"evt_adulto_{int(time.time())}_{random.randint(0,999)}",
+                    id=novo_id(PrefixoId.EVENTO_ADULTO),
                     timestamp=timestamp_rpg,
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id],
@@ -100,7 +99,7 @@ class NPCLifecycleManager:
                 WorldLogger.info(f"👵 [ENVELHECIMENTO] {resumo}", npc=npc)
 
                 evento = Evento(
-                    id=f"evt_idoso_{int(time.time())}_{random.randint(0,999)}",
+                    id=novo_id(PrefixoId.EVENTO_IDOSO),
                     timestamp=timestamp_rpg,
                     local_id=npc.casa_id or "rua",
                     envolvidos=[npc.id],
@@ -134,7 +133,7 @@ class NPCLifecycleManager:
             resumo = f"Luto na Vila: O habitante {npc.nome} faleceu{idade_str} devido a problemas de saúde/inanição."
         
         evento = Evento(
-            id=f"evt_morte_{int(time.time())}_{random.randint(0,999)}",
+            id=novo_id(PrefixoId.EVENTO_MORTE),
             timestamp=timestamp_rpg,
             local_id=npc.casa_id or "rua",
             envolvidos=[npc.id],

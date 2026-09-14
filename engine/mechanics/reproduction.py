@@ -1,8 +1,8 @@
-import time
 import random
 import threading
 from dataclasses import dataclass
 from ..models import NPC, Evento, EstagioVida, HumorNPC, TipoEvento, Acao, Genero
+from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
 from ..ai import AIBiographyClient
@@ -90,7 +90,7 @@ class NPCReproductionManager:
                             resumo = f"Grande notícia em segredo: {m.nome} e {h.nome} estão esperando um bebê!"
                             
                             evento = Evento(
-                                id=f"evt_concepcao_{int(time.time())}_{random.randint(0,999)}",
+                                id=novo_id(PrefixoId.EVENTO_CONCEPCAO),
                                 timestamp=timestamp_rpg,
                                 local_id=casa_id,
                                 envolvidos=[m.id, h.id],
@@ -136,7 +136,7 @@ class NPCReproductionManager:
         # 3. Criar e salvar o bebê com nome temporário no banco
         timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
         
-        bebe_id = f"npc_nac_{int(time.time())}_{random.randint(0, 999)}"
+        bebe_id = novo_id(PrefixoId.NPC_NASCIDO)
         
         novo_bebe = NPC(
             id=bebe_id,
@@ -191,7 +191,7 @@ class NPCReproductionManager:
         # Registrar evento de parto com nome temporário
         pais_str = f"{mae.nome} e {pai.nome}" if pai else mae.nome
         resumo_temp = f"Nascimento na Vila! Nasceu o bebê {nome_temp_bebe} ({_ROTULO_GENERO_BEBE[genero_bebe]}), filho de {pais_str}."
-        evento_id = f"evt_parto_{int(time.time())}_{random.randint(0,999)}"
+        evento_id = novo_id(PrefixoId.EVENTO_PARTO)
         
         evento = Evento(
             id=evento_id,

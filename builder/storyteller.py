@@ -10,10 +10,10 @@ DESCRIÇÃO: Utiliza IA para descrever e criar um evento mundial pontual (afeta 
 import json
 import os
 import sys
-from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from engine.ai import AIStorytellerClient
+from engine.identificadores import PrefixoId, novo_id
 from engine.mechanics.mestre import MestreManager
 from engine.config_loader import carregar_config_global
 from web.banco import obter_db
@@ -33,7 +33,7 @@ def run_storyteller(tema=TEMA_PADRAO):
     try:
         evento = AIStorytellerClient.gerar_evento_global(tema, contexto)
 
-        ev_id = f"glob_{int(datetime.now().timestamp())}"
+        ev_id = novo_id(PrefixoId.EVENTO_GLOBAL)
         db.eventos.salvar_global(
             ev_id, evento['titulo'], evento['descricao'], evento['tipo'],
             evento.get('afeta_local_id'), json.dumps(evento['modificadores']),

@@ -10,9 +10,9 @@ DESCRIÇÃO:
     pelo construtor: um teste de interação social pode passar um dublê e medir só a
     afinidade, sem que um romance surpresa altere o resultado.
 """
-import time
 import random
 from ..models import NPC, Acao, Evento, TipoEvento, VinculoSocial
+from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
 from ..tempo import RelogioMundo
@@ -128,7 +128,7 @@ class NPCSocialManager:
             tipo = "CONVERSA" if mod >= 0 else "DISCUSSAO"
             resumo = f"{n1.nome} e {n2.nome} tiveram uma {tipo} em {local_nome}."
             timestamp_rpg = RelogioMundo.timestamp_rpg(self._mundo.data_simulada)
-            evento = Evento(f"evt_{int(time.time())}_{random.randint(0,999)}",
+            evento = Evento(novo_id(PrefixoId.EVENTO_SOCIAL),
                             timestamp_rpg, loc_id, [n1.id, n2.id], tipo, mod, resumo)
             WorldLogger.debug(f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})", npc=n1)
             WorldLogger.queue_db_log(n2, "DEBUG", f"  >> EVENTO: {resumo} (Afinidade: {nova_afinidade} | {vinculo})")

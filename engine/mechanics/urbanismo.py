@@ -22,12 +22,11 @@ DESCRIÇÃO:
 """
 import json
 import os
-import random
-import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from ..models import Evento, Local, LoteEstado, Lote, NPC, TipoEvento
+from ..identificadores import PrefixoId, novo_id
 from ..logger import WorldLogger
 from ..config_loader import cfg_get
 from ..mundo import EstadoDoMundo
@@ -311,7 +310,7 @@ class GerenciadorUrbanismo:
 
         resumo = f"{cidade.nome} transbordou os muros — nasceu um arrabalde novo, com {len(lotes_novos)} lotes."
         evento = Evento(
-            id=f"evt_expansao_{int(time.time())}_{random.randint(0, 999)}",
+            id=novo_id(PrefixoId.EVENTO_EXPANSAO),
             timestamp=RelogioMundo.timestamp_rpg(self._mundo.data_simulada),
             local_id="", envolvidos=[], tipo_evento=TipoEvento.EXPANSAO_URBANA.value,
             modificador_afinidade=0, resumo_estruturado=resumo,

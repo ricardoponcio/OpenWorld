@@ -7,9 +7,9 @@ DESCRIÇÃO:
     critérios de elegibilidade biológica/social, formalização atômica do
     casamento no RPG, e a rotina cron de casamentos passivos.
 """
-import time
 import random
 from ..models import NPC, Evento, TipoEvento, EstadoCivil, VinculoSocial
+from ..identificadores import PrefixoId, novo_id
 from ..tempo import RelogioMundo
 from ..logger import WorldLogger
 from ..consultas_npc import NPCUtils
@@ -185,7 +185,7 @@ class NPCMarriageManager:
             bonus_afinidade = 30
 
         evento = Evento(
-            id=f"evt_uniao_{int(time.time())}_{random.randint(0,999)}",
+            id=novo_id(PrefixoId.EVENTO_UNIAO),
             timestamp=timestamp_rpg,
             local_id=casa_escolhida,
             envolvidos=[n1.id, n2.id],
