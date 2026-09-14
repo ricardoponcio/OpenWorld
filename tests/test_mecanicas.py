@@ -558,6 +558,28 @@ def test_concepcao_recusa_parentes(config, monkeypatch):
     assert mae.gravidez_ticks == 0
 
 
+def test_bebe_nasce_na_cidade_da_mae(config, monkeypatch):
+    """C02 (docs/16_PLANO_PAINEL_E_IA.md): `processar_parto` não copiava `cidade_id`
+    da mãe pro `NPC(...)` do recém-nascido — 493 bebês (todos os nascidos em jogo)
+    ficaram com `cidade_id` nulo numa run real, fora de `npcs_por_cidade`, do
+    mercado de trabalho quando crescerem, do contexto do Mestre e das estatísticas."""
+    monkeypatch.setattr(
+        NPCReproductionManager, "_iniciar_batizado_assincrono", lambda self, dados: None)
+
+    mae = adulto("npc_mae", "Mãe Gestante", genero=Genero.FEMININO.value,
+                 cidade_id=2, gravidez_ticks=1)
+    cidade = Cidade(2, "uuid", "Cidade da Mãe", "pequena", "vila", 100, 100)
+    mundo = mundo_de(npcs=[mae], locais=[casa()], cidades=[cidade])
+
+    NPCReproductionManager(mundo, config).processar_parto(mae)
+
+    bebes = [n for n in mundo.npcs if n.mae_id == mae.id]
+    assert len(bebes) == 1
+    bebe = bebes[0]
+    assert bebe.cidade_id == 2
+    assert bebe in mundo.npcs_por_cidade[2]
+
+
 # ----------------------------------------------------------------------
 # NPCActionManager e NPCMovementManager
 # ----------------------------------------------------------------------

@@ -139,6 +139,13 @@ def invariante_9_indice_social_nao_vazio(npcs: list, locais: dict) -> list:
     return sorted(cid for cid in cidades_habitadas if not indice.sociais(cid) or not indice.passeio(cid))
 
 
+def invariante_10_todo_vivo_tem_cidade(npcs: list) -> list:
+    """C02 (docs/16_PLANO_PAINEL_E_IA.md): `processar_parto` não copiava `cidade_id`
+    da mãe pro bebê — 493 NPCs (todos os nascidos em jogo) ficaram sem cidade numa
+    run real, fora de `npcs_por_cidade`, do mercado de trabalho e das estatísticas."""
+    return sorted(n.id for n in npcs if n.esta_vivo() and not n.cidade_id)
+
+
 INVARIANTES = [
     ("1. tipo em TipoLocal", lambda m: invariante_1_tipo_no_enum(m.locais)),
     ("2. ninguém trabalha em residência", lambda m: invariante_2_ninguem_trabalha_em_residencia(m.npcs, m.locais)),
@@ -149,6 +156,7 @@ INVARIANTES = [
     ("7. pais não são parentes entre si", lambda m: invariante_7_pais_nao_sao_parentes(m.npcs)),
     ("8. nome de cidade é único", lambda m: invariante_8_nome_de_cidade_unico(MANIFEST_PATH)),
     ("9. índice social/passeio não vazio", lambda m: invariante_9_indice_social_nao_vazio(m.npcs, m.locais)),
+    ("10. todo vivo tem cidade", lambda m: invariante_10_todo_vivo_tem_cidade(m.npcs)),
 ]
 
 

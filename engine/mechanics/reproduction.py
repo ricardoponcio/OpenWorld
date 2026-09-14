@@ -144,6 +144,11 @@ class NPCReproductionManager:
             profissao="dependente",
             profissao_id="ocioso",
             casa_id=mae.casa_id,
+            # C02 (docs/16_PLANO_PAINEL_E_IA.md): sem isto o bebê nascia sem cidade —
+            # 493 casos (todos os nascidos em jogo) numa run real, fora de
+            # npcs_por_cidade, do mercado de trabalho ao crescer, do contexto do
+            # Mestre e das estatísticas.
+            cidade_id=mae.cidade_id,
             local_trabalho_id="",
             localizacao_atual_id=mae.casa_id,
             acao_atual=Acao.OCIOSO,
