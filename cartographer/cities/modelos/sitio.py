@@ -5,12 +5,12 @@ e passado pronto — nenhum modelo chama `obter_cartografo()` nem lê `mapa_comp
 diretamente.
 
 Armadilha de determinismo (F4.6/Seção 10.1): `SitioCidade.medir()` precisa do RAIO da
-cidade pra saber que janela de terreno amostrar, mas o raio só é sorteado dentro do
-modelo (com `self.rng`, que só existe depois do sítio medido — Seção 4.5). A saída: o
-raio é sorteado aqui com uma cópia efêmera de `random.Random(seed)`, só pra dimensionar a
-janela; o modelo (radial.py) redesenha o MESMO valor logo depois com o `self.rng` real
-(mesma seed, mesma sequência determinística) — nenhum estado de RNG é compartilhado entre
-os dois, e o resultado bate byte a byte com o comportamento de antes do F4.
+cidade pra saber que janela de terreno amostrar, mas o raio real só é conhecido DEPOIS
+que o modelo existe — desde R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R) ele é
+DERIVADO do número de domicílios sorteado (`escala.py:raio_para_lotes`), não mais
+sorteado direto. A saída: a janela usa o TETO de `faixa_raio_m` (não mais uma amostra
+do rng) — seguro por construção, porque `raio_para_lotes` sempre grampeia o raio
+derivado dentro dessa mesma faixa, então o teto nunca é menor que o raio final.
 """
 import os
 import math
@@ -84,11 +84,16 @@ class SitioCidade:
         y_mundo = float(cidade["y_global"])
         metros_por_px = metros_por_pixel_mundo(config)
 
-        # Raio efêmero só pra dimensionar a janela de terreno — ver docstring do módulo.
-        import random
-        raio_provisorio = random.Random(seed).uniform(*faixa_raio_m(config, tamanho))
+        # R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio real só é conhecido
+        # DEPOIS do modelo existir (é derivado do número de domicílios sorteado, não
+        # mais sorteado direto — `raio_para_lotes`). Dimensionar a janela de terreno
+        # com o TETO de `faixa_raio_m` (não mais uma amostra provisória do rng) é
+        # seguro por construção: `raio_para_lotes` sempre GRAMPEIA o raio derivado
+        # dentro dessa mesma faixa, então o teto nunca é menor que o raio final —
+        # a janela nunca fica pequena demais (G06/Q04, docs/PLANO_CIDADE_VIVA.md).
+        _, teto_raio_m = faixa_raio_m(config, tamanho)
         fator_janela = cfg_get(config, "cidade_geo_janela_terreno_fator")
-        raio_janela_m = raio_provisorio * fator_janela
+        raio_janela_m = teto_raio_m * fator_janela
 
         terreno = grad_x = grad_y = None
         altitude_media = temperatura_media = umidade_media = 0.0

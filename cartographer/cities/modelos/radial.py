@@ -12,8 +12,8 @@ dizer igual ao de antes) e é o motivo de a "grade" deixar de ser um array 2D re
 import math
 
 from config import cfg_get
-from cartographer.cities.escala import faixa_raio_m
-from .base import ModeloCidade, Rua, Quadra, Malha, envolver_poligono, pontos_ao_longo_do_poligono, densificar_anel
+from .base import (ModeloCidade, Rua, Quadra, Malha, envolver_poligono,
+                    pontos_ao_longo_do_poligono, densificar_anel, derivar_ou_forcar_raio)
 
 # Dois anéis vizinhos podem se mover um na direção do outro, então a soma das duas
 # amplitudes tem que caber no vão: cada uma < metade. 0.45 dá 10% de margem de
@@ -29,12 +29,16 @@ FATOR_TOLERANCIA_LARGURA = 1.5
 class RadialModelo(ModeloCidade):
     nome = "radial"
 
-    def __init__(self, sitio, config, rng):
+    def __init__(self, sitio, config, rng, raio_m_forcado=None):
         super().__init__(sitio, config, rng)
         # ⚠️ Ordem de consumo do self.rng idêntica à do GeradorCidade de antes do F4
-        # (raio -> anéis -> fator de lote -> setores) — mudar a ordem muda todas as
-        # cidades do mundo, silenciosamente (Seção 10 item 1).
-        self.raio_m = self.rng.uniform(*faixa_raio_m(config, sitio.tamanho))
+        # (domicílios -> anéis -> fator de lote -> setores) — mudar a ordem muda
+        # todas as cidades do mundo, silenciosamente (Seção 10 item 1). R01 (docs/
+        # PLANO_POPULACAO_E_ESCALA.md, Bloco R): o raio deixou de ser sorteado
+        # direto — é DERIVADO do número de domicílios sorteado aqui, na MESMA
+        # posição da sequência que o sorteio de raio ocupava antes.
+        self.raio_m, self.lotes_alvo = derivar_ou_forcar_raio(
+            sitio, config, self.rng, raio_m_forcado, self.nome)
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)
         # G05: num_aneis deixa de ser sorteado independente do raio — o vão entre anéis
         # (raio_m / (num_aneis+1)) É a profundidade da quadra (Anexo 3 do

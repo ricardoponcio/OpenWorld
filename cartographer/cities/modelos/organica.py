@@ -20,8 +20,8 @@ PASSO_ANGULAR_FRACAO_MAXIMA = 0.35
 class OrganicaModelo(RadialModelo):
     nome = "organica"
 
-    def __init__(self, sitio, config, rng):
-        super().__init__(sitio, config, rng)
+    def __init__(self, sitio, config, rng, raio_m_forcado=None):
+        super().__init__(sitio, config, rng, raio_m_forcado)
         # F7.1.1/G04: irregularidade maior — depois de G01 o raio do anel não lê mais
         # `self.irreg` (só a silhueta de grade/muralha lê), então "organica é mais torta
         # que radial" passa a ser a mesma fração do vão, só que amplificada — sempre

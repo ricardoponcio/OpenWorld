@@ -45,10 +45,59 @@ def faixa_raio_m(config, tamanho):
     sorteiam o raio) passam por aqui; se um dos dois lesse a chave crua e o outro
     passasse pela escala, a janela deixaria de cobrir a cidade e o terreno seria lido
     errado, silenciosamente, por causa do `np.clip` que G06 removeu (Q04, docs/
-    PLANO_CIDADE_VIVA.md)."""
+    PLANO_CIDADE_VIVA.md).
+
+    R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): desde que o raio passou a ser
+    DERIVADO do número de domicílios (`raio_para_lotes`), esta faixa deixou de ser a
+    FONTE do raio e virou só o piso/teto de sanidade que grampeia o resultado — ela
+    continua sendo o que `SitioCidade` usa pra dimensionar a janela de terreno (o teto
+    é sempre >= qualquer raio derivado, por construção do grampo)."""
     faixa = cfg_get(config, "cidade_geo_raio_m_faixa_por_tamanho").get(tamanho, [500.0, 500.0])
     escala = cfg_get(config, "cidade_geo_escala")
     return [faixa[0] * escala, faixa[1] * escala]
+
+
+def domicilios_alvo(config, tamanho, rng):
+    """R01: quantos domicílios (lotes residenciais que nascem OCUPADOS) a cidade deve
+    ter — o sorteio PRIMÁRIO da cidade agora; o raio passa a ser DERIVADO disso
+    (`raio_para_lotes`), não mais sorteado direto. Único lugar que lê
+    `cidade_geo_domicilios_alvo_faixa_por_tamanho`.
+
+    `cidade_geo_escala` (D5, docs/PLANO_CIDADE_VIVA.md) multiplica AQUI — domicílios,
+    não mais raio. O float continua sendo "o tamanho das cidades do mundo", só que
+    numa unidade que corresponde a gente de verdade (`builder/populador.py` conta os
+    domicílios que nasceram ocupados pra decidir quantas famílias povoar, R03)."""
+    faixa = cfg_get(config, "cidade_geo_domicilios_alvo_faixa_por_tamanho").get(tamanho, [50.0, 50.0])
+    escala = cfg_get(config, "cidade_geo_escala")
+    return rng.uniform(*faixa) * escala
+
+
+def lotes_alvo(config, tamanho, domicilios: float) -> float:
+    """R01: quantos lotes (residenciais + comerciais + institucionais) a cidade
+    precisa pra comportar `domicilios` residências, dada a fração de lotes ocupados
+    no nascimento (`cidade_geo_ocupacao_inicial_por_tamanho`, D2) e o piso de área
+    residencial (`cidade_geo_fracao_residencial_min`) — os dois já existem, D01/D02
+    de PLANO_CIDADE_VIVA.md, e não são recalculados aqui, só lidos."""
+    ocupacao = cfg_get(config, "cidade_geo_ocupacao_inicial_por_tamanho").get(tamanho, 1.0)
+    fracao_residencial_min = cfg_get(config, "cidade_geo_fracao_residencial_min")
+    return domicilios / (ocupacao * fracao_residencial_min)
+
+
+def raio_para_lotes(config, modelo_nome: str, lotes_alvo_valor: float, tamanho: str):
+    """R02: converte "quero N lotes" em "então o raio é R", usando a densidade de
+    lote por raio MEDIDA por modelo (`cidade_geo_densidade_lote_por_modelo`,
+    `builder/fix/calibrar_densidade.py`) — nunca deduzida (a relação varia por
+    modelo: `grade` cresce com raio², `linear` quase linear com raio).
+
+    `lotes = k * raio^e  =>  raio = (lotes/k)^(1/e)`. Grampeado em `faixa_raio_m`
+    (agora piso/teto de sanidade, não mais fonte) — devolve `(raio_m, grampeado)`
+    pro chamador decidir se registra o estouro; grampear e engolir em silêncio
+    esconderia a faixa de domicílios saindo de calibragem (R01, Ação 4)."""
+    k, e = cfg_get(config, "cidade_geo_densidade_lote_por_modelo")[modelo_nome]
+    raio_bruto = (lotes_alvo_valor / k) ** (1.0 / e)
+    piso, teto = faixa_raio_m(config, tamanho)
+    raio_final = max(piso, min(teto, raio_bruto))
+    return raio_final, raio_final != raio_bruto
 
 
 def diametro_px_de_mundo(config, raio_m):

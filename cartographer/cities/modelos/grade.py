@@ -7,16 +7,18 @@ novo a entrar.
 import math
 
 from config import cfg_get
-from cartographer.cities.escala import faixa_raio_m
-from .base import ModeloCidade, Rua, Quadra, Malha, pontos_ao_longo_do_poligono
+from .base import ModeloCidade, Rua, Quadra, Malha, pontos_ao_longo_do_poligono, derivar_ou_forcar_raio
 
 
 class GradeModelo(ModeloCidade):
     nome = "grade"
 
-    def __init__(self, sitio, config, rng):
+    def __init__(self, sitio, config, rng, raio_m_forcado=None):
         super().__init__(sitio, config, rng)  # roda ajustar_por_sitio (calibra self.lado_faixa)
-        self.raio_m = self.rng.uniform(*faixa_raio_m(config, sitio.tamanho))
+        # R01 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): raio derivado de
+        # domicílios, não mais sorteado direto — mesmo raciocínio de radial.py.
+        self.raio_m, self.lotes_alvo = derivar_ou_forcar_raio(
+            sitio, config, self.rng, raio_m_forcado, self.nome)
         faixa_fator_cidade = cfg_get(config, "cidade_geo_lote_fator_cidade_faixa")
         self.lote_fator_cidade = self.rng.uniform(*faixa_fator_cidade)
         self.num_portoes = cfg_get(config, "cidade_geo_num_portoes_por_tamanho").get(sitio.tamanho, 2)

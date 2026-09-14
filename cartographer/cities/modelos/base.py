@@ -15,6 +15,31 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from config import cfg_get
+from cartographer.cities.escala import domicilios_alvo, lotes_alvo, raio_para_lotes
+
+
+def derivar_ou_forcar_raio(sitio, config, rng, raio_m_forcado, nome_modelo):
+    """R01/R02 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): compartilhado pelos
+    modelos que sorteiam `raio_m` no próprio `__init__` (radial, grade, linear —
+    organica herda de radial) pra nunca triplicar a mesma conta (armadilha 12, docs/
+    PLANO_POPULACAO_E_ESCALA.md: um cálculo copiado é dois cálculos que podem
+    divergir). ⚠️ Chame na MESMA posição da sequência do `rng` que o sorteio de raio
+    ocupava antes de R01 — mudar a ordem muda todas as cidades do mundo (Seção 10
+    item 1).
+
+    Devolve `(raio_m, lotes_alvo_valor)`. `lotes_alvo_valor` é `None` quando
+    `raio_m_forcado` foi usado (R02, `builder/fix/calibrar_densidade.py`) — não há
+    alvo pra comparar contra o medido numa calibragem."""
+    if raio_m_forcado is not None:
+        return raio_m_forcado, None
+    domicilios = domicilios_alvo(config, sitio.tamanho, rng)
+    valor_lotes_alvo = lotes_alvo(config, sitio.tamanho, domicilios)
+    raio_m, grampeado = raio_para_lotes(config, nome_modelo, valor_lotes_alvo, sitio.tamanho)
+    if grampeado:
+        print(f"⚠️  {sitio.nome}: raio derivado de domicílios saturou a faixa de sanidade "
+              f"({raio_m:.0f} m) — cidade_geo_domicilios_alvo_faixa_por_tamanho pode estar "
+              f"fora de calibragem pra '{sitio.tamanho}'.")
+    return raio_m, valor_lotes_alvo
 
 
 def pontos_ao_longo_do_poligono(poligono, espacamento):
@@ -202,6 +227,12 @@ class ModeloCidade:
         # rng, em ordem específica (ver o comentário de determinismo em radial.py).
         self.raio_m = 500.0
         self.lote_fator_cidade = 1.0
+        # R02 (docs/PLANO_POPULACAO_E_ESCALA.md): quantos lotes a cidade deveria ter,
+        # segundo `derivar_ou_forcar_raio` — `None` pro modelo mínimo (T5, sem raio
+        # derivado) e pra qualquer geração calibrada (R02, `raio_m_forcado`). Quem lê
+        # isto (`manifesto.py`, a correção de Newton) trata `None` como "sem alvo pra
+        # comparar", não como zero.
+        self.lotes_alvo = None
         # F5.2/Seção 10 item 10: ajustar_por_sitio roda ANTES de construir_malha, mas
         # DEPOIS de rng/np_rng existirem — e não pode consumir self.rng (desloca a
         # sequência inteira pra todas as cidades). Ele só lê o sítio e ajusta parâmetros.

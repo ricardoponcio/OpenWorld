@@ -1,4 +1,4 @@
-from ..models import Lote, LoteEstado
+from ..models import Lote, LoteEstado, CategoriaLocal
 
 
 class RepositorioLote:
@@ -102,6 +102,22 @@ class RepositorioLote:
                 "UPDATE lotes SET estado = ?, local_id = '', dono_npc_id = '' "
                 "WHERE id = ? AND estado = ?",
                 (LoteEstado.LIVRE.value, lote_id, LoteEstado.OCUPADO.value))
+
+    def contar_residencias_ocupadas(self, cidade_id: int) -> int:
+        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): quantos domicílios nasceram
+        ocupados nesta cidade — um lote 'ocupado' cujo Local é uma RESIDÊNCIA (marco e
+        comércio de bairro também nascem 'ocupados', T03/D2, e não contam como família).
+        Cada residência ocupada é uma família, no contrato de R00: o cartógrafo decide
+        quantos domicílios a cidade tem, o povoador CONTA o resultado, nunca recalcula."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT COUNT(*) AS n FROM lotes l
+                   JOIN locais loc ON loc.id = l.local_id
+                   WHERE l.cidade_id = ? AND l.estado = ? AND loc.categoria = ?""",
+                (cidade_id, LoteEstado.OCUPADO.value, CategoriaLocal.RESIDENCIA.value))
+            row = cursor.fetchone()
+            return row["n"] if row else 0
 
     def alterados_por_cidade(self, cidade_id: int) -> list:
         """T05: lotes cujo `estado` já não é mais o que o GeoJSON gravou na importação

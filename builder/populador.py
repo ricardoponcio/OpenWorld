@@ -193,12 +193,12 @@ class PopuladorDeMundo:
         self.locais_trabalho_por_cidade = {}
         self.npcs_gerados = []
 
-    def executar(self, num_npcs: int = None) -> None:
-        """`num_npcs`, quando informado, SUBSTITUI `npcs_por_cidade` do config como a
-        base per-cidade (ainda escalada por `npcs_por_cidade_por_tamanho`) — é o que
-        permite `--npcs 5` num reset rápido de teste sem editar o config.json."""
+    def executar(self) -> None:
+        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): não existe mais uma base de
+        NPCs por cidade vinda do config — o cartógrafo já decidiu quantos domicílios a
+        cidade tem (R01/R02), o povoador só CONTA quantas residências nasceram
+        ocupadas e sorteia o tamanho de cada família (`npcs_por_familia_faixa`)."""
         print(f"🏗️  Iniciando Povoamento Dinâmico de Mundo (Tema: {self.tema})")
-        base_npcs = num_npcs if num_npcs is not None else cfg_get(self.cfg_pop, "npcs_por_cidade")
 
         self._importar_cartografia()
         if not self.cidades_salvas:
@@ -208,9 +208,9 @@ class PopuladorDeMundo:
         self._importar_geometria_das_cidades()
         self._coletar_locais_de_trabalho()
 
-        dnas = self._gerar_dnas_em_paralelo(base_npcs)
+        dnas = self._gerar_dnas_em_paralelo()
         self._criar_npcs(dnas)
-        self._formar_casais_iniciais(base_npcs)
+        self._formar_casais_iniciais()
         self._estabelecer_lacos_sociais()
         self._inicializar_mercado_de_trabalho()
 
@@ -284,31 +284,45 @@ class PopuladorDeMundo:
                 candidatos = [Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)]
             self.locais_trabalho_por_cidade[cid['db_id']] = candidatos
 
-    def _populacao_da_cidade(self, cidade: dict, base_npcs: int) -> int:
-        """P07/D1: multiplicador por tamanho (a capital parece capital) sobre a base
-        configurada (`npcs_por_cidade`, ou o override de `--npcs`)."""
-        multiplicadores = cfg_get(self.cfg_pop, "npcs_por_cidade_por_tamanho")
-        fator = multiplicadores.get(cidade.get('tamanho', 'medio'), 1.0)
-        return max(1, round(base_npcs * fator))
+    def _familias_da_cidade(self, cidade_id: int) -> list:
+        """R03 (docs/PLANO_POPULACAO_E_ESCALA.md, Bloco R): as casas ocupadas da
+        cidade, uma por família — contrato de R00: o cartógrafo decide quantos
+        domicílios a cidade tem, o povoador CONTA o resultado, nunca recalcula.
+        `contar_residencias_ocupadas` lê o estado que vive no banco (T01), fonte de
+        verdade; a lista de `casas_por_cidade` (parse do GeoJSON na importação, mesma
+        passada de T02) é quem carrega os ids pra atribuir família a casa. Cidade em
+        paliativo (sem Lote nenhum, Bloco T) não tem 'ocupado' pra contar no banco —
+        cada casa provisória vira uma família mesmo assim."""
+        casas = self.casas_por_cidade.get(cidade_id) or []
+        n_banco = self.db.lotes.contar_residencias_ocupadas(cidade_id)
+        if n_banco and n_banco != len(casas):
+            WorldLogger.warning(
+                f"[POPULATE] cidade {cidade_id}: {n_banco} residência(s) ocupada(s) no "
+                f"banco, mas {len(casas)} casa(s) na lista da geometria — usando a lista.")
+        return casas
 
-    def _gerar_dnas_em_paralelo(self, base_npcs: int) -> list:
-        """P07: itera TODAS as cidades ativas, cada uma com sua própria população
-        (`_populacao_da_cidade`). Custo de IA: só a cidade em FOCO recebe geração de
+    def _gerar_dnas_em_paralelo(self) -> list:
+        """R03: itera TODAS as cidades ativas; em cada uma, uma família por residência
+        ocupada (`_familias_da_cidade`), com tamanho sorteado em
+        `npcs_por_familia_faixa`. Custo de IA: só a cidade em FOCO recebe geração de
         DNA por IA de verdade — as outras usam fallback procedural direto, sem
         nenhuma chamada de IA (de 20 pra 750 NPCs seriam 750 chamadas; sem isto o
         custo aparece na fatura, não numa decisão consciente)."""
+        faixa_familia = cfg_get(self.cfg_pop, "npcs_por_familia_faixa")
         npc_params = []
         for cid in self.cidades_ativas:
             cidade_id = cid['db_id']
-            n = self._populacao_da_cidade(cid, base_npcs)
-            casas = self.casas_por_cidade.get(cidade_id) or []
+            casas = self._familias_da_cidade(cidade_id)
             locais_trabalho = self.locais_trabalho_por_cidade.get(cidade_id) or []
-            for i in range(n):
-                genero_alvo = Genero.MASCULINO.value if i % 2 == 0 else Genero.FEMININO.value
-                casa = random.choice(casas) if casas else ""
-                loc_trabalho = random.choice(locais_trabalho) if locais_trabalho else \
-                    Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)
-                npc_params.append((cidade_id, i, genero_alvo, loc_trabalho, casa))
+            idx = 0
+            for casa in casas:
+                tamanho_familia = random.randint(int(faixa_familia[0]), int(faixa_familia[1]))
+                for membro in range(tamanho_familia):
+                    genero_alvo = Genero.MASCULINO.value if membro % 2 == 0 else Genero.FEMININO.value
+                    loc_trabalho = random.choice(locais_trabalho) if locais_trabalho else \
+                        Local(id="_fallback", nome="Praça", tipo="Social", categoria=CategoriaLocal.PUBLICO.value)
+                    npc_params.append((cidade_id, idx, genero_alvo, loc_trabalho, casa))
+                    idx += 1
 
         print(f"👥 Povoando {len(self.cidades_ativas)} cidade(s) com {len(npc_params)} "
               f"habitante(s) no total (IA: Workers {self.ia_max_thread}, só na cidade em foco)...")
@@ -400,7 +414,7 @@ class PopuladorDeMundo:
             agrupado.setdefault(n.cidade_id, []).append(n)
         return agrupado
 
-    def _formar_casais_iniciais(self, base_npcs: int) -> None:
+    def _formar_casais_iniciais(self) -> None:
         """P07: casais só entre habitantes da MESMA cidade — roda por cidade ativa, não
         sobre a população global (casamento entre cidades diferentes não faz sentido,
         mesmo raciocínio de P04)."""
@@ -415,9 +429,8 @@ class PopuladorDeMundo:
             adultos_f = [n for n in habitantes if n.genero == Genero.FEMININO.value and n.estagio_vida == EstagioVida.ADULTO.value]
             casas_cidade = self.casas_por_cidade.get(cidade_id) or [""]
 
-            n_populacao = self._populacao_da_cidade(cid, base_npcs)
             num_casais = min(len(adultos_m), len(adultos_f),
-                             n_populacao // cfg_get(self.cfg_pop, "casal_divisor_por_npc"))
+                             len(habitantes) // cfg_get(self.cfg_pop, "casal_divisor_por_npc"))
             for idx in range(num_casais):
                 m, f = adultos_m[idx], adultos_f[idx]
 

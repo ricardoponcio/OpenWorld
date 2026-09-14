@@ -8,7 +8,7 @@ rm -f database/openworld.db
 bash cartographer/reset_cartography.sh
 
 echo "👥 Povoando o mundo com IA..."
-venv/bin/python builder/populate.py --npcs 20 --ia-max-thread 4
+venv/bin/python builder/populate.py --ia-max-thread 4
 
 echo "✨ PROCESSO CONCLUÍDO! O mundo está povoado e pronto."
 echo "💡 Para iniciar a simulação, execute: python3 run_simulation.py"
