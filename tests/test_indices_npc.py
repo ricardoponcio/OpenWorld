@@ -11,6 +11,7 @@ BYTE A BYTE iguais a uma reconstrução do zero — é o teste que pega o `mover
 from engine.config_loader import carregar_config_global
 from engine.consultas_npc import NPCUtils
 from engine.loop import GameLoop
+from engine.mechanics.finance import NPCLegacyManager
 from engine.models import Cidade, EstagioVida, Genero
 from tests.mundo_sintetico import adulto, casa, mundo_de
 
@@ -110,6 +111,42 @@ def test_mudar_cidade_move_entre_os_indices_e_limpa_casa_trabalho():
     assert npc.id not in {n.id for n in mundo.npcs_por_cidade.get(1, [])}
     assert npc.id not in {n.id for n in mundo.npcs_por_casa.get("casa_1", [])}
     assert npc.id not in {n.id for n in mundo.npcs_por_localizacao.get("casa_1", [])}
+
+
+class _NaoItereTudo(list):
+    """D02: prova que `processar_heranca` não varre `mundo.npcs` inteiro — qualquer
+    iteração completa da lista falha o teste (o índice `filhos_por_genitor` não é
+    afetado, já foi construído antes desta troca)."""
+
+    def __iter__(self):
+        raise AssertionError("processar_heranca não devia iterar mundo.npcs inteiro")
+
+
+def test_filhos_por_genitor_inclui_recem_nascido():
+    mundo = mundo_de(npcs=[], locais=[casa()])
+    bebe = adulto("npc_bebe", "Recém-nascido", casa_id="casa_1",
+                  localizacao_atual_id="casa_1", cidade_id=1, mae_id="npc_mae")
+
+    mundo.registrar_npc(bebe)
+
+    assert bebe.id in {n.id for n in mundo.filhos_por_genitor.get("npc_mae", [])}
+
+
+def test_heranca_vai_para_filho_vivo_sem_varrer_populacao():
+    """D02 (docs/16_PLANO_PAINEL_E_IA.md): `NPCLegacyManager.processar_heranca`
+    varria `mundo.npcs` inteiro pra achar herdeiros — 12,6 ms por morte medidos.
+    Usa `mundo.filhos_por_genitor` (mantido incrementalmente) em vez disso."""
+    falecido = adulto("npc_pai", "Falecido", dinheiro_total_pc=100.0)
+    filho_vivo = adulto("npc_filho_vivo", "Filho Vivo", pai_id="npc_pai", dinheiro_total_pc=0.0)
+    filho_morto = adulto("npc_filho_morto", "Filho Morto", pai_id="npc_pai", saude=0,
+                         estagio_vida=EstagioVida.MORTO.value)
+    mundo = mundo_de(npcs=[falecido, filho_vivo, filho_morto], locais=[casa()])
+    mundo.npcs = _NaoItereTudo(mundo.npcs)
+
+    NPCLegacyManager(mundo, _config()).processar_heranca(falecido, "1200-01-01T00:00:00")
+
+    assert filho_vivo.dinheiro_total_pc == 100.0
+    assert falecido.dinheiro_total_pc == 0
 
 
 def test_indices_batem_com_reconstrucao_do_zero():

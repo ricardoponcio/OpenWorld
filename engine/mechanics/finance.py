@@ -20,11 +20,10 @@ class NPCLegacyManager:
         """Processa o testamento e a herança financeira de um NPC recém-falecido."""
         cfg_bio = cfg_get(self._config, "biologia_e_sociedade")
         
-        herdeiros = []
-        for n in self._mundo.npcs:
-            if n.esta_vivo() and (n.mae_id == npc.id or n.pai_id == npc.id):
-                herdeiros.append(n)
-                
+        # D02 (docs/16_PLANO_PAINEL_E_IA.md): índice mantido (mundo.filhos_por_genitor),
+        # não varredura de mundo.npcs inteiro — 12,6 ms por morte medidos.
+        herdeiros = [n for n in self._mundo.filhos_por_genitor.get(npc.id, ()) if n.esta_vivo()]
+
         if not herdeiros and npc.casa_id:
             parceiros = []
             # X04 (docs/15_PLANO_MUNDO_CRIVEL.md, armadilha 19): índice, não varredura.

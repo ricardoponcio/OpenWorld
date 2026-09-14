@@ -45,6 +45,12 @@ class EstadoDoMundo:
     npcs_por_casa: Dict = field(default=None, repr=False, compare=False)
     npcs_por_localizacao: Dict = field(default=None, repr=False, compare=False)
     npcs_por_cidade: Dict = field(default=None, repr=False, compare=False)
+    # D02 (docs/16_PLANO_PAINEL_E_IA.md): filhos por genitor (mãe OU pai — um NPC com
+    # os dois entra nas duas listas). `NPCLegacyManager.processar_heranca` varria
+    # `mundo.npcs` inteiro pra achar herdeiros: 12,6 ms por morte medidos. NÃO some
+    # do índice na morte (o filho morto continua sendo filho pra quem consultar; o
+    # consumidor filtra por `esta_vivo()`) — a lista é pequena, não vale a pena podar.
+    filhos_por_genitor: Dict = field(default=None, repr=False, compare=False)
 
     # H02 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md, armadilha 15): casas cuja composição
     # (quem mora lá, quem é dependente de quem) mudou desde a última vez que
@@ -220,6 +226,10 @@ class EstadoDoMundo:
         if npc.localizacao_atual_id:
             self.npcs_por_localizacao.setdefault(npc.localizacao_atual_id, []).append(npc)
         self.npcs_por_cidade.setdefault(npc.cidade_id, []).append(npc)
+        # D02: entra na lista de filhos de cada genitor que tiver.
+        for genitor_id in (npc.mae_id, npc.pai_id):
+            if genitor_id:
+                self.filhos_por_genitor.setdefault(genitor_id, []).append(npc)
         self.marcar_casa_suja(npc.casa_id)
         self.npcs_sem_agenda[npc.id] = npc
 
@@ -354,7 +364,15 @@ class EstadoDoMundo:
         self.baldes_decisao = {}
         self.npcs_em_consequencia = {}
         self.npcs_sem_agenda = {}
+        self.filhos_por_genitor = {}
         for npc in self.npcs:
+            # D02 (docs/16_PLANO_PAINEL_E_IA.md): ANTES do `continue` de baixo —
+            # um filho já falecido continua sendo filho do genitor pra quem
+            # consultar (o consumidor filtra por `esta_vivo()`); só os índices de
+            # localização/agenda são exclusivos de quem está vivo.
+            for genitor_id in (npc.mae_id, npc.pai_id):
+                if genitor_id:
+                    self.filhos_por_genitor.setdefault(genitor_id, []).append(npc)
             if not npc.esta_vivo():
                 continue
             if npc.casa_id:

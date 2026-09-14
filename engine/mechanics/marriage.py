@@ -68,7 +68,11 @@ class NPCMarriageManager:
         não muda de casa (`casa_origem == casa_destino`) ou não tinha casa."""
         if not casa_origem or casa_origem == casa_destino:
             return []
-        moradores = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, casa_origem, apenas_vivos=True)
+        # D02 (docs/16_PLANO_PAINEL_E_IA.md, armadilha 18 — o gêmeo): usava
+        # `NPCUtils.obter_moradores_da_casa(self._mundo.npcs, ...)`, que varre
+        # mundo.npcs inteiro pra achar quem mora numa casa. Índice já mantido
+        # (A04), mesmo padrão que os vizinhos deste arquivo já usam (X04).
+        moradores = self._mundo.npcs_por_casa.get(casa_origem, ())
         return [m for m in moradores if m.id != pai_ou_mae.id and m.eh_dependente()
                 and (m.mae_id == pai_ou_mae.id or m.pai_id == pai_ou_mae.id)]
 
@@ -78,7 +82,8 @@ class NPCMarriageManager:
         casal e os filhos que vêm junto. Precisa contar os filhos ANTES de decidir
         se a casa está cheia — senão o destino parece ter espaço que some assim que
         a família chega inteira."""
-        atuais = NPCUtils.obter_moradores_da_casa(self._mundo.npcs, casa_destino, apenas_vivos=True)
+        # D02 (docs/16_PLANO_PAINEL_E_IA.md, armadilha 18 - o mesmo gemeo de cima).
+        atuais = self._mundo.npcs_por_casa.get(casa_destino, ())
         ids_exceto_casal = {m.id for m in atuais} - {n1.id, n2.id}
         return len(ids_exceto_casal) + 2 + len(filhos)
 
