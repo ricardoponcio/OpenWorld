@@ -1,5 +1,8 @@
 import json
-from ..models import NPC, Acao, EstadoCivil
+from dataclasses import dataclass
+from typing import Optional
+
+from ..models import NPC, Acao, EstadoCivil, SituacaoHabitante
 from ..logger import WorldLogger
 
 
@@ -9,6 +12,58 @@ def _safe_json_load(data, default):
     except (json.JSONDecodeError, TypeError) as e:
         WorldLogger.warning(f"JSON corrompido em coluna de NPC, usando default {default!r}: {e}")
         return default
+
+
+@dataclass
+class FiltroHabitantes:
+    """P02 (docs/16_PLANO_PAINEL_E_IA.md): agrupa os parâmetros de
+    `RepositorioNPC.contar_habitantes`/`listar_habitantes` num objeto só — os dois
+    métodos continuam com 1 parâmetro (ARQUITETURA §4), não 7."""
+    cidade_id: Optional[int] = None
+    busca_nome: str = ""
+    estagio_vida: Optional[str] = None   # EstagioVida.X.value
+    acao: Optional[str] = None           # Acao.X.value
+    situacao: str = SituacaoHabitante.VIVOS.value
+    pagina: int = 1
+    por_pagina: int = 50
+
+
+# Colunas do cartão da grade de habitantes — o mesmo conjunto que
+# `listar_projecao_dashboard` já usava, sem o dataclass NPC completo.
+_COLUNAS_CARTAO_HABITANTE = (
+    "id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, "
+    "dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, "
+    "pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks"
+)
+
+
+def _montar_where_habitantes(filtro: "FiltroHabitantes"):
+    """Monta a cláusula WHERE e os parâmetros na MESMA ordem — nunca f-string com
+    valor do usuário (ARQUITETURA §15 item 4), sempre `?`."""
+    condicoes = []
+    parametros = []
+
+    if filtro.cidade_id is not None:
+        condicoes.append("cidade_id = ?")
+        parametros.append(filtro.cidade_id)
+    if filtro.busca_nome:
+        condicoes.append("nome LIKE ?")
+        parametros.append(f"%{filtro.busca_nome}%")
+    if filtro.estagio_vida is not None:
+        condicoes.append("estagio_vida = ?")
+        parametros.append(filtro.estagio_vida)
+    if filtro.acao is not None:
+        condicoes.append("acao_atual = ?")
+        parametros.append(filtro.acao)
+
+    if filtro.situacao == SituacaoHabitante.VIVOS.value:
+        condicoes.append("saude > 0")
+    elif filtro.situacao == SituacaoHabitante.MORTOS.value:
+        condicoes.append("saude <= 0")
+    # TODOS: sem condição de saúde.
+
+    clausula = f"WHERE {' AND '.join(condicoes)}" if condicoes else ""
+    return clausula, parametros
 
 
 class RepositorioNPC:
@@ -216,6 +271,26 @@ class RepositorioNPC:
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT id, nome, profissao, acao_atual, localizacao_atual_id, energia, fome, social, dinheiro_total_pc, saude, humor, genero, estagio_vida, data_nascimento, pai_id, mae_id, estado_civil, conjuge_id, gravidez_ticks FROM npcs')
+            return cursor.fetchall()
+
+    def contar_habitantes(self, filtro: FiltroHabitantes) -> int:
+        clausula, parametros = _montar_where_habitantes(filtro)
+        with self.db.connection() as conn:
+            row = conn.cursor().execute(f"SELECT COUNT(*) AS n FROM npcs {clausula}", parametros).fetchone()
+            return row["n"] if row else 0
+
+    def listar_habitantes(self, filtro: FiltroHabitantes) -> list:
+        """P02 (docs/16_PLANO_PAINEL_E_IA.md): paginação e filtro FEITOS NO SQL —
+        antes a aba Habitantes recebia todos os NPCs do mundo e filtrava/paginava
+        em JS."""
+        clausula, parametros = _montar_where_habitantes(filtro)
+        offset = (filtro.pagina - 1) * filtro.por_pagina
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT {_COLUNAS_CARTAO_HABITANTE} FROM npcs {clausula} "
+                f"ORDER BY nome LIMIT ? OFFSET ?",
+                (*parametros, filtro.por_pagina, offset))
             return cursor.fetchall()
 
     def listar_resumo_vivos(self, cidade_id) -> list:

@@ -12,6 +12,7 @@ primeira importação de `web.dashboard` neste processo (mesmo padrão de
 import tempfile
 import os
 
+from config import cfg_get, get_config
 from engine.database import DatabaseManager
 from engine.models import NPC, EstagioVida
 from web.banco import configurar_db
@@ -50,3 +51,50 @@ def test_api_estado_traz_velocidade_efetiva_nula_sem_estatisticas():
     assert data["velocidade_efetiva"] is None
     assert data["hora"]
     assert isinstance(data["cronicas"], list)
+
+
+def test_api_estado_traz_polling_ms_do_config():
+    """P02 (docs/16_PLANO_PAINEL_E_IA.md): estado.js lê o intervalo daqui — nunca
+    duplica painel.estado_polling_ms como número solto no JS."""
+    resposta = app.test_client().get('/api/estado')
+    data = resposta.get_json()
+
+    assert data["polling_ms"] == cfg_get(get_config(), "painel", "estado_polling_ms")
+
+
+def test_api_habitantes_pagina_e_filtra():
+    """P02: ponta a ponta via Flask (não só o repositório) — página 1 de 10 da
+    cidade 2, ordenada por nome."""
+    _db_teste.npcs.salvar_completo(
+        [_npc(f"hab_c2_{i}", nome=f"Hab C2 {i:02d}", cidade_id=2) for i in range(15)])
+
+    resposta = app.test_client().get('/api/habitantes?cidade=2&pagina=1&por_pagina=10')
+    data = resposta.get_json()
+
+    assert data["total"] == 15
+    assert data["pagina"] == 1
+    assert data["por_pagina"] == 10
+    assert len(data["habitantes"]) == 10
+    assert data["habitantes"][0]["nome"] == "Hab C2 00"
+    assert "status" in data["habitantes"][0] and "bio" in data["habitantes"][0]
+
+
+def test_api_habitantes_situacao_invalida_devolve_400():
+    resposta = app.test_client().get('/api/habitantes?situacao=zumbi')
+    assert resposta.status_code == 400
+    assert "error" in resposta.get_json()
+
+
+def test_api_habitantes_por_pagina_respeita_teto_do_config():
+    teto = cfg_get(get_config(), "painel", "habitantes_por_pagina_maximo")
+    resposta = app.test_client().get(f'/api/habitantes?por_pagina={teto + 1000}')
+    assert resposta.get_json()["por_pagina"] == teto
+
+
+def test_api_habitantes_filtros_devolve_enums_e_config():
+    resposta = app.test_client().get('/api/habitantes/filtros')
+    data = resposta.get_json()
+
+    assert "vivos" in data["situacoes"] and "mortos" in data["situacoes"]
+    assert "adulto" in data["estagios"]
+    assert data["painel"]["habitantes_por_pagina"] == cfg_get(get_config(), "painel", "habitantes_por_pagina")

@@ -8,6 +8,7 @@ banco isolado) pra provar que o `executemany` grava e lê de volta corretamente.
 """
 from engine.database import DatabaseManager
 from engine.models import NPC, EstagioVida
+from engine.repositorios.npc import FiltroHabitantes
 
 
 def _db(tmp_path):
@@ -124,3 +125,34 @@ def test_salvar_relacionamentos_muitos_lista_vazia_nao_quebra(tmp_path):
     db = _db(tmp_path)
     db.npcs.salvar_relacionamentos_muitos([])
     assert db.npcs.listar_relacionamentos("npc_1") == []
+
+
+def test_listar_habitantes_pagina_e_filtra_por_cidade(tmp_path):
+    """P02 (docs/16_PLANO_PAINEL_E_IA.md): filtro e paginação feitos no SQL, não
+    no JS — 60 NPCs na cidade 1 (nomes 'C1 NPC 00'..'C1 NPC 59', ordenáveis por
+    nome) e 60 na cidade 2; página 2 de 50 da cidade 1 devolve só os 10
+    restantes, e contar_habitantes bate com o total real da cidade."""
+    db = _db(tmp_path)
+    npcs = ([_npc(f"c1_{i}", nome=f"C1 NPC {i:02d}", cidade_id=1) for i in range(60)]
+            + [_npc(f"c2_{i}", nome=f"C2 NPC {i:02d}", cidade_id=2) for i in range(60)])
+    db.npcs.salvar_completo(npcs)
+
+    filtro = FiltroHabitantes(cidade_id=1, pagina=2, por_pagina=50)
+    pagina = db.npcs.listar_habitantes(filtro)
+
+    assert db.npcs.contar_habitantes(filtro) == 60
+    assert [r["nome"] for r in pagina] == [f"C1 NPC {i:02d}" for i in range(50, 60)]
+
+
+def test_busca_por_nome_nao_aceita_injecao(tmp_path):
+    """Busca monta `nome LIKE ?` com parâmetro — nunca f-string com o texto do
+    usuário (ARQUITETURA §15 item 4)."""
+    db = _db(tmp_path)
+    db.npcs.salvar_completo([_npc("npc_1", nome="Thorne")])
+
+    filtro = FiltroHabitantes(busca_nome="'; DROP TABLE npcs; --")
+
+    assert db.npcs.contar_habitantes(filtro) == 0
+    assert db.npcs.listar_habitantes(filtro) == []
+    # A tabela continua existindo e com o NPC original intacto.
+    assert len(db.npcs.carregar_todos()) == 1

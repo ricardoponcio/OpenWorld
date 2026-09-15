@@ -208,6 +208,13 @@
         "estatisticas_a_cada_ticks": 60,
         "console_resumo_a_cada_s_reais": 10
     },
+    "painel": {
+        "_comentario": "Bloco P (docs/16_PLANO_PAINEL_E_IA.md): parâmetros de apresentação do dashboard, servidos pela API — o JS nunca repete estes números (ARQUITETURA §10 regra 6).",
+        "habitantes_por_pagina": 50,
+        "habitantes_por_pagina_maximo": 200,
+        "estado_polling_ms": 1000,
+        "estatisticas_polling_ms": 5000
+    },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",
         "capacidade_padrao_residencia": 5,

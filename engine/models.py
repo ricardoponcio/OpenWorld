@@ -208,6 +208,15 @@ class ContadorMundo(Enum):
     MINUTO_EM_INANICAO     = "minuto_em_inanicao"
 
 
+class SituacaoHabitante(Enum):
+    """P02 (docs/16_PLANO_PAINEL_E_IA.md): filtro vivo/morto/todos da aba
+    Habitantes — domínio de APRESENTAÇÃO do painel (`saude > 0`/`<= 0`), não o
+    mesmo conceito que `EstagioVida.MORTO` (estágio de vida)."""
+    VIVOS = "vivos"
+    MORTOS = "mortos"
+    TODOS = "todos"
+
+
 class ComandoMestre(Enum):
     """Ações de mundo que o Modo Mestre aceita (R-F03). O valor é a string que a IA
     devolve no campo `comando` e que vai para a coluna `acoes_propostas` — resposta de

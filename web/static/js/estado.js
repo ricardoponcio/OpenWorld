@@ -8,9 +8,10 @@ import { registrarAcoes } from './acoes.js';
 import { escaparHtml } from './formatacao.js';
 import { obterEstado, definirVelocidade, alternarPausa } from './api.js';
 
-// P02 (docs/16_PLANO_PAINEL_E_IA.md) introduz painel.estado_polling_ms no
-// config — até lá, 1000 é o mesmo valor que /api/update já usava.
-const POLLING_MS = 1000;
+// P02 (docs/16_PLANO_PAINEL_E_IA.md, ARQUITETURA §10 regra 6): o intervalo vem
+// de painel.estado_polling_ms (config), nunca duplicado aqui — 1000 é só o
+// chute inicial até a primeira resposta de /api/estado chegar.
+let pollingMs = 1000;
 
 function atualizarBanner(eventoGlobal) {
     const banner = document.getElementById('event-banner');
@@ -64,6 +65,7 @@ async function atualizarEstado() {
         statusIcon.innerText = "🟢";
         statusBar.className = "status-ok";
 
+        if (data.polling_ms) pollingMs = data.polling_ms;
         document.getElementById('clock').innerText = data.hora;
         atualizarPauseUI(data.pausado);
         atualizarVelocidade(data.velocidade_pedida);
@@ -88,9 +90,9 @@ async function setSpeed(v) {
 
 // F01 (docs/16_PLANO_PAINEL_E_IA.md): ponto de início explícito, chamado por
 // app.js — nada de efeito colateral disparado só por importar este módulo.
-export function iniciarEstado() {
-    atualizarEstado();
-    setInterval(atualizarEstado, POLLING_MS);
+export async function iniciarEstado() {
+    await atualizarEstado(); // primeira resposta já ajusta pollingMs pro valor do config
+    setInterval(atualizarEstado, pollingMs);
 }
 
 // F01: cada módulo registra as próprias ações — evita import circular com app.js.

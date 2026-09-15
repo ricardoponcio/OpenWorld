@@ -5,7 +5,8 @@ FUNÇÃO: Serialização de payloads HTTP com mais de 3 campos (ARQUITETURA §14
 """
 import json
 
-from engine.models import MetaChave
+from config import cfg_get, get_config
+from engine.models import Acao, EstagioVida, MetaChave, SituacaoHabitante
 
 
 def formatar_moeda(total_pc):
@@ -54,4 +55,40 @@ def serializar_estado(db) -> dict:
         "velocidade_efetiva": desempenho["velocidade_efetiva"] if desempenho else None,
         "evento_global": evento_global,
         "cronicas": cronicas,
+        # P02 (docs/16_PLANO_PAINEL_E_IA.md): estado.js lê isto pra armar o
+        # próprio polling — ARQUITETURA §10 regra 6, nenhum número de config
+        # repetido no JS.
+        "polling_ms": cfg_get(get_config(), "painel", "estado_polling_ms"),
+    }
+
+
+def serializar_habitante(r) -> dict:
+    """P02 (docs/16_PLANO_PAINEL_E_IA.md): uma linha da grade de habitantes —
+    mesmo formato enxuto (chaves curtas) que `/api/update` já usava, pra não
+    reescrever `painel_npcs.js`/`formatacao.js` além do necessário nesta tarefa."""
+    return {
+        "id": r["id"], "nome": r["nome"], "profissao": r["profissao"], "acao": r["acao_atual"],
+        "status": {
+            "e": r["energia"], "f": r["fome"], "s": r["social"],
+            "d": formatar_moeda(r["dinheiro_total_pc"]), "h": r["saude"], "m": r["humor"],
+        },
+        "bio": {
+            "g": r["genero"], "ev": r["estagio_vida"], "dn": r["data_nascimento"],
+            "pai": r["pai_id"], "mae": r["mae_id"], "ec": r["estado_civil"],
+            "cj": r["conjuge_id"], "gr": r["gravidez_ticks"],
+        },
+    }
+
+
+def serializar_filtros_habitantes(db) -> dict:
+    """P02: catálogo de valores válidos pros filtros da aba Habitantes — servido,
+    não copiado no JS (ARQUITETURA §10 regra 6). `FiltroNpc` (F03) sai de
+    `constantes.js` em P04, substituído pelas `situacoes` daqui."""
+    cidades = db.mundo.carregar_cidades_por_id()
+    return {
+        "cidades": [{"id": cid, "nome": c.nome} for cid, c in cidades.items()],
+        "estagios": [e.value for e in EstagioVida],
+        "acoes": [a.value for a in Acao],
+        "situacoes": [s.value for s in SituacaoHabitante],
+        "painel": cfg_get(get_config(), "painel"),
     }

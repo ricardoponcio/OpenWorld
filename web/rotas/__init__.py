@@ -4,6 +4,7 @@ from web.rotas.tiles import tiles_bp
 from web.rotas.features import features_bp
 from web.rotas.cidade import cidade_bp
 from web.rotas.estado import estado_bp
+from web.rotas.habitantes import habitantes_bp
 
 
 def registrar_blueprints(app):
@@ -16,3 +17,4 @@ def registrar_blueprints(app):
     app.register_blueprint(features_bp)
     app.register_blueprint(cidade_bp)
     app.register_blueprint(estado_bp)
+    app.register_blueprint(habitantes_bp)
