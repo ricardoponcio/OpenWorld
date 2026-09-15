@@ -172,6 +172,30 @@ def test_buscar_ficha_de_npc_inexistente_devolve_none(tmp_path):
     assert db.npcs.buscar_ficha("fantasma") is None
 
 
+def test_listar_posicoes_respeita_limite_e_blocos(tmp_path):
+    """M04 (docs/16_PLANO_PAINEL_E_IA.md): 2.000 locais (> 900, força mais de um
+    bloco de `IN (...)`) e 3.000 NPCs vivos espalhados entre eles — `limite=1000`
+    nunca devolve mais que 1.000 linhas, mesmo cruzando blocos."""
+    from engine.models import Local
+
+    db = _db(tmp_path)
+    locais = [Local(id=f"local_{i}", nome=f"Local {i}", tipo="Casa") for i in range(2000)]
+    db.locais.salvar_em_lote(locais)
+
+    npcs = [_npc(f"npc_{i}", localizacao_atual_id=f"local_{i % 2000}") for i in range(3000)]
+    db.npcs.salvar_completo(npcs)
+
+    local_ids = [l.id for l in locais]
+    resultado = db.npcs.listar_posicoes(local_ids, limite=1000)
+
+    assert len(resultado) == 1000
+
+
+def test_listar_posicoes_lista_vazia_nao_quebra(tmp_path):
+    db = _db(tmp_path)
+    assert db.npcs.listar_posicoes([], limite=100) == []
+
+
 def test_busca_por_nome_nao_aceita_injecao(tmp_path):
     """Busca monta `nome LIKE ?` com parâmetro — nunca f-string com o texto do
     usuário (ARQUITETURA §15 item 4)."""

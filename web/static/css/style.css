@@ -564,7 +564,7 @@ header {
 .leaflet-sidebar-titulo { font-size: 0.85rem; color: var(--text-dim); margin: 0 0 0.4rem 0; }
 .leaflet-continent-list { display: flex; flex-direction: column; gap: 0.4rem; }
 .leaflet-lista-vazia { color: var(--text-dim); font-size: 0.8rem; }
-#mapa-leaflet-container { flex: 1; border-radius: 12px; background: #04202e; }
+#mapa-leaflet-container { flex: 1; border-radius: 12px; background: #04202e; position: relative; }
 .mapa-live-erro { padding: 1rem; color: var(--danger); }
 .continente-area { opacity: 0.7; font-size: 0.75rem; }
 .popup-coord { opacity: 0.6; font-size: 0.75rem; }
@@ -573,6 +573,22 @@ header {
 .popup-continente { opacity: 0.6; font-size: 0.85rem; }
 .popup-descricao { margin-top: 6px; }
 .popup-dica-zoom { margin-top: 6px; opacity: 0.7; font-size: 0.8rem; }
+/* M04 (docs/16_PLANO_PAINEL_E_IA.md): aviso discreto quando /api/mapa/npcs
+   trunca (mais habitantes na bbox do que painel.mapa_npcs_max_pontos). */
+.mapa-npcs-aviso-truncado {
+    position: absolute;
+    bottom: 0.8rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-dim);
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    z-index: 1000;
+    pointer-events: none;
+}
 
 /* Modal de ficha do NPC */
 .modal-header--empilhado { flex-direction: column; align-items: stretch; gap: 1rem; }

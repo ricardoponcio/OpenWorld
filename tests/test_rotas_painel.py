@@ -16,8 +16,9 @@ import json
 
 from config import cfg_get, get_config
 from engine.database import DatabaseManager
-from engine.models import NPC, EstagioVida, MetaChave
+from engine.models import NPC, EstagioVida, Local, MetaChave
 from web.banco import configurar_db
+from web.serializadores import deslocamento_deterministico
 
 _dir_teste = tempfile.mkdtemp(prefix="openworld_test_rotas_painel_")
 _db_teste = DatabaseManager(db_path=os.path.join(_dir_teste, "teste.db"), pool_size=2)
@@ -135,6 +136,49 @@ def test_api_estatisticas_devolve_o_json_gravado():
     assert data["total"]["vivos_por_estagio"]["adulto"] == 5
     assert data["hoje"]["nascimento"] == 2
     assert data["polling_ms"] == cfg_get(get_config(), "painel", "estatisticas_polling_ms")
+
+
+def test_deslocamento_deterministico_e_estavel():
+    """M04 (docs/16_PLANO_PAINEL_E_IA.md): mesmo id, mesmo resultado em duas
+    chamadas (nunca hash() — aleatorizado por processo); distância <= raio."""
+    dx1, dy1 = deslocamento_deterministico("npc_x", 6.0)
+    dx2, dy2 = deslocamento_deterministico("npc_x", 6.0)
+    assert (dx1, dy1) == (dx2, dy2)
+    assert (dx1 ** 2 + dy1 ** 2) ** 0.5 <= 6.0
+
+    # ids diferentes devem (quase sempre) cair em pontos diferentes — prova que
+    # não é uma constante disfarçada.
+    dx3, dy3 = deslocamento_deterministico("npc_y", 6.0)
+    assert (dx1, dy1) != (dx3, dy3)
+
+
+def test_mapa_npcs_abaixo_do_zoom_minimo_devolve_vazio():
+    """M04: z abaixo de painel.mapa_npcs_zoom_min nem consulta o banco — só
+    devolve {"npcs": [], "truncado": False}."""
+    zoom_min = cfg_get(get_config(), "painel", "mapa_npcs_zoom_min")
+    resposta = app.test_client().get(f'/api/mapa/npcs?bbox=0,0,10,10&z={zoom_min - 1}')
+    data = resposta.get_json()
+
+    assert data == {"npcs": [], "truncado": False}
+
+
+def test_api_mapa_npcs_acima_do_zoom_minimo_devolve_posicoes_deslocadas():
+    """M04: ponta a ponta via Flask — NPC vivo num local dentro da bbox aparece
+    na resposta, com x/y deslocados da coordenada crua do local (nunca 0,0)."""
+    zoom_min = cfg_get(get_config(), "painel", "mapa_npcs_zoom_min")
+
+    _db_teste.locais.salvar_em_lote([Local(id="local_mapa_npc", nome="Taverna", tipo="Loja",
+                                            coordenadas=[100.0, 100.0])])
+    _db_teste.npcs.salvar_completo([_npc("npc_mapa", localizacao_atual_id="local_mapa_npc")])
+
+    resposta = app.test_client().get(f'/api/mapa/npcs?bbox=0,0,200,200&z={zoom_min}')
+    data = resposta.get_json()
+
+    achado = next((n for n in data["npcs"] if n["id"] == "npc_mapa"), None)
+    assert achado is not None
+    assert achado["nome"] == "NPC npc_mapa"
+    assert (achado["x"], achado["y"]) != (100.0, 100.0)
+    assert data["truncado"] is False
 
 
 def test_api_estatisticas_sem_nada_gravado_devolve_dict_vazio_mais_polling():

@@ -118,6 +118,17 @@ class RepositorioLocal:
                 (cidade_id, CategoriaLocal.RESIDENCIA.value)).fetchone()
             return row["n"] if row else 0
 
+    def listar_coordenadas(self) -> list:
+        """M04 (docs/16_PLANO_PAINEL_E_IA.md): id/coordenada de todo local ATIVO —
+        usado por `web/cache_locais.py` pra montar o índice em memória que a
+        camada de NPCs do Mapa Live consulta por bbox, sem reabrir o banco a cada
+        requisição."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, coordenadas FROM locais WHERE status = 1")
+            return [{"id": r["id"], "coordenadas": json.loads(r["coordenadas"])}
+                    for r in cursor.fetchall()]
+
     def buscar_por_cidade(self, cidade_id) -> list:
         with self.db.connection() as conn:
             cursor = conn.cursor()

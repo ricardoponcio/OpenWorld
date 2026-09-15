@@ -117,7 +117,11 @@ function montarHtmlFicha(npc, rels) {
     `;
 }
 
-async function abrirFicha(npcId) {
+// M04 (docs/16_PLANO_PAINEL_E_IA.md): exportada pra camada_npcs.js abrir a
+// ficha ao clicar num ponto do Mapa Live — clique num L.circleMarker não passa
+// por `despachar()` (delegação de `data-acao` só ouve clique em elemento DOM
+// com esse atributo), então é uma chamada de função direta, não uma ação.
+export async function abrirFicha(npcId) {
     estado.activeNpcId = npcId;
     const modal = document.getElementById('npc-log-modal');
     const title = document.getElementById('modal-npc-nome');

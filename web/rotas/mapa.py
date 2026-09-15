@@ -122,6 +122,14 @@ def api_continentes():
         # M03 (docs/16_PLANO_PAINEL_E_IA.md): TTL do cache de lotes_alterados por
         # cidade no Mapa Live — servido, não copiado no JS (ARQUITETURA §10 regra 6).
         "mapa_lotes_alterados_cache_ms": cfg_get(get_config(), "painel", "mapa_lotes_alterados_cache_ms"),
+        # M04: zoom mínimo e intervalo de polling da camada de NPCs — o front lê
+        # daqui; teto de pontos e raio de espalhamento são parâmetros só do
+        # servidor (aplicados em /api/mapa/npcs), servidos aqui pra inspeção/
+        # transparência, sem duplicação em nenhum dos dois lados.
+        "mapa_npcs_zoom_min": cfg_get(get_config(), "painel", "mapa_npcs_zoom_min"),
+        "mapa_npcs_max_pontos": cfg_get(get_config(), "painel", "mapa_npcs_max_pontos"),
+        "mapa_npcs_espalhamento_m": cfg_get(get_config(), "painel", "mapa_npcs_espalhamento_m"),
+        "mapa_npcs_polling_ms": cfg_get(get_config(), "painel", "mapa_npcs_polling_ms"),
         # Tabela de biomas (id -> rótulo/emoji) — o frontend consome daqui em vez de
         # manter uma cópia própria (R-B06: já divergiu uma vez, com um bioma "Zona Urbana"
         # inventado no JS que não existe no classificador).

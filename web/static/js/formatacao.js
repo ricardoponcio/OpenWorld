@@ -58,3 +58,14 @@ export function rotuloEstagioCompleto(estagioVida) {
 export const CATEGORIA_EDIFICIO_COR = { residencia: '#9c8a76', fazenda: '#228B22', quartel: '#4682B4', taverna: '#D2691E', publico: '#696969', mercado: '#FFD700', forja: '#A9A9A9', universidade: '#5D3FD3', generic: '#808080' };
 
 export const TIPO_CIDADE_EMOJI = { capital: '👑', fortaleza: '🏯', portuaria: '⚓', pesqueira: '🎣', comercial: '💰', mistica: '🔮', 'mística': '🔮', mineira: '⛏️', agricola: '🌾', 'agrícola': '🌾', residencial: '🏠' };
+
+// M04 (docs/16_PLANO_PAINEL_E_IA.md): cor do ponto de cada NPC na camada de
+// "habitantes se locomovendo" do Mapa Live, por ação atual — a lista de ações
+// válidas vem de /api/habitantes/filtros (não copiada aqui); isto é só a
+// apresentação (mesmo espírito de CATEGORIA_EDIFICIO_COR/TIPO_CIDADE_EMOJI).
+// Chaves conferidas contra engine.models.Acao: batem exatamente as 7.
+export const COR_POR_ACAO = {
+    Dormir: '#7c3aed', Trabalhar: '#f59e0b', Socializar: '#22c55e', Comer: '#ef4444',
+    Ocioso: '#94a3b8', 'Cuidar da Prole': '#38bdf8', Construindo: '#eab308',
+};
+export const COR_ACAO_PADRAO = '#ffffff';

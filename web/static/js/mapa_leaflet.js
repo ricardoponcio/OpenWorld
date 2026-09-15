@@ -17,6 +17,7 @@
 import { registrarAcoes } from './acoes.js';
 import { estado, pixelParaLatLng, latLngParaPixel, bboxParaBounds } from './mapa_leaflet_estado.js';
 import { criarCamadasVetoriaisLeaflet, carregarFeaturesVisiveisLeaflet } from './mapa_leaflet_camadas.js';
+import { iniciarCamadaNpcs } from './camada_npcs.js';
 import { obterContinentes, obterInfoMapaMundi } from './api.js';
 import { escaparHtml } from './formatacao.js';
 
@@ -73,6 +74,7 @@ const CHAVES_OBRIGATORIAS_CONTINENTES = [
     'dimensao_global', 'tile_zoom_maximo_ui', 'tile_max_native_zoom',
     'mapa_features_tooltip_zoom_min', 'cidade_via_largura_m_por_classe',
     'cidade_via_largura_min_px', 'metros_por_pixel_mundo', 'mapa_lotes_alterados_cache_ms',
+    'mapa_npcs_zoom_min', 'mapa_npcs_polling_ms',
 ];
 
 function mostrarErroMapaLeaflet(mensagem) {
@@ -108,6 +110,8 @@ async function carregarMundoLeaflet() {
         estado.leafletViaLarguraM = data.cidade_via_largura_m_por_classe;
         estado.leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
         estado.leafletLotesAlteradosCacheMs = data.mapa_lotes_alterados_cache_ms;
+        estado.leafletMapaNpcsZoomMin = data.mapa_npcs_zoom_min;
+        estado.leafletMapaNpcsPollingMs = data.mapa_npcs_polling_ms;
 
         const bounds = L.latLngBounds(pixelParaLatLng(0, estado.leafletDimensaoGlobal), pixelParaLatLng(estado.leafletDimensaoGlobal, 0));
 
@@ -134,6 +138,7 @@ async function carregarMundoLeaflet() {
         // moveend/zoomend (bbox+zoom visíveis), não no load inicial só.
         if (Object.keys(estado.leafletCamadasVetoriais).length === 0) {
             criarCamadasVetoriaisLeaflet();
+            iniciarCamadaNpcs();
             estado.leafletMap.on('moveend', _debounce(carregarFeaturesVisiveisLeaflet, DEBOUNCE_MOVEEND_MS));
         }
         carregarFeaturesVisiveisLeaflet();

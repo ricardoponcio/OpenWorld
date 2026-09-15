@@ -330,6 +330,28 @@ class RepositorioNPC:
                 (npc_id, npc_id))
             return {"npc": npc, "filhos": cursor.fetchall()}
 
+    def listar_posicoes(self, local_ids: list, limite: int) -> list:
+        """M04 (docs/16_PLANO_PAINEL_E_IA.md): NPCs vivos nos locais dados (a bbox
+        visível do Mapa Live), até `limite` — em blocos de no máximo 900 ids por
+        consulta (teto de parâmetros de uma cláusula `IN` do SQLite)."""
+        if not local_ids:
+            return []
+        resultado = []
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            for inicio in range(0, len(local_ids), 900):
+                faltam = limite - len(resultado)
+                if faltam <= 0:
+                    break
+                bloco = local_ids[inicio:inicio + 900]
+                placeholders = ",".join("?" for _ in bloco)
+                cursor.execute(
+                    f"SELECT id, nome, acao_atual, localizacao_atual_id FROM npcs "
+                    f"WHERE saude > 0 AND localizacao_atual_id IN ({placeholders}) LIMIT ?",
+                    (*bloco, faltam))
+                resultado.extend(cursor.fetchall())
+        return resultado
+
     def listar_resumo_vivos(self, cidade_id) -> list:
         """M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade — o
         contexto do Mestre listava os 840 NPCs do mundo inteiro sem filtro."""

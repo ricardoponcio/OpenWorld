@@ -215,7 +215,12 @@
         "estado_polling_ms": 1000,
         "estatisticas_polling_ms": 5000,
         "_comentario_mapa_lotes": "M03 (docs/16_PLANO_PAINEL_E_IA.md): o Mapa Live buscava lotes_alterados de cada cidade visível a cada moveend (0,41s cada, medido antes de M02). O front cacheia por cidade e só busca de novo depois deste TTL.",
-        "mapa_lotes_alterados_cache_ms": 30000
+        "mapa_lotes_alterados_cache_ms": 30000,
+        "_comentario_mapa_npcs": "M04 (docs/16_PLANO_PAINEL_E_IA.md): camada de NPCs do Mapa Live. Teto de pontos por requisição, raio de espalhamento dentro do local (metros reais), intervalo de polling e zoom mínimo. zoom_min = 13 é o zoom_min de 'edificio' de uma cidade 'medio' (cidade_zoom_min_por_tamanho, /api/continentes, lido no mundo real ao escrever esta tarefa) — mesmo zoom em que os edifícios de uma cidade média já acendem.",
+        "mapa_npcs_zoom_min": 13,
+        "mapa_npcs_max_pontos": 2000,
+        "mapa_npcs_espalhamento_m": 6.0,
+        "mapa_npcs_polling_ms": 2000
     },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",

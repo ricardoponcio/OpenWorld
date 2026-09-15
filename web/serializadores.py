@@ -4,6 +4,8 @@ FUNÇÃO: Serialização de payloads HTTP com mais de 3 campos (ARQUITETURA §14
     fora das rotas, para manter cada rota em ≤ 10 linhas.
 """
 import json
+import math
+import zlib
 from datetime import datetime
 
 from config import cfg_get, get_config
@@ -126,3 +128,35 @@ def serializar_filtros_habitantes(db) -> dict:
         "situacoes": [s.value for s in SituacaoHabitante],
         "painel": cfg_get(get_config(), "painel"),
     }
+
+
+def deslocamento_deterministico(npc_id: str, raio_px: float) -> tuple:
+    """M04 (docs/16_PLANO_PAINEL_E_IA.md): desvio determinístico (mesmo `npc_id`
+    -> sempre o mesmo resultado) dentro de um raio — pra 20 pessoas numa taverna
+    não virarem 1 ponto só no Mapa Live. `zlib.crc32`, nunca `hash()`
+    (ARQUITETURA §11 D2 / lista de padrões proibidos #21): `hash()` de string é
+    aleatorizado por processo em Python, então o mesmo NPC pularia de lugar a
+    cada reinício do servidor. Ângulo e distância vêm de duas voltas de crc32
+    com sal diferente — função pura, sem I/O, por isso testável isoladamente."""
+    h_angulo = zlib.crc32(npc_id.encode("utf-8"))
+    h_distancia = zlib.crc32((npc_id + "_raio").encode("utf-8"))
+    angulo = (h_angulo % 3600) / 3600.0 * 2 * math.pi
+    distancia = (h_distancia % 1000) / 1000.0 * raio_px
+    return (distancia * math.cos(angulo), distancia * math.sin(angulo))
+
+
+def serializar_mapa_npcs(linhas: list, limite: int, obter_coordenada, raio_px: float) -> dict:
+    """M04: aplica o deslocamento determinístico e monta a resposta de
+    `/api/mapa/npcs`. `obter_coordenada(local_id)` é injetada (não importada
+    direto de `web.cache_locais`) pra esta função continuar testável sem banco
+    nem cache em memória — só dicionários e uma função na entrada."""
+    truncado = len(linhas) > limite
+    npcs = []
+    for r in linhas[:limite]:
+        coordenada = obter_coordenada(r["localizacao_atual_id"])
+        if coordenada is None:
+            continue
+        dx, dy = deslocamento_deterministico(r["id"], raio_px)
+        npcs.append({"id": r["id"], "nome": r["nome"], "acao": r["acao_atual"],
+                     "x": coordenada[0] + dx, "y": coordenada[1] + dy})
+    return {"npcs": npcs, "truncado": truncado}

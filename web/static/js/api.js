@@ -136,3 +136,10 @@ export async function obterFeaturesMapa(camadas, bbox, z) {
     const res = await fetch(`/api/mapa/features?camadas=${camadas}&bbox=${bbox}&z=${z}`);
     return res.json();
 }
+
+// M04 (docs/16_PLANO_PAINEL_E_IA.md): posições (já deslocadas) dos NPCs vivos
+// na bbox visível do Mapa Live — camada_npcs.js.
+export async function obterPosicoesNpcs(bbox, z) {
+    const res = await fetch(`/api/mapa/npcs?bbox=${bbox}&z=${z}`);
+    return res.json();
+}

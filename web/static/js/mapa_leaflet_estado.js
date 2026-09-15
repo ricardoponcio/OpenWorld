@@ -45,6 +45,10 @@ export const estado = {
     // M03 (docs/16_PLANO_PAINEL_E_IA.md): TTL do cache de lotes_alterados por
     // cidade, vindo de /api/continentes (painel.mapa_lotes_alterados_cache_ms).
     leafletLotesAlteradosCacheMs: 30000,
+    // M04: zoom mínimo e intervalo de polling da camada de NPCs se locomovendo,
+    // vindos de /api/continentes (painel.mapa_npcs_zoom_min/mapa_npcs_polling_ms).
+    leafletMapaNpcsZoomMin: 13,
+    leafletMapaNpcsPollingMs: 2000,
 };
 
 export function pixelParaLatLng(px, py) {
