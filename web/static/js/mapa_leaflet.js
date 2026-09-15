@@ -17,18 +17,35 @@
 // convertido de volta pra pixel de mundo (Y crescendo pra baixo) pra consultar a
 // API de inspeção. Ver pixelParaLatLng/latLngParaPixel.
 
-let leafletMap = null;
-let leafletTileLayer = null;
-let leafletDimensaoGlobal = 768;
-let leafletZoomMaximo = 15;
-let leafletMaxNativeZoom = 11;
-let leafletContinentesCache = [];
-let leafletPopupAtual = null;
+import { registrarAcoes } from './acoes.js';
 
-// Fase 3 (P2.1): camada vetorial GeoJSON — nome -> L.geoJSON. "estradas"/"pois"/
-// "fronteiras" ainda não têm gerador (nenhuma fase até aqui produz esse dado); ficam
-// no seletor de camadas já prontas pra quando uma fase futura escrever o arquivo.
-//
+// F01 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estado do módulo num objeto só, não
+// dezenas de `let` soltos (ARQUITETURA §10 regra 4).
+const estado = {
+    leafletMap: null,
+    leafletTileLayer: null,
+    leafletDimensaoGlobal: 768,
+    leafletZoomMaximo: 15,
+    leafletMaxNativeZoom: 11,
+    leafletContinentesCache: [],
+    leafletPopupAtual: null,
+    // Fase 3 (P2.1): camada vetorial GeoJSON — nome -> L.geoJSON. "estradas"/"pois"/
+    // "fronteiras" ainda não têm gerador (nenhuma fase até aqui produz esse dado); ficam
+    // no seletor de camadas já prontas pra quando uma fase futura escrever o arquivo.
+    leafletCamadasVetoriais: {},
+    leafletControlCamadas: null,
+    leafletTooltipZoomMin: 5,
+    // `{tamanho: {camada: zoom_min}}` vindo de /api/continentes — a mesma tabela que o
+    // gerador gravou nas features. Serve pra contar ao usuário a que zoom cada camada
+    // acende, em vez de repetir números aqui (que já divergiram do config uma vez).
+    leafletZoomMinCidade: {},
+    // Escala do mundo e largura das vias, servidas por /api/continentes. São o que
+    // permite desenhar em METRO em vez de px de tela — ver estiloRua.
+    leafletMetrosPorPixelMundo: 15811.4,
+    leafletViaLarguraM: { principal: 11, anel: 7, secundaria: 5 },
+    leafletViaLarguraMinPx: 1.5,
+};
+
 // Fase 4 (P2.2): "detalhe_cidade" é um grupo com as 8 camadas internas de geometria de
 // cidade (rua/quarteirao/muralha/torre/portao/praca/edificio/lote) — um único toggle no
 // control, não 8. O grupo entra LIGADO por padrão (D3 do DIAGNOSTICO_V3, 2026-09-11: as
@@ -37,18 +54,6 @@ let leafletPopupAtual = null;
 // existe). Só aparece perto o bastante (zoom_min alto, calculado em
 // generate_city_geometry.py a partir do tamanho real da cidade — a cidade é sub-pixel na
 // escala do mundo, Seção 2.1).
-let leafletCamadasVetoriais = {};
-let leafletControlCamadas = null;
-let leafletTooltipZoomMin = 5;
-// `{tamanho: {camada: zoom_min}}` vindo de /api/continentes — a mesma tabela que o gerador
-// gravou nas features. Serve pra contar ao usuário a que zoom cada camada acende, em vez
-// de repetir números aqui (que já divergiram do config uma vez).
-let leafletZoomMinCidade = {};
-// Escala do mundo e largura das vias, servidas por /api/continentes. São o que permite
-// desenhar em METRO em vez de px de tela — ver estiloRua.
-let leafletMetrosPorPixelMundo = 15811.4;
-let leafletViaLarguraM = { principal: 11, anel: 7, secundaria: 5 };
-let leafletViaLarguraMinPx = 1.5;
 const CAMADAS_MUNDO = ['cidades', 'pois', 'estradas', 'fronteiras'];
 const CAMADAS_DETALHE_CIDADE = ['muralha', 'torre', 'portao', 'praca', 'rua', 'quarteirao', 'patio', 'lote', 'edificio'];
 const CAMADAS_VETORIAIS_DISPONIVEIS = [...CAMADAS_MUNDO, ...CAMADAS_DETALHE_CIDADE];
@@ -83,14 +88,14 @@ function bboxParaBounds(bbox) {
     return L.latLngBounds(sw, ne);
 }
 
-function initMapaLeaflet() {
-    if (leafletMap) {
+export function initMapaLeaflet() {
+    if (estado.leafletMap) {
         // Já inicializado — só garante que o tamanho renderiza certo ao trocar de aba
-        setTimeout(() => leafletMap.invalidateSize(), 50);
+        setTimeout(() => estado.leafletMap.invalidateSize(), 50);
         return;
     }
 
-    leafletMap = L.map('mapa-leaflet-container', {
+    estado.leafletMap = L.map('mapa-leaflet-container', {
         crs: L.CRS.Simple,
         // Tem que bater com o minZoom da tile layer (não existe tile pré-gerado abaixo do
         // zoom 0 — é o mundo inteiro em 3x3 tiles de 256px). Se o mapa permitisse zoom
@@ -102,58 +107,58 @@ function initMapaLeaflet() {
         attributionControl: false,
     });
 
-    leafletMap.on('click', onMapaLeafletClick);
+    estado.leafletMap.on('click', onMapaLeafletClick);
     carregarMundoLeaflet();
     // Garante dimensões corretas mesmo na primeira inicialização (a aba pode ainda não ter
     // sofrido reflow síncrono em alguns navegadores/timings).
-    setTimeout(() => leafletMap.invalidateSize(), 50);
+    setTimeout(() => estado.leafletMap.invalidateSize(), 50);
 }
 
 async function carregarMundoLeaflet() {
     try {
         const res = await fetch('/api/continentes');
         const data = await res.json();
-        leafletDimensaoGlobal = data.dimensao_global || 768;
+        estado.leafletDimensaoGlobal = data.dimensao_global || 768;
         // Fase 0.6: não é mais teto técnico (faltava tile pré-gerado acima disso) — o
         // raster agora pode ser gerado em qualquer zoom (gerar_janela é resolução-livre).
         // tile_zoom_maximo_ui é decisão de custo/UI, calibrada na Fase 1.2.
-        leafletZoomMaximo = data.tile_zoom_maximo_ui || 15;
+        estado.leafletZoomMaximo = data.tile_zoom_maximo_ui || 15;
         // D5/D2 do DIAGNOSTICO_V3: acima deste zoom o raster não tem detalhe novo — o
         // Leaflet estica o último tile renderizado em vez de pedir um novo ao servidor.
-        leafletMaxNativeZoom = data.tile_max_native_zoom || 11;
-        leafletContinentesCache = data.continentes || [];
-        leafletTooltipZoomMin = data.mapa_features_tooltip_zoom_min || 5;
-        leafletZoomMinCidade = data.cidade_zoom_min_por_tamanho || {};
-        leafletMetrosPorPixelMundo = data.metros_por_pixel_mundo || leafletMetrosPorPixelMundo;
-        leafletViaLarguraM = data.cidade_via_largura_m_por_classe || leafletViaLarguraM;
-        if (typeof data.cidade_via_largura_min_px === 'number') leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
+        estado.leafletMaxNativeZoom = data.tile_max_native_zoom || 11;
+        estado.leafletContinentesCache = data.continentes || [];
+        estado.leafletTooltipZoomMin = data.mapa_features_tooltip_zoom_min || 5;
+        estado.leafletZoomMinCidade = data.cidade_zoom_min_por_tamanho || {};
+        estado.leafletMetrosPorPixelMundo = data.metros_por_pixel_mundo || estado.leafletMetrosPorPixelMundo;
+        estado.leafletViaLarguraM = data.cidade_via_largura_m_por_classe || estado.leafletViaLarguraM;
+        if (typeof data.cidade_via_largura_min_px === 'number') estado.leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
 
-        const bounds = L.latLngBounds(pixelParaLatLng(0, leafletDimensaoGlobal), pixelParaLatLng(leafletDimensaoGlobal, 0));
+        const bounds = L.latLngBounds(pixelParaLatLng(0, estado.leafletDimensaoGlobal), pixelParaLatLng(estado.leafletDimensaoGlobal, 0));
 
-        leafletMap.setMaxZoom(leafletZoomMaximo);
-        if (leafletTileLayer) leafletMap.removeLayer(leafletTileLayer);
-        leafletTileLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+        estado.leafletMap.setMaxZoom(estado.leafletZoomMaximo);
+        if (estado.leafletTileLayer) estado.leafletMap.removeLayer(estado.leafletTileLayer);
+        estado.leafletTileLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
             tileSize: 256,
             minZoom: 0,
-            maxZoom: leafletZoomMaximo,
+            maxZoom: estado.leafletZoomMaximo,
             // D5/D2 do DIAGNOSTICO_V3: acima deste nível o raster não ganha detalhe NOVO
             // (medido: o gradiente da imagem satura ali), então o Leaflet estica o tile
             // desse zoom em vez de pedir um tile novo ao servidor — mesma imagem, custo
             // zero. tile_zoom_maximo_ui continua maior porque as camadas VETORIAIS de
             // cidade (rua/edifício/etc) precisam de zoom alto e não perdem qualidade.
-            maxNativeZoom: leafletMaxNativeZoom,
+            maxNativeZoom: estado.leafletMaxNativeZoom,
             noWrap: true,
             bounds: bounds,
-        }).addTo(leafletMap);
+        }).addTo(estado.leafletMap);
 
-        leafletMap.setMaxBounds(bounds.pad(0.2));
-        leafletMap.fitBounds(bounds);
+        estado.leafletMap.setMaxBounds(bounds.pad(0.2));
+        estado.leafletMap.fitBounds(bounds);
 
         // Fase 3: camadas vetoriais criadas uma vez; dados recarregam a cada
         // moveend/zoomend (bbox+zoom visíveis), não no load inicial só.
-        if (Object.keys(leafletCamadasVetoriais).length === 0) {
+        if (Object.keys(estado.leafletCamadasVetoriais).length === 0) {
             criarCamadasVetoriaisLeaflet();
-            leafletMap.on('moveend', carregarFeaturesVisiveisLeaflet);
+            estado.leafletMap.on('moveend', carregarFeaturesVisiveisLeaflet);
         }
         carregarFeaturesVisiveisLeaflet();
 
@@ -165,9 +170,9 @@ async function carregarMundoLeaflet() {
 // `style` (usado pra LineString/Polygon) e `pointToLayer` (usado pra Point) ao mesmo
 // tempo; como cada camada só contém um tipo de geometria, cada uma usa só o que precisa.
 // Quantos px de TELA vale um metro no zoom atual. No L.CRS.Simple 1 px de mundo ocupa
-// 2^zoom px de tela, e 1 px de mundo são `leafletMetrosPorPixelMundo` metros.
+// 2^zoom px de tela, e 1 px de mundo são `estado.leafletMetrosPorPixelMundo` metros.
 function pxDeTelaPorMetro() {
-    return Math.pow(2, leafletMap.getZoom()) / leafletMetrosPorPixelMundo;
+    return Math.pow(2, estado.leafletMap.getZoom()) / estado.leafletMetrosPorPixelMundo;
 }
 
 // Tom de cada classe de via. Terra batida clara sobre o verde do terreno; a principal é a
@@ -186,12 +191,12 @@ const ESTILO_VIA_POR_CLASSE = {
 // moveend (e zoom dispara moveend), então isto se reajusta sozinho ao navegar.
 function estiloRua(feature) {
     const classe = (feature.properties || {}).classe_via || 'secundaria';
-    const larguraM = leafletViaLarguraM[classe] || leafletViaLarguraM.secundaria || 5;
+    const larguraM = estado.leafletViaLarguraM[classe] || estado.leafletViaLarguraM.secundaria || 5;
     return {
         ...(ESTILO_VIA_POR_CLASSE[classe] || ESTILO_VIA_POR_CLASSE.secundaria),
         // O piso existe porque no zoom em que a camada acende a cidade inteira ainda tem
         // ~310 px e a via de verdade daria 2 px de largura.
-        weight: Math.max(leafletViaLarguraMinPx, larguraM * pxDeTelaPorMetro()),
+        weight: Math.max(estado.leafletViaLarguraMinPx, larguraM * pxDeTelaPorMetro()),
         // Junta e ponta arredondadas fecham o cruzamento em vez de deixar o entalhe que
         // denuncia que aquilo são segmentos soltos.
         lineCap: 'round',
@@ -242,12 +247,12 @@ function criarCamadasVetoriaisLeaflet() {
 
     CAMADAS_MUNDO.forEach(nome => {
         const layer = L.geoJSON(null, { pointToLayer: criarMarcadorFeatureLeaflet });
-        leafletCamadasVetoriais[nome] = layer;
+        estado.leafletCamadasVetoriais[nome] = layer;
         overlays[CAMADAS_NOMES_AMIGAVEIS[nome] || nome] = layer;
     });
     // Só "cidades" começa visível — as outras existem no seletor pra quando uma fase
     // futura escrever o GeoJSON correspondente (hoje ficam vazias, sem erro nenhum).
-    leafletCamadasVetoriais['cidades'].addTo(leafletMap);
+    estado.leafletCamadasVetoriais['cidades'].addTo(estado.leafletMap);
 
     // Fase 4: as camadas de detalhe de cidade viram UM grupo — um toggle só
     // ("🏛️ Detalhe da Cidade"), não um checkbox por camada pra ligar/desligar toda vez.
@@ -268,21 +273,21 @@ function criarCamadasVetoriaisLeaflet() {
             };
         }
         const layer = L.geoJSON(null, opcoes);
-        leafletCamadasVetoriais[nome] = layer;
+        estado.leafletCamadasVetoriais[nome] = layer;
         layer.addTo(grupoDetalheCidade);
     });
     // O rótulo cita o menor zoom_min de todas as camadas e tamanhos — é o primeiro momento
     // em que QUALQUER cidade desenha alguma coisa. Calculado, não escrito à mão.
-    const zoomsConhecidos = Object.values(leafletZoomMinCidade).flatMap(t => Object.values(t));
+    const zoomsConhecidos = Object.values(estado.leafletZoomMinCidade).flatMap(t => Object.values(t));
     const zoomEntrada = zoomsConhecidos.length > 0 ? Math.min(...zoomsConhecidos) : 9;
     overlays[`🏛️ Detalhe da Cidade (zoom ${zoomEntrada}+)`] = grupoDetalheCidade;
     // D3 do DIAGNOSTICO_V3: o grupo entra LIGADO. As camadas internas já têm zoom_min
     // (nada é desenhado em zoom baixo), então ligar por padrão não custa nada em
     // performance e é a única forma do usuário descobrir que a cidade existe.
-    grupoDetalheCidade.addTo(leafletMap);
+    grupoDetalheCidade.addTo(estado.leafletMap);
 
-    if (leafletControlCamadas) leafletMap.removeControl(leafletControlCamadas);
-    leafletControlCamadas = L.control.layers(null, overlays, { collapsed: false }).addTo(leafletMap);
+    if (estado.leafletControlCamadas) estado.leafletMap.removeControl(estado.leafletControlCamadas);
+    estado.leafletControlCamadas = L.control.layers(null, overlays, { collapsed: false }).addTo(estado.leafletMap);
 }
 
 function criarMarcadorDetalheCidade(feature, latlng, camada) {
@@ -316,7 +321,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
 
     if (props.nome) {
         marker.bindTooltip(props.nome, {
-            permanent: leafletMap.getZoom() >= leafletTooltipZoomMin,
+            permanent: estado.leafletMap.getZoom() >= estado.leafletTooltipZoomMin,
             direction: 'top',
             offset: [0, -12],
             className: 'leaflet-vector-tooltip',
@@ -325,7 +330,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
 
     // Os zooms vêm da tabela do servidor, por tamanho de cidade — uma cidade grande abre
     // as ruas 2 níveis antes de uma pequena, então não existe um número único pra citar.
-    const zoomsCidade = leafletZoomMinCidade[props.tamanho] || {};
+    const zoomsCidade = estado.leafletZoomMinCidade[props.tamanho] || {};
     const zoomRua = zoomsCidade.rua;
     const zoomEdificio = zoomsCidade.edificio;
     const dicaZoom = (zoomRua && zoomEdificio)
@@ -345,7 +350,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
     // antes era um 13 fixo, que para uma cidade pequena ainda mostrava só as ruas.
     marker.on('dblclick', (e) => {
         L.DomEvent.stopPropagation(e);
-        leafletMap.flyTo(latlng, Math.min(zoomEdificio || 13, leafletZoomMaximo));
+        estado.leafletMap.flyTo(latlng, Math.min(zoomEdificio || 13, estado.leafletZoomMaximo));
     });
 
     return marker;
@@ -359,7 +364,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
 // não precisa saber que existe um banco por trás.
 function _cidadesVisiveisLeaflet(x0, y0, x1, y1) {
     const ids = new Set();
-    for (const cont of leafletContinentesCache) {
+    for (const cont of estado.leafletContinentesCache) {
         for (const cid of (cont.cidades || [])) {
             if (cid.cidade_id == null) continue;
             if (cid.x_global >= x0 && cid.x_global <= x1 && cid.y_global >= y0 && cid.y_global <= y1) {
@@ -390,7 +395,7 @@ async function mesclarLotesAlteradosLeaflet(loteFeatureCollection, x0, y0, x1, y
 }
 
 async function carregarFeaturesVisiveisLeaflet() {
-    if (!leafletMap || Object.keys(leafletCamadasVetoriais).length === 0) return;
+    if (!estado.leafletMap || Object.keys(estado.leafletCamadasVetoriais).length === 0) return;
 
     // A bbox vai em px de mundo FRACIONÁRIO. Arredondar para inteiro (o que esta função
     // fazia) colapsava a janela num ponto de área zero assim que o zoom passava de ~10,
@@ -399,14 +404,14 @@ async function carregarFeaturesVisiveisLeaflet() {
     // e nunca os edifícios, torres e portões, que são pontos em coordenada quebrada. Pior:
     // os dois filtros não tinham interseção, já que edifício pede zoom >= 13 e uma bbox
     // utilizável exigia zoom <= 9. Nenhum zoom mostrava a cidade construída.
-    const bounds = leafletMap.getBounds();
+    const bounds = estado.leafletMap.getBounds();
     const sw = latLngParaPixelExato(bounds.getSouthWest());
     const ne = latLngParaPixelExato(bounds.getNorthEast());
     const x0 = Math.min(sw.x, ne.x), x1 = Math.max(sw.x, ne.x);
     const y0 = Math.min(sw.y, ne.y), y1 = Math.max(sw.y, ne.y);
     // floor, não round: com zoomSnap 0.25, arredondar acendia a camada meio nível antes do
     // seu zoom_min, desenhando geometria numa escala em que ela ainda vira borrão.
-    const z = Math.floor(leafletMap.getZoom());
+    const z = Math.floor(estado.leafletMap.getZoom());
 
     try {
         const camadas = CAMADAS_VETORIAIS_DISPONIVEIS.join(',');
@@ -414,7 +419,7 @@ async function carregarFeaturesVisiveisLeaflet() {
         const data = await res.json();
         if (data.lote) await mesclarLotesAlteradosLeaflet(data.lote, x0, y0, x1, y1);
         CAMADAS_VETORIAIS_DISPONIVEIS.forEach(nome => {
-            const layer = leafletCamadasVetoriais[nome];
+            const layer = estado.leafletCamadasVetoriais[nome];
             if (!layer || !data[nome]) return;
             layer.clearLayers();
             layer.addData(data[nome]);
@@ -425,34 +430,34 @@ async function carregarFeaturesVisiveisLeaflet() {
 function renderizarListaContinentesLeaflet() {
     const container = document.getElementById('leaflet-continent-list');
     if (!container) return;
-    if (leafletContinentesCache.length === 0) {
+    if (estado.leafletContinentesCache.length === 0) {
         container.innerHTML = '<span style="color:var(--text-dim); font-size:0.8rem;">Nenhum continente no manifesto — gere o mundo primeiro.</span>';
         return;
     }
-    container.innerHTML = leafletContinentesCache.map((c, i) => `
-        <button class="filter-btn" onclick="pularParaContinenteLeaflet(${i})">
+    container.innerHTML = estado.leafletContinentesCache.map((c, i) => `
+        <button class="filter-btn" data-acao="ir-para-continente-leaflet" data-indice="${i}">
             🏔️ ${c.nome} <span style="opacity:0.7; font-size:0.75rem;">(${Math.round((c.area_real_km2 || 0) / 1000)}k km²)</span>
         </button>
-    `).join('') + `<button class="filter-btn" onclick="voltarMundoLeaflet()">🌍 Ver mundo inteiro</button>`;
+    `).join('') + `<button class="filter-btn" data-acao="voltar-mundo-leaflet">🌍 Ver mundo inteiro</button>`;
 }
 
 function pularParaContinenteLeaflet(indice) {
-    const cont = leafletContinentesCache[indice];
+    const cont = estado.leafletContinentesCache[indice];
     if (!cont || !cont.bounding_box || !cont.bounding_box.max_x) {
         alert('Este continente não tem bounding box válido (0 pixels de terra?).');
         return;
     }
-    leafletMap.flyToBounds(bboxParaBounds(cont.bounding_box), { maxZoom: leafletZoomMaximo, duration: 0.6 });
+    estado.leafletMap.flyToBounds(bboxParaBounds(cont.bounding_box), { maxZoom: estado.leafletZoomMaximo, duration: 0.6 });
 }
 
 function voltarMundoLeaflet() {
-    const bounds = L.latLngBounds(pixelParaLatLng(0, leafletDimensaoGlobal), pixelParaLatLng(leafletDimensaoGlobal, 0));
-    leafletMap.flyToBounds(bounds, { duration: 0.6 });
+    const bounds = L.latLngBounds(pixelParaLatLng(0, estado.leafletDimensaoGlobal), pixelParaLatLng(estado.leafletDimensaoGlobal, 0));
+    estado.leafletMap.flyToBounds(bounds, { duration: 0.6 });
 }
 
 async function onMapaLeafletClick(e) {
     const { x, y } = latLngParaPixel(e.latlng);
-    if (x < 0 || y < 0 || x >= leafletDimensaoGlobal || y >= leafletDimensaoGlobal) return;
+    if (x < 0 || y < 0 || x >= estado.leafletDimensaoGlobal || y >= estado.leafletDimensaoGlobal) return;
 
     // Sempre consulta a informação "oficial" do mapa mundi pra essa coordenada, independente
     // do quão fundo o zoom está — o tile visível pode vir de um recorte de cidade/continente,
@@ -462,8 +467,8 @@ async function onMapaLeafletClick(e) {
         const data = await res.json();
         if (data.error) return;
 
-        if (leafletPopupAtual) leafletMap.closePopup(leafletPopupAtual);
-        leafletPopupAtual = L.popup()
+        if (estado.leafletPopupAtual) estado.leafletMap.closePopup(estado.leafletPopupAtual);
+        estado.leafletPopupAtual = L.popup()
             .setLatLng(e.latlng)
             .setContent(`
                 <strong>${data.bioma_nome}</strong><br>
@@ -472,6 +477,12 @@ async function onMapaLeafletClick(e) {
                 Umidade: ${(data.umidade * 100).toFixed(1)}%<br>
                 <span style="opacity:0.6; font-size:0.75rem;">px (${x}, ${y})</span>
             `)
-            .openOn(leafletMap);
+            .openOn(estado.leafletMap);
     } catch (err) { console.error('Erro ao consultar info do mapa:', err); }
 }
+
+// F01 (docs/16_PLANO_PAINEL_E_IA.md): cada módulo registra as próprias ações.
+registrarAcoes({
+    'ir-para-continente-leaflet': (alvo) => pularParaContinenteLeaflet(parseInt(alvo.dataset.indice, 10)),
+    'voltar-mundo-leaflet': () => voltarMundoLeaflet(),
+});

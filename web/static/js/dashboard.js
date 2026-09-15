@@ -1,19 +1,36 @@
-let staticData = null;
-let activeView = 'map-view';
-let npcFilter = 'vivos';
-let allNpcs = [];
-let allRels = [];
-let activeModalTab = 'profile';
-let activeNpcId = null;
+import { registrarAcoes } from './acoes.js';
+import { initMapaLeaflet } from './mapa_leaflet.js';
+
+// F01 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estado do módulo num objeto só, não
+// dezenas de `let` soltos (ARQUITETURA §10 regra 4).
+const estado = {
+    staticData: null,
+    activeView: 'map-view',
+    npcFilter: 'vivos',
+    allNpcs: [],
+    allRels: [],
+    activeModalTab: 'profile',
+    activeNpcId: null,
+};
+
+// F01: os botões de aba usam nomes curtos em `data-aba` (trocar-aba/mapa,
+// .../habitantes, ...) — o mapeamento pro id de DOM real é temporário; F03 formaliza
+// isso com o enum `Aba`.
+const ABA_PARA_VIEW_ID = {
+    'mapa': 'map-view',
+    'habitantes': 'npc-view',
+    'mestre': 'mestre-view',
+    'mapa-live': 'mapa-leaflet-view',
+};
 
 function switchView(btn, id) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    
+
     document.getElementById(id).classList.add('active');
     btn.classList.add('active');
-    activeView = id;
-    
+    estado.activeView = id;
+
     const eventLog = document.getElementById('event-log');
     if (id === 'npc-view' || id === 'mestre-view' || id === 'mapa-leaflet-view') {
         eventLog.style.display = 'none';
@@ -31,7 +48,7 @@ function switchView(btn, id) {
 }
 
 function setNpcFilter(filter) {
-    npcFilter = filter;
+    estado.npcFilter = filter;
     document.querySelectorAll('.filter-btn').forEach(btn => {
         const text = btn.innerText.toLowerCase();
         let isMatch = false;
@@ -48,10 +65,19 @@ function toggleEventLog() {
     log.classList.toggle('collapsed');
 }
 
-async function init() {
+export function iniciarDashboard() {
+    // F01: o Enter no campo do Mestre era um `onkeydown` inline — vira um listener
+    // de verdade, registrado aqui (uma vez), no próprio elemento.
+    document.getElementById('mestre-input').addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') enviarMensagemMestre();
+    });
+    iniciarPolling();
+}
+
+async function iniciarPolling() {
     try {
         const res = await fetch('/api/init');
-        staticData = await res.json();
+        estado.staticData = await res.json();
         // Old map generation removed
 
         update();
@@ -76,9 +102,9 @@ async function update() {
     try {
         const res = await fetch('/api/update');
         const data = await res.json();
-        
-        if (data.npcs) allNpcs = data.npcs;
-        if (data.rels) allRels = data.rels;
+
+        if (data.npcs) estado.allNpcs = data.npcs;
+        if (data.rels) estado.allRels = data.rels;
 
         if (data.error) {
             statusMsg.innerText = data.error;
@@ -99,7 +125,7 @@ async function update() {
 
         updatePauseUI(data.p);
         document.getElementById('clock').innerText = data.h || "Sincronizando...";
-        
+
         document.querySelectorAll('.speed-btn').forEach(b => {
             b.classList.toggle('active', parseFloat(b.innerText) == data.v);
         });
@@ -119,14 +145,14 @@ async function update() {
             window.updateMapEntities(data.npcs);
         }
 
-        if (activeView === 'npc-view' && data.npcs) {
+        if (estado.activeView === 'npc-view' && data.npcs) {
             const grid = document.getElementById('npc-grid');
-            
+
             // Aplicar o filtro na lista de habitantes
             let filteredNpcs = data.npcs;
-            if (npcFilter === 'vivos') {
+            if (estado.npcFilter === 'vivos') {
                 filteredNpcs = data.npcs.filter(n => n.status.h > 0);
-            } else if (npcFilter === 'mortos') {
+            } else if (estado.npcFilter === 'mortos') {
                 filteredNpcs = data.npcs.filter(n => n.status.h <= 0);
             }
 
@@ -162,7 +188,7 @@ async function update() {
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
                             <div style="font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
-                            <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" onclick="abrirHistorico('${n.id}', '${n.nome.replace(/'/g, "\\'")}')">👤 Perfil</button>
+                            <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" data-acao="abrir-ficha" data-npc-id="${escaparHtml(n.id)}">👤 Perfil</button>
                         </div>
                     </div>
                 `;
@@ -172,7 +198,7 @@ async function update() {
         if (data.evs) {
             const logInner = document.getElementById('event-log-inner');
             if (logInner) {
-                logInner.innerHTML = `<h4 style="margin-bottom:1rem; color:var(--accent); font-family:'Outfit'">📜 Crônicas Recentes</h4>` + 
+                logInner.innerHTML = `<h4 style="margin-bottom:1rem; color:var(--accent); font-family:'Outfit'">📜 Crônicas Recentes</h4>` +
                     data.evs.map(e => `<div class="event-item"><small>${e.t}</small><br>${e.r}</div>`).join('');
             }
         }
@@ -215,32 +241,25 @@ function getNPCAvatar(genero, estagio_vida) {
 
 function getNPCNameById(npcId) {
     if (!npcId) return null;
-    const found = allNpcs.find(n => n.id === npcId);
+    const found = estado.allNpcs.find(n => n.id === npcId);
     return found ? found.nome : "Desconhecido";
 }
 
 function getNPCChildren(npcId) {
-    return allNpcs.filter(n => n.bio.pai === npcId || n.bio.mae === npcId);
+    return estado.allNpcs.filter(n => n.bio.pai === npcId || n.bio.mae === npcId);
 }
 
 function getNPCRelationships(npcId) {
-    return allRels.filter(r => r.a === npcId);
-}
-
-function switchModalNPC(newNpcId) {
-    const found = allNpcs.find(n => n.id === newNpcId);
-    if (found) {
-        abrirHistorico(found.id, found.nome);
-    }
+    return estado.allRels.filter(r => r.a === npcId);
 }
 
 function switchModalTab(tab) {
-    activeModalTab = tab;
-    
+    estado.activeModalTab = tab;
+
     // Atualizar UI dos botões das abas
     document.getElementById('tab-profile-btn').classList.toggle('active', tab === 'profile');
     document.getElementById('tab-logs-btn').classList.toggle('active', tab === 'logs');
-    
+
     // Atualizar exibição dos blocos de conteúdo
     document.getElementById('modal-tab-profile').style.display = tab === 'profile' ? 'block' : 'none';
     document.getElementById('modal-tab-logs').style.display = tab === 'logs' ? 'block' : 'none';
@@ -249,33 +268,33 @@ function switchModalTab(tab) {
 function renderNPCProfile(npc) {
     const avatar = getNPCAvatar(npc.bio.g, npc.bio.ev);
     const generoStr = npc.bio.g === 'M' ? 'Masculino ♂️' : 'Feminino ♀️';
-    const estagioStr = npc.bio.ev === 'bebe' ? 'Bebê 👶' : 
-                       (npc.bio.ev === 'crianca' ? 'Criança 👦' : 
-                       (npc.bio.ev === 'idoso' ? 'Idoso(a) 👴👵' : 
+    const estagioStr = npc.bio.ev === 'bebe' ? 'Bebê 👶' :
+                       (npc.bio.ev === 'crianca' ? 'Criança 👦' :
+                       (npc.bio.ev === 'idoso' ? 'Idoso(a) 👴👵' :
                        (npc.bio.ev === 'morto' ? 'Falecido(a) 💀' : 'Adulto(a) 🧑')));
-    
+
     // Pais
     const maeNome = getNPCNameById(npc.bio.mae);
     const paiNome = getNPCNameById(npc.bio.pai);
-    
-    const maeLink = npc.bio.mae ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.mae}')">👩 ${maeNome}</a>` : '<span style="color: var(--text-dim)">Desconhecida</span>';
-    const paiLink = npc.bio.pai ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.pai}')">👨 ${paiNome}</a>` : '<span style="color: var(--text-dim)">Desconhecido</span>';
-    
+
+    const maeLink = npc.bio.mae ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.mae)}">👩 ${maeNome}</a>` : '<span style="color: var(--text-dim)">Desconhecida</span>';
+    const paiLink = npc.bio.pai ? `<a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.pai)}">👨 ${paiNome}</a>` : '<span style="color: var(--text-dim)">Desconhecido</span>';
+
     // Cônjuge
     let conjugeLink = '<span style="color: var(--text-dim)">Nenhum</span>';
     if (npc.bio.ec === 'casado' && npc.bio.cj) {
         const conjugeNome = getNPCNameById(npc.bio.cj);
-        conjugeLink = `<a href="#" style="color: var(--success); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${npc.bio.cj}')">💍 ${conjugeNome}</a>`;
+        conjugeLink = `<a href="#" style="color: var(--success); text-decoration: none; font-weight: 600;" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.cj)}">💍 ${conjugeNome}</a>`;
     }
-    
+
     // Filhos
     const filhos = getNPCChildren(npc.id);
     const filhosList = filhos.length > 0 ? filhos.map(f => `
         <li style="list-style: none; margin-bottom: 0.3rem;">
-            <a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" onclick="switchModalNPC('${f.id}')">👶 ${f.nome} (${f.bio.ev === 'bebe' ? 'Bebê' : 'Criança'})</a>
+            <a href="#" style="color: var(--accent); text-decoration: none; font-weight: 600;" data-acao="abrir-ficha" data-npc-id="${escaparHtml(f.id)}">👶 ${f.nome} (${f.bio.ev === 'bebe' ? 'Bebê' : 'Criança'})</a>
         </li>
     `).join('') : '<span style="color: var(--text-dim)">Nenhum filho registrado.</span>';
-    
+
     // Círculo Social
     const rels = getNPCRelationships(npc.id);
     const relsList = rels.length > 0 ? rels.map(r => {
@@ -302,7 +321,7 @@ function renderNPCProfile(npc) {
 
     return `
         ${gravidezHtml}
-        
+
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
             <!-- Informações Básicas -->
             <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
@@ -320,7 +339,7 @@ function renderNPCProfile(npc) {
                     <div><span style="color: var(--text-dim)">Data Nascimento:</span> <span>${npc.bio.dn.split('T')[0] || "Era Inicial"}</span></div>
                 </div>
             </div>
-            
+
             <!-- Família e Árvore Genealógica -->
             <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
                 <h4 style="color: var(--accent); font-family: 'Outfit'; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(56,189,248,0.1); padding-bottom: 0.4rem;">👨‍👩‍👧 Árvore Genealógica</h4>
@@ -334,7 +353,7 @@ function renderNPCProfile(npc) {
                     </div>
                 </div>
             </div>
-            
+
             <!-- Relações Sociais -->
             <div style="grid-column: 1 / -1; background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04);">
                 <h4 style="color: var(--accent); font-family: 'Outfit'; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(56,189,248,0.1); padding-bottom: 0.4rem;">💬 Círculo de Relacionamentos</h4>
@@ -346,8 +365,10 @@ function renderNPCProfile(npc) {
     `;
 }
 
-async function abrirHistorico(npcId, npcNome) {
-    activeNpcId = npcId;
+async function abrirHistorico(npcId) {
+    estado.activeNpcId = npcId;
+    const npcEncontrado = estado.allNpcs.find(n => n.id === npcId);
+    const npcNome = npcEncontrado ? npcEncontrado.nome : "Desconhecido";
     const modal = document.getElementById('npc-log-modal');
     const title = document.getElementById('modal-npc-nome');
     const profileContainer = document.getElementById('modal-profile-details');
@@ -357,7 +378,7 @@ async function abrirHistorico(npcId, npcNome) {
     list.innerHTML = `<p style="text-align: center; color: var(--text-dim);">Carregando logs...</p>`;
     profileContainer.innerHTML = `<p style="text-align: center; color: var(--text-dim);">Carregando ficha...</p>`;
     modal.classList.add('active');
-    
+
     // Resetar aba padrão para Perfil
     switchModalTab('profile');
 
@@ -365,10 +386,10 @@ async function abrirHistorico(npcId, npcNome) {
         const resRels = await fetch(`/api/npc_rels/${npcId}`);
         const dataRels = await resRels.json();
         if (dataRels.rels) {
-            allRels = dataRels.rels.map(r => ({...r, a: npcId})); // Populate 'a' field to match old logic
+            estado.allRels = dataRels.rels.map(r => ({...r, a: npcId})); // Populate 'a' field to match old logic
         }
 
-        const foundNpc = allNpcs.find(n => n.id === npcId);
+        const foundNpc = estado.allNpcs.find(n => n.id === npcId);
         if (foundNpc) {
             profileContainer.innerHTML = renderNPCProfile(foundNpc);
         }
@@ -407,16 +428,18 @@ async function abrirHistorico(npcId, npcNome) {
     }
 }
 
-function fecharHistorico(event) {
-    if (event) event.stopPropagation();
+function fecharHistorico() {
     const modal = document.getElementById('npc-log-modal');
     modal.classList.remove('active');
-    activeNpcId = null;
+    estado.activeNpcId = null;
 }
 
 // --- Modo Mestre de IA (Frente 5) ---
 
-function escapeHtmlMestre(str) {
+// F01 (docs/16_PLANO_PAINEL_E_IA.md): renomeado de escapeHtmlMestre — passa a ser
+// usado por qualquer texto do servidor que vá pro DOM, não só o chat do Mestre.
+// F05 move isto pra formatacao.js.
+function escaparHtml(str) {
     const div = document.createElement('div');
     div.innerText = str == null ? '' : String(str);
     return div.innerHTML;
@@ -428,7 +451,7 @@ function renderMestreChatLog(historico) {
         const ehJogador = h.autor === 'jogador';
         return `
             <div style="align-self:${ehJogador ? 'flex-end' : 'flex-start'}; max-width: 80%; background: ${ehJogador ? 'var(--accent)' : 'rgba(255,255,255,0.06)'}; color: ${ehJogador ? '#04202e' : 'inherit'}; padding: 0.6rem 0.9rem; border-radius: 14px; font-size: 0.85rem; white-space: pre-wrap;">
-                ${escapeHtmlMestre(h.mensagem)}
+                ${escaparHtml(h.mensagem)}
             </div>
         `;
     }).join('');
@@ -443,10 +466,10 @@ function renderMestreChatLog(historico) {
             <div class="info-card" style="border: 1px solid var(--accent);">
                 <strong style="font-size:0.85rem;">⚡ O Mestre propôs ${ultima.acoes_propostas.length} ação(ões) no mundo:</strong>
                 <ul style="font-size:0.8rem; color: var(--text-dim); margin: 0.4rem 0;">
-                    ${ultima.acoes_propostas.map(a => `<li>${escapeHtmlMestre(a.comando)} ${escapeHtmlMestre(a.id || '')}</li>`).join('')}
+                    ${ultima.acoes_propostas.map(a => `<li>${escaparHtml(a.comando)} ${escaparHtml(a.id || '')}</li>`).join('')}
                 </ul>
-                <button class="filter-btn active" onclick="confirmarAcoesMestre(${ultima.id})">✅ Confirmar</button>
-                <button class="filter-btn" onclick="document.getElementById('mestre-acoes-pendentes').style.display='none'">✋ Ignorar</button>
+                <button class="filter-btn active" data-acao="confirmar-acoes" data-conversa-id="${ultima.id}">✅ Confirmar</button>
+                <button class="filter-btn" data-acao="ignorar-acoes">✋ Ignorar</button>
             </div>
         `;
     } else {
@@ -530,5 +553,26 @@ async function confirmarAcoesMestre(conversaId) {
     } catch (e) { console.error("Erro ao confirmar ações do Mestre:", e); }
 }
 
-init();
+function ignorarAcoesMestre() {
+    document.getElementById('mestre-acoes-pendentes').style.display = 'none';
+}
 
+// F01: cada módulo registra as próprias ações — evita import circular com app.js.
+registrarAcoes({
+    'pausar': () => togglePause(),
+    'velocidade': (alvo) => setSpeed(parseInt(alvo.dataset.valor, 10)),
+    'trocar-aba': (alvo) => switchView(alvo, ABA_PARA_VIEW_ID[alvo.dataset.aba]),
+    'filtro-npc': (alvo) => setNpcFilter(alvo.dataset.filtro),
+    'alternar-cronicas': () => toggleEventLog(),
+    'abrir-ficha': (alvo) => abrirHistorico(alvo.dataset.npcId),
+    // F01: só fecha quando o clique foi no próprio overlay/botão × — não quando um
+    // clique dentro do conteúdo do modal borbulha até aqui (o conteúdo não tem
+    // data-acao, então closest() sobe até o overlay; sem esta checagem qualquer
+    // clique no modal inteiro o fecharia).
+    'fechar-ficha': (alvo, ev) => { if (ev.target === alvo) fecharHistorico(); },
+    'ficha-aba': (alvo) => switchModalTab(alvo.dataset.aba),
+    'avancar-tempo': (alvo) => avancarTempoMestre(parseInt(alvo.dataset.minutos, 10)),
+    'enviar-mensagem': () => enviarMensagemMestre(),
+    'confirmar-acoes': (alvo) => confirmarAcoesMestre(alvo.dataset.conversaId),
+    'ignorar-acoes': () => ignorarAcoesMestre(),
+});

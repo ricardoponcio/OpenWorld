@@ -2,76 +2,68 @@ const canvas = document.getElementById('mapaCanvas');
 const ctx = canvas.getContext('2d');
 const container = document.getElementById('canvasContainer');
 
-// Mode & State variables
-let currentMode = 'global'; // 'global', 'continent' ou 'city'
-let currentContinentUuid = null;
-let currentCityNome = null;
-let scale = 1.0;
-let offsetX = 0;
-let offsetY = 0;
-let isDragging = false;
-let startX = 0;
-let startY = 0;
-let lastInspectedX = -1;
-let lastInspectedY = -1;
-let minScale = 1.0;
-let mouseX = -1;
-let mouseY = -1;
-let hoveredTooltip = null;
-
-let cityEntities = { locais: [], npcs: [], bbox: null };
-// D7 do DIAGNOSTICO_V3: posição do marcador agregado desenhado por drawCityGridAndEntities
-// (canvas em pixel de TELA, já com offset/scale aplicados) — usado só pro hit-test do hover.
-let cityAggregateMarker = null;
-let cachedContinents = [];
-// R-B06/R-H04: tabela de biomas (id -> {rotulo, emoji}) servida por /api/continentes —
-// nunca copiada à mão aqui (já divergiu uma vez: um bioma "Zona Urbana" inventado no JS
-// que não existia no classificador Python).
-let cachedBiomas = {};
+// F01 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estado do módulo num objeto só, não
+// dezenas de `let` soltos (ARQUITETURA §10 regra 4).
+const estado = {
+    currentMode: 'global', // 'global', 'continent' ou 'city'
+    currentContinentUuid: null,
+    currentCityNome: null,
+    scale: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    lastInspectedX: -1,
+    lastInspectedY: -1,
+    minScale: 1.0,
+    mouseX: -1,
+    mouseY: -1,
+    hoveredTooltip: null,
+    cityEntities: { locais: [], npcs: [], bbox: null },
+    // D7 do DIAGNOSTICO_V3: posição do marcador agregado desenhado por
+    // drawCityGridAndEntities (canvas em pixel de TELA, já com offset/scale
+    // aplicados) — usado só pro hit-test do hover.
+    cityAggregateMarker: null,
+    cachedContinents: [],
+    // R-B06/R-H04: tabela de biomas (id -> {rotulo, emoji}) servida por
+    // /api/continentes — nunca copiada à mão aqui (já divergiu uma vez: um bioma
+    // "Zona Urbana" inventado no JS que não existia no classificador Python).
+    cachedBiomas: {},
+    npcAnimations: {}, // id -> { x, y, tx, ty }
+    isAnimating: false,
+    hoverTimeout: null,
+    abortController: null,
+};
 
 // Query memory cache
 const apiCache = {};
 
 // Animation State
-let npcAnimations = {}; // id -> { x, y, tx, ty }
-let isAnimating = false;
-
 function lerp(start, end, amt) {
     return (1 - amt) * start + amt * end;
 }
 
-// Load the terrain image
+// Load the terrain image — o `src`/`onload` de verdade só é atribuído dentro de
+// iniciarMapaComposto() (F01, docs/16_PLANO_PAINEL_E_IA.md): nenhum efeito colateral
+// no topo do módulo, app.js decide quando iniciar.
 const img = new Image();
-img.src = '/api/mapa_composto/imagem';
-
-img.onload = function() {
-    canvas.width = 600;
-    canvas.height = 600;
-    
-    minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
-    scale = minScale;
-    
-    offsetX = (canvas.width - img.width * scale) / 2;
-    offsetY = (canvas.height - img.height * scale) / 2;
-    
-    draw();
-};
 
 // Render pipeline
 function draw() {
     ctx.fillStyle = '#060810';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, offsetX, offsetY, img.width * scale, img.height * scale);
+    ctx.drawImage(img, estado.offsetX, estado.offsetY, img.width * estado.scale, img.height * estado.scale);
 
-    if (currentMode === 'global') {
+    if (estado.currentMode === 'global') {
         drawGlobalMarkers();
     }
 
-    if (currentMode === 'continent') {
+    if (estado.currentMode === 'continent') {
         drawContinentMarkers();
     }
 
-    if (currentMode === 'city') {
+    if (estado.currentMode === 'city') {
         drawCityGridAndEntities();
         drawCityLegend();
     }
@@ -110,10 +102,10 @@ function drawCityLegend() {
 }
 
 function drawTooltip() {
-    if (!hoveredTooltip) return;
+    if (!estado.hoveredTooltip) return;
     
     ctx.font = '12px Outfit, sans-serif';
-    const lines = hoveredTooltip.split('\n');
+    const lines = estado.hoveredTooltip.split('\n');
     let maxWidth = 0;
     lines.forEach(l => {
         const w = ctx.measureText(l).width;
@@ -123,10 +115,10 @@ function drawTooltip() {
     const boxW = maxWidth + 20;
     const boxH = lines.length * 16 + 10;
     
-    let tx = mouseX + 15;
-    let ty = mouseY + 15;
-    if (tx + boxW > canvas.width) tx = mouseX - boxW - 5;
-    if (ty + boxH > canvas.height) ty = mouseY - boxH - 5;
+    let tx = estado.mouseX + 15;
+    let ty = estado.mouseY + 15;
+    if (tx + boxW > canvas.width) tx = estado.mouseX - boxW - 5;
+    if (ty + boxH > canvas.height) ty = estado.mouseY - boxH - 5;
     
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.fillRect(tx, ty, boxW, boxH);
@@ -142,7 +134,7 @@ function drawTooltip() {
 
 function animateLoop() {
     draw();
-    if (isAnimating) {
+    if (estado.isAnimating) {
         requestAnimationFrame(animateLoop);
     }
 }
@@ -151,7 +143,7 @@ function animateLoop() {
 // de grade 0-40. Converte mundo -> pixel da imagem da região devolvida por
 // `/api/regiao/<nome>/entities` (mesma janela que gerou a imagem em si — D7).
 function mundoParaImagemCidade(x, y) {
-    const bbox = cityEntities.bbox;
+    const bbox = estado.cityEntities.bbox;
     if (!bbox) return { x: 0, y: 0 };
     const ix = (x - bbox.min_x) / Math.max(1e-6, bbox.max_x - bbox.min_x) * bbox.largura_img;
     const iy = (y - bbox.min_y) / Math.max(1e-6, bbox.max_y - bbox.min_y) * bbox.altura_img;
@@ -166,20 +158,20 @@ function mundoParaImagemCidade(x, y) {
 // (ruas/edifícios/lotes individuais) é a camada vetorial do Mapa Live (D3), que não é
 // sub-pixel porque é desenhada em coordenada de mundo exata, não amostrada num raster.
 function drawCityGridAndEntities() {
-    if (!cityEntities.bbox) return; // ainda carregando /entities
-    if (cityEntities.locais.length === 0 && cityEntities.npcs.length === 0) return;
+    if (!estado.cityEntities.bbox) return; // ainda carregando /entities
+    if (estado.cityEntities.locais.length === 0 && estado.cityEntities.npcs.length === 0) return;
 
     // Centroide de todos os locais (ou dos NPCs, se não houver locais) em pixel de imagem.
-    const pontos = cityEntities.locais.length > 0
-        ? cityEntities.locais.map(l => mundoParaImagemCidade(l.coordenadas[0], l.coordenadas[1]))
-        : [mundoParaImagemCidade(cityEntities.bbox.min_x + (cityEntities.bbox.max_x - cityEntities.bbox.min_x) / 2,
-                                   cityEntities.bbox.min_y + (cityEntities.bbox.max_y - cityEntities.bbox.min_y) / 2)];
+    const pontos = estado.cityEntities.locais.length > 0
+        ? estado.cityEntities.locais.map(l => mundoParaImagemCidade(l.coordenadas[0], l.coordenadas[1]))
+        : [mundoParaImagemCidade(estado.cityEntities.bbox.min_x + (estado.cityEntities.bbox.max_x - estado.cityEntities.bbox.min_x) / 2,
+                                   estado.cityEntities.bbox.min_y + (estado.cityEntities.bbox.max_y - estado.cityEntities.bbox.min_y) / 2)];
     const centroX = pontos.reduce((s, p) => s + p.x, 0) / pontos.length;
     const centroY = pontos.reduce((s, p) => s + p.y, 0) / pontos.length;
 
-    const px = offsetX + centroX * scale;
-    const py = offsetY + centroY * scale;
-    const raio = Math.max(6, 9 * scale);
+    const px = estado.offsetX + centroX * estado.scale;
+    const py = estado.offsetY + centroY * estado.scale;
+    const raio = Math.max(6, 9 * estado.scale);
 
     ctx.beginPath();
     ctx.arc(px, py, raio, 0, 2 * Math.PI);
@@ -195,127 +187,125 @@ function drawCityGridAndEntities() {
     ctx.textBaseline = 'middle';
     ctx.fillText('🏰', px, py);
 
-    cityAggregateMarker = { x: px, y: py, raio, locais: cityEntities.locais.length, npcs: cityEntities.npcs.length };
+    estado.cityAggregateMarker = { x: px, y: py, raio, locais: estado.cityEntities.locais.length, npcs: estado.cityEntities.npcs.length };
 }
 
 window.updateMapEntities = function(liveNpcs) {
-    if (currentMode === 'city') {
-        const cityLocIds = new Set(cityEntities.locais.map(l => l.id));
-        cityEntities.npcs = liveNpcs.filter(npc => cityLocIds.has(npc.loc_id));
+    if (estado.currentMode === 'city') {
+        const cityLocIds = new Set(estado.cityEntities.locais.map(l => l.id));
+        estado.cityEntities.npcs = liveNpcs.filter(npc => cityLocIds.has(npc.loc_id));
         // Note: The animateLoop is constantly drawing, so no need to call draw() explicitly here.
     }
 }
 
 // Zoom calculations
 function adjustZoom(amount, zoomX, zoomY) {
-    const oldScale = scale;
-    scale = Math.min(8.0, Math.max(minScale, scale + amount));
+    const oldScale = estado.scale;
+    estado.scale = Math.min(8.0, Math.max(estado.minScale, estado.scale + amount));
 
-    offsetX = zoomX - (zoomX - offsetX) * (scale / oldScale);
-    offsetY = zoomY - (zoomY - offsetY) * (scale / oldScale);
+    estado.offsetX = zoomX - (zoomX - estado.offsetX) * (estado.scale / oldScale);
+    estado.offsetY = zoomY - (zoomY - estado.offsetY) * (estado.scale / oldScale);
 
     draw();
 }
 
-// Panning listeners
-canvas.addEventListener('mousedown', function(e) {
-    isDragging = true;
-    startX = e.clientX - offsetX;
-    startY = e.clientY - offsetY;
-});
-
-window.addEventListener('mouseup', function() {
-    isDragging = false;
-});
-
-function isClickInCity(x, y, cityX, cityY) {
-    const cx = offsetX + cityX * scale;
-    const cy = offsetY + cityY * scale;
-    const distance = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-    return distance <= 10 * scale; // Area clicável da cidade
+// Panning listeners — F01 (docs/16_PLANO_PAINEL_E_IA.md): viram declarações nomeadas
+// aqui (sem efeito colateral) e são registradas dentro de iniciarMapaComposto().
+function aoPressionarBotaoCanvas(e) {
+    estado.isDragging = true;
+    estado.startX = e.clientX - estado.offsetX;
+    estado.startY = e.clientY - estado.offsetY;
 }
 
-canvas.addEventListener('mousemove', function(e) {
-    if (isDragging) {
-        offsetX = e.clientX - startX;
-        offsetY = e.clientY - startY;
+function aoSoltarBotaoJanela() {
+    estado.isDragging = false;
+}
+
+function isClickInCity(x, y, cityX, cityY) {
+    const cx = estado.offsetX + cityX * estado.scale;
+    const cy = estado.offsetY + cityY * estado.scale;
+    const distance = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+    return distance <= 10 * estado.scale; // Area clicável da cidade
+}
+
+function aoMoverMouseCanvas(e) {
+    if (estado.isDragging) {
+        estado.offsetX = e.clientX - estado.startX;
+        estado.offsetY = e.clientY - estado.startY;
         draw();
     } else {
         // Interactive Land Inspection
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
-        
-        mouseX = canvasX;
-        mouseY = canvasY;
+
+        estado.mouseX = canvasX;
+        estado.mouseY = canvasY;
 
         // Map coordinates back to actual image space
-        const originalX = Math.floor((canvasX - offsetX) / scale);
-        const originalY = Math.floor((canvasY - offsetY) / scale);
-        
+        const originalX = Math.floor((canvasX - estado.offsetX) / estado.scale);
+        const originalY = Math.floor((canvasY - estado.offsetY) / estado.scale);
+
         // Tooltip logic for the aggregated city marker (D7 do DIAGNOSTICO_V3: um marcador
         // só, não mais um hit-test por local/NPC individual — eles são sub-pixel aqui).
-        hoveredTooltip = null;
-        if (currentMode === 'city' && cityAggregateMarker) {
-            const m = cityAggregateMarker;
+        estado.hoveredTooltip = null;
+        if (estado.currentMode === 'city' && estado.cityAggregateMarker) {
+            const m = estado.cityAggregateMarker;
             const dist = Math.hypot(canvasX - m.x, canvasY - m.y);
             if (dist < m.raio + 4) {
-                hoveredTooltip = `🏰 ${currentCityNome}\n${m.locais} locais · ${m.npcs} NPCs\nVeja o Mapa Live (🗾) pra ruas e edifícios`;
+                estado.hoveredTooltip = `🏰 ${estado.currentCityNome}\n${m.locais} locais · ${m.npcs} NPCs\nVeja o Mapa Live (🗾) pra ruas e edifícios`;
             }
         }
 
         // Validate boundaries
         if (originalX >= 0 && originalX < img.width && originalY >= 0 && originalY < img.height) {
-            if (originalX !== lastInspectedX || originalY !== lastInspectedY) {
-                lastInspectedX = originalX;
-                lastInspectedY = originalY;
+            if (originalX !== estado.lastInspectedX || originalY !== estado.lastInspectedY) {
+                estado.lastInspectedX = originalX;
+                estado.lastInspectedY = originalY;
                 fetchTerrainInfo(originalX, originalY);
             }
         }
     }
-});
+}
 
 // Wheel Zoom Listener
-canvas.addEventListener('wheel', function(e) {
+function aoRodarRodaCanvas(e) {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const zoomX = e.clientX - rect.left;
     const zoomY = e.clientY - rect.top;
     const delta = e.deltaY < 0 ? 0.5 : -0.5;
     adjustZoom(delta, zoomX, zoomY);
-}, { passive: false });
+}
 
 // Asynchronous details pipeline
-let hoverTimeout = null;
-let abortController = null;
-
 function fetchTerrainInfo(x, y) {
-    const cacheKey = `${currentMode}_${currentContinentUuid || 'global'}_${x},${y}`;
+    const cacheKey = `${estado.currentMode}_${estado.currentContinentUuid || 'global'}_${x},${y}`;
     
     if (apiCache[cacheKey]) {
         updateSidebar(apiCache[cacheKey]);
         return;
     }
 
-    if (hoverTimeout) {
-        clearTimeout(hoverTimeout);
+    if (estado.hoverTimeout) {
+        clearTimeout(estado.hoverTimeout);
     }
 
-    hoverTimeout = setTimeout(() => {
-        if (abortController) {
-            abortController.abort();
+    estado.hoverTimeout = setTimeout(() => {
+        if (estado.abortController) {
+            estado.abortController.abort();
         }
-        abortController = new AbortController();
-        const signal = abortController.signal;
+        estado.abortController = new AbortController();
+        const signal = estado.abortController.signal;
 
-        if (currentMode === 'city') {
+        if (estado.currentMode === 'city') {
             updateSidebar({ x: x, y: y, bioma_id: 6, bioma_nome: "Zona Urbana", altitude: 45, temperatura: 55, umidade: 50 });
             return;
         }
 
-        const url = currentMode === 'global' 
+        const url = estado.currentMode === 'global' 
             ? `/api/mapa_composto/info/${x}/${y}` 
-            : `/api/continente/${currentContinentUuid}/info/${x}/${y}`;
+            : `/api/continente/${estado.currentContinentUuid}/info/${x}/${y}`;
 
         fetch(url, { signal })
             .then(res => res.json())
@@ -337,7 +327,7 @@ function fetchTerrainInfo(x, y) {
 function updateSidebar(data) {
     document.getElementById('lblCoord').innerText = `X: ${data.x}, Y: ${data.y}`;
     
-    const bioma = cachedBiomas[data.bioma_id];
+    const bioma = estado.cachedBiomas[data.bioma_id];
     const badgeInfo = bioma
         ? { text: `${bioma.emoji} ${bioma.rotulo}`, class: `biome-${data.bioma_id}` }
         : { text: `❓ ${data.bioma_nome}`, class: "biome-5" };
@@ -358,7 +348,7 @@ function updateSidebar(data) {
     document.getElementById('lblHumidity').innerText = `${humPct}%`;
     document.getElementById('barHumidity').style.width = `${humPct}%`;
 
-    if (currentMode === 'global') {
+    if (estado.currentMode === 'global') {
         // Deprecated tile functionality removed
     }
 }
@@ -368,8 +358,8 @@ function loadContinents() {
     fetch('/api/continentes')
         .then(res => res.json())
         .then(data => {
-            cachedContinents = data.continentes || [];
-            cachedBiomas = data.biomas || {};
+            estado.cachedContinents = data.continentes || [];
+            estado.cachedBiomas = data.biomas || {};
             draw(); // Redraw map to show markers
 
             const container = document.getElementById('continents-list-container');
@@ -442,8 +432,8 @@ function selectContinent(uuid, nome, btnElement) {
     const originalStatus = statusSpan.innerText;
     statusSpan.innerText = 'Processando...';
 
-    currentMode = 'continent';
-    currentContinentUuid = uuid;
+    estado.currentMode = 'continent';
+    estado.currentContinentUuid = uuid;
 
     document.getElementById('status-mapa').innerText = `⏳ Gerando/Carregando ${nome}...`;
     document.getElementById('status-mapa').style.borderColor = 'var(--warning)';
@@ -458,10 +448,10 @@ function selectContinent(uuid, nome, btnElement) {
         canvas.width = 600;
         canvas.height = 600;
         
-        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        scale = minScale;
-        offsetX = (canvas.width - img.width * scale) / 2;
-        offsetY = (canvas.height - img.height * scale) / 2;
+        estado.minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        estado.scale = estado.minScale;
+        estado.offsetX = (canvas.width - img.width * estado.scale) / 2;
+        estado.offsetY = (canvas.height - img.height * estado.scale) / 2;
         
         draw();
 
@@ -487,9 +477,9 @@ function selectCity(nome, btnElement, continenteNome) {
     btnElement.classList.add('active');
     btnElement.classList.add('loading');
     
-    currentMode = 'city';
-    currentCityNome = nome;
-    currentContinentUuid = null;
+    estado.currentMode = 'city';
+    estado.currentCityNome = nome;
+    estado.currentContinentUuid = null;
 
     document.getElementById('status-mapa').innerText = `⏳ Gerando/Carregando ${nome}...`;
     document.getElementById('status-mapa').style.borderColor = 'var(--warning)';
@@ -507,14 +497,14 @@ function selectCity(nome, btnElement, continenteNome) {
         canvas.width = 600;
         canvas.height = 600;
 
-        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        scale = minScale;
-        offsetX = (canvas.width - img.width * scale) / 2;
-        offsetY = (canvas.height - img.height * scale) / 2;
+        estado.minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        estado.scale = estado.minScale;
+        estado.offsetX = (canvas.width - img.width * estado.scale) / 2;
+        estado.offsetY = (canvas.height - img.height * estado.scale) / 2;
 
-        npcAnimations = {};
-        if (!isAnimating) {
-            isAnimating = true;
+        estado.npcAnimations = {};
+        if (!estado.isAnimating) {
+            estado.isAnimating = true;
             animateLoop();
         }
 
@@ -522,7 +512,7 @@ function selectCity(nome, btnElement, continenteNome) {
             .then(res => res.json())
             .then(data => {
                 if (!data.error) {
-                    cityEntities = data;
+                    estado.cityEntities = data;
                     draw();
                 }
             });
@@ -542,14 +532,14 @@ function selectCity(nome, btnElement, continenteNome) {
 }
 
 // Global Map select
-document.getElementById('btn-global-map').addEventListener('click', function() {
+function aoClicarMapaGlobal() {
     document.querySelectorAll('.continent-btn').forEach(b => b.classList.remove('active'));
     this.classList.add('active');
 
-    currentMode = 'global';
-    currentContinentUuid = null;
-    currentCityNome = null;
-    cityEntities = { locais: [], npcs: [], bbox: null };
+    estado.currentMode = 'global';
+    estado.currentContinentUuid = null;
+    estado.currentCityNome = null;
+    estado.cityEntities = { locais: [], npcs: [], bbox: null };
 
     document.getElementById('status-mapa').innerText = '⏳ Sincronizando Mapa Mundi...';
     document.getElementById('status-mapa').style.borderColor = 'var(--warning)';
@@ -560,13 +550,13 @@ document.getElementById('btn-global-map').addEventListener('click', function() {
     img.onload = function() {
         canvas.width = 600;
         canvas.height = 600;
-        
-        minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
-        scale = minScale;
-        offsetX = (canvas.width - img.width * scale) / 2;
-        offsetY = (canvas.height - img.height * scale) / 2;
-        
-        isAnimating = false;
+
+        estado.minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        estado.scale = estado.minScale;
+        estado.offsetX = (canvas.width - img.width * estado.scale) / 2;
+        estado.offsetY = (canvas.height - img.height * estado.scale) / 2;
+
+        estado.isAnimating = false;
         draw();
 
         document.getElementById('status-mapa').innerText = '🟢 Mapa Mundi Global (768x768)';
@@ -581,61 +571,88 @@ document.getElementById('btn-global-map').addEventListener('click', function() {
         document.getElementById('lblInstructionTip1').innerText = '• Cada tile do mapa composto possui tamanho fixo de 256x256 pixels.';
         document.getElementById('lblInstructionTip2').innerText = '• Ao passar o mouse, a grade acima acende mostrando qual tile você está inspecionando.';
     };
-});
+}
 
 // Control buttons
-document.getElementById('btnZoomIn').addEventListener('click', function() {
+function aoClicarZoomIn() {
     adjustZoom(0.5, canvas.width / 2, canvas.height / 2);
-});
+}
 
-document.getElementById('btnZoomOut').addEventListener('click', function() {
+function aoClicarZoomOut() {
     adjustZoom(-0.5, canvas.width / 2, canvas.height / 2);
-});
+}
 
-document.getElementById('btnZoomReset').addEventListener('click', function() {
-    scale = minScale;
-    offsetX = (canvas.width - img.width * scale) / 2;
-    offsetY = (canvas.height - img.height * scale) / 2;
+function aoClicarZoomReset() {
+    estado.scale = estado.minScale;
+    estado.offsetX = (canvas.width - img.width * estado.scale) / 2;
+    estado.offsetY = (canvas.height - img.height * estado.scale) / 2;
     draw();
-});
+}
 
-// Start initialization
-loadContinents();
+// F01 (docs/16_PLANO_PAINEL_E_IA.md): ponto de início explícito, chamado por
+// app.js — nada de efeito colateral disparado só por importar este módulo.
+export function iniciarMapaComposto() {
+    canvas.addEventListener('mousedown', aoPressionarBotaoCanvas);
+    window.addEventListener('mouseup', aoSoltarBotaoJanela);
+    canvas.addEventListener('mousemove', aoMoverMouseCanvas);
+    canvas.addEventListener('wheel', aoRodarRodaCanvas, { passive: false });
+
+    document.getElementById('btn-global-map').addEventListener('click', aoClicarMapaGlobal);
+    document.getElementById('btnZoomIn').addEventListener('click', aoClicarZoomIn);
+    document.getElementById('btnZoomOut').addEventListener('click', aoClicarZoomOut);
+    document.getElementById('btnZoomReset').addEventListener('click', aoClicarZoomReset);
+
+    img.onload = function() {
+        canvas.width = 600;
+        canvas.height = 600;
+
+        estado.minScale = Math.min(canvas.width / img.width, canvas.height / img.height);
+        estado.scale = estado.minScale;
+
+        estado.offsetX = (canvas.width - img.width * estado.scale) / 2;
+        estado.offsetY = (canvas.height - img.height * estado.scale) / 2;
+
+        draw();
+    };
+    img.src = '/api/mapa_composto/imagem';
+
+    loadContinents();
+}
 
 function drawGlobalMarkers() {
-    if (!cachedContinents || cachedContinents.length === 0) return;
+    if (!estado.cachedContinents || estado.cachedContinents.length === 0) return;
     
-    cachedContinents.forEach(c => {
+    estado.cachedContinents.forEach(c => {
         // Label do Continente
         if (c.bounding_box) {
             const centerX = (c.bounding_box.min_x + c.bounding_box.max_x) / 2;
             const centerY = (c.bounding_box.min_y + c.bounding_box.max_y) / 2;
             
-            const px = offsetX + centerX * scale;
-            const py = offsetY + centerY * scale;
+            const px = estado.offsetX + centerX * estado.scale;
+            const py = estado.offsetY + centerY * estado.scale;
             
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.font = `bold ${Math.max(12, 16 * scale)}px sans-serif`;
+            ctx.font = `bold ${Math.max(12, 16 * estado.scale)}px sans-serif`;
             const textWidth = ctx.measureText(c.nome).width;
             
             // Fundo do texto do continente
-            ctx.fillRect(px - textWidth/2 - 6, py - 16 * scale, textWidth + 12, 22 * scale);
+            ctx.fillRect(px - textWidth/2 - 6, py - 16 * estado.scale, textWidth + 12, 22 * estado.scale);
             
             // Texto do continente
             ctx.fillStyle = '#FFD700'; // Dourado
             ctx.textAlign = 'center';
-            ctx.fillText(c.nome, px, py - 2 * scale);
+            ctx.fillText(c.nome, px, py - 2 * estado.scale);
         }
         
         // Marcadores das Cidades
         if (c.cidades) {
             c.cidades.forEach(city => {
-                const cx = offsetX + city.x_global * scale;
-                const cy = offsetY + city.y_global * scale;
+                const cx = estado.offsetX + city.x_global * estado.scale;
+                const cy = estado.offsetY + city.y_global * estado.scale;
                 
                 // Pin point minúsculo da cidade no mapa mundi
                 ctx.beginPath();
-                ctx.arc(cx, cy, 1.5 * scale, 0, 2 * Math.PI);
+                ctx.arc(cx, cy, 1.5 * estado.scale, 0, 2 * Math.PI);
                 ctx.fillStyle = '#ff4444';
                 ctx.fill();
                 
@@ -645,9 +662,9 @@ function drawGlobalMarkers() {
 }
 
 function drawContinentMarkers() {
-    if (!cachedContinents || !currentContinentUuid) return;
+    if (!estado.cachedContinents || !estado.currentContinentUuid) return;
     
-    const cont = cachedContinents.find(c => c.uuid === currentContinentUuid);
+    const cont = estado.cachedContinents.find(c => c.uuid === estado.currentContinentUuid);
     if (!cont || !cont.cidades) return;
     
     const minX = Math.max(0, cont.bounding_box.min_x - 20);
@@ -662,26 +679,26 @@ function drawContinentMarkers() {
         const relX = (city.x_global - minX) / globW;
         const relY = (city.y_global - minY) / globH;
         
-        const cx = offsetX + (relX * img.width * scale);
-        const cy = offsetY + (relY * img.height * scale);
+        const cx = estado.offsetX + (relX * img.width * estado.scale);
+        const cy = estado.offsetY + (relY * img.height * estado.scale);
         
         // Pin point da cidade
         ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(4, 5 * scale), 0, 2 * Math.PI);
+        ctx.arc(cx, cy, Math.max(4, 5 * estado.scale), 0, 2 * Math.PI);
         ctx.fillStyle = '#ff4444';
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = Math.max(1.5, 2 * scale);
+        ctx.lineWidth = Math.max(1.5, 2 * estado.scale);
         ctx.stroke();
         
         // Sombra do texto da cidade
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.font = `bold ${Math.max(12, 14 * scale)}px sans-serif`;
+        ctx.font = `bold ${Math.max(12, 14 * estado.scale)}px sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(city.nome, cx + 1, cy - 10 * scale + 1);
+        ctx.fillText(city.nome, cx + 1, cy - 10 * estado.scale + 1);
 
         // Texto da cidade
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(city.nome, cx, cy - 10 * scale);
+        ctx.fillText(city.nome, cx, cy - 10 * estado.scale);
     });
 }
