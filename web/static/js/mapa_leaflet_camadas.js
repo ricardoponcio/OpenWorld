@@ -51,9 +51,12 @@ export function criarCamadasVetoriaisLeaflet() {
         if (nome === 'edificio') {
             opcoes.onEachFeature = (feature, layer) => {
                 const props = feature.properties || {};
+                // G04 (docs/16_PLANO_PAINEL_E_IA.md): "Residência Bairro Médio 42" existe
+                // em várias quadras da mesma cidade (o nome não é único) — a quadra
+                // desambigua qual é qual.
                 layer.bindPopup(`
                     <strong>${props.nome ? escaparHtml(props.nome) : 'Edifício'}</strong><br>
-                    <span class="popup-sub">${escaparHtml(props.tipo_local || '')}${props.bairro ? ' · ' + escaparHtml(props.bairro) : ''}</span>
+                    <span class="popup-sub">${escaparHtml(props.tipo_local || '')}${props.bairro ? ' · ' + escaparHtml(props.bairro) : ''}${props.quarteirao_id ? ' · quadra ' + escaparHtml(props.quarteirao_id) : ''}</span>
                 `);
             };
         }
