@@ -1,4 +1,59 @@
 {
+    "ia": {
+        "_comentario": "Bloco I (docs/16_PLANO_PAINEL_E_IA.md). provedores: como falar com cada serviço (todos no formato OpenAI /chat/completions — o Ollama também aceita, em /v1). padrao: cadeia de fallback e limites usados por todo cliente. clientes: sobrescritas por cliente (chave = ClienteIA.value); objeto vazio = herda tudo do padrão. A CHAVE de API nunca fica aqui: chave_api_env é o NOME da variável de ambiente.",
+        "provedores": {
+            "ollama_local": {
+                "url_base": "http://localhost:11434/v1",
+                "chave_api_env": "",
+                "requisicoes_por_minuto": 0,
+                "requisicoes_por_dia": 0,
+                "pausa_apos_limite_s": 0,
+                "cabecalhos_extras": {},
+                "contexto_tokens_servidor": 4096
+            },
+            "openrouter": {
+                "_comentario": "Limites do plano gratuito (modelos ':free'), consultados em 2026-09-14 em openrouter.ai/docs/api-reference/limits: 20 req/min; 50 req/dia com menos de 10 créditos comprados, 1000 req/dia com 10 ou mais. 0 = sem limite local.",
+                "url_base": "https://openrouter.ai/api/v1",
+                "chave_api_env": "OPENROUTER_API_KEY",
+                "requisicoes_por_minuto": 20,
+                "requisicoes_por_dia": 50,
+                "pausa_apos_limite_s": 60,
+                "cabecalhos_extras": {"X-Title": "OpenWorld"},
+                "contexto_tokens_servidor": 0
+            }
+        },
+        "padrao": {
+            "cadeia": [
+                {"provedor": "openrouter", "modelo": "google/gemma-4-31b-it:free"},
+                {"provedor": "ollama_local", "modelo": "qwen2.5-coder:7b"}
+            ],
+            "timeout_s": 60,
+            "tentativas_por_provedor": 2,
+            "backoff_inicial_s": 1.0
+        },
+        "clientes": {
+            "_comentario": "nome_bebe e dna_npc começam no Ollama local: são volume (um nome por nascimento, um DNA por NPC da cidade em foco) e esgotariam os 50 req/dia gratuitos em minutos. mestre e evento_global têm timeout maior porque o contexto deles tem ~28 mil tokens: medido 50-83 s (Mestre) e 187-262 s (evento) no Ollama local com contexto de 32 mil — com o padrão de 60 s, o fallback para o Ollama falharia sempre (Seção 2.7).",
+            "mestre": {"timeout_s": 180},
+            "nome_bebe": {"cadeia": [{"provedor": "ollama_local", "modelo": "qwen2.5-coder:7b"}], "timeout_s": 8, "tentativas_por_provedor": 1},
+            "dna_npc": {"cadeia": [{"provedor": "ollama_local", "modelo": "qwen2.5-coder:7b"}], "timeout_s": 120},
+            "background_npc": {"cadeia": [{"provedor": "ollama_local", "modelo": "qwen2.5-coder:7b"}], "timeout_s": 8},
+            "locais_cidade": {},
+            "evento_global": {"timeout_s": 300},
+            "planejamento_continentes": {"timeout_s": 120},
+            "fundacao_cidades": {"timeout_s": 120}
+        },
+        "coleta_uso": {
+            "ativa": true,
+            "arquivo": "logs/ia_uso.jsonl",
+            "gravar_texto": true
+        },
+        "estimativa_custo": {
+            "_comentario": "Preço de referência (decisão ❸), consultado em 2026-09-14 em openrouter.ai/api/v1/models. Mude aqui quando o preço mudar — o script de estimativa lê daqui, ou ao vivo com --precos-ao-vivo.",
+            "modelo_referencia": "deepseek/deepseek-v4-flash",
+            "preco_entrada_usd_por_milhao_tokens": 0.08246,
+            "preco_saida_usd_por_milhao_tokens": 0.16492
+        }
+    },
     "salvar_logs_npc_no_banco": false,
     "_comentario_simulacao_intervalo_maximo_decisao_min": "A02 (docs/13_PLANO_POPULACAO_E_ESCALA.md, 2026-09-12): teto do salto entre decisões de um NPC. Não abaixe pra 'ficar mais seguro' — a segurança vem do cálculo de cruzamento de limiar em engine/mechanics/agenda.py, não daqui; abaixar só quadruplica o custo do avanço rápido.",
     "simulacao_intervalo_maximo_decisao_min": 240,
