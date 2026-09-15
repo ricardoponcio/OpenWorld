@@ -517,13 +517,14 @@
             "portuaria": [["linear", 0.5], ["grade", 0.5]],
             "_default": [["radial", 1.0]]
         },
+        "_comentario_e01": "E01 (docs/16_PLANO_PAINEL_E_IA.md, decisão ❼): +1 de capacidade no comércio de bairro — 5.205 vagas para 19.209 adultos (27,1%) medidos em 2026-09-15. Ajuste de transição: a saída de verdade para o desemprego é empreendedorismo, num plano futuro. Poço de Bairro (generic, não emprega) e os edifícios notáveis não mudam.",
         "cidade_geo_catalogo_comercio_bairro": [
-            {"tipo_local": "Padaria de Bairro", "categoria": "forja", "capacidade": 3, "salario_base": 60, "um_a_cada_n_lotes": 40},
-            {"tipo_local": "Taverna de Bairro", "categoria": "taverna", "capacidade": 4, "salario_base": 70, "um_a_cada_n_lotes": 50},
-            {"tipo_local": "Quitanda", "categoria": "mercado", "capacidade": 3, "salario_base": 55, "um_a_cada_n_lotes": 35},
-            {"tipo_local": "Oficina", "categoria": "forja", "capacidade": 3, "salario_base": 75, "um_a_cada_n_lotes": 45},
+            {"tipo_local": "Padaria de Bairro", "categoria": "forja", "capacidade": 4, "salario_base": 60, "um_a_cada_n_lotes": 40},
+            {"tipo_local": "Taverna de Bairro", "categoria": "taverna", "capacidade": 5, "salario_base": 70, "um_a_cada_n_lotes": 50},
+            {"tipo_local": "Quitanda", "categoria": "mercado", "capacidade": 4, "salario_base": 55, "um_a_cada_n_lotes": 35},
+            {"tipo_local": "Oficina", "categoria": "forja", "capacidade": 4, "salario_base": 75, "um_a_cada_n_lotes": 45},
             {"tipo_local": "Poço de Bairro", "categoria": "generic", "capacidade": 1, "salario_base": 0, "um_a_cada_n_lotes": 30},
-            {"tipo_local": "Capela de Bairro", "categoria": "publico", "capacidade": 2, "salario_base": 50, "um_a_cada_n_lotes": 100}
+            {"tipo_local": "Capela de Bairro", "categoria": "publico", "capacidade": 3, "salario_base": 50, "um_a_cada_n_lotes": 100}
         ],
 
         "_comentario_2": "Adicionado ao concluir a Frente 1 (2026-09-09): tectônica, clima restante, cor/shading e zoom. Valores preservam o comportamento visual anterior à migração, exceto onde indicado no ROADMAP/AUDITORIA como correção intencional.",
