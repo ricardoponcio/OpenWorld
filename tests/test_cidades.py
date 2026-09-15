@@ -22,9 +22,10 @@ from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.generate_city_geometry import GeradorCidade
 from cartographer.cities.geometria import quad
 from cartographer.cities.geometria import lotes as lotes_mod
+from cartographer.cities.geometria.sobreposicao import area_de_intersecao
 from cartographer.cities.modelos import SitioCidade, MODELOS
 from cartographer.cities.modelos.base import ModeloCidade, Quadra, Malha
-from cartographer.cities.escala import corrigir_raio_por_newton, faixa_raio_m
+from cartographer.cities.escala import corrigir_raio_por_newton, faixa_raio_m, metros_por_pixel_mundo
 from config import cfg_get
 
 _CIDADE_TESTE = {"nome": "Aurora Vales", "tamanho": "medio", "tipo": "residencial",
@@ -58,6 +59,26 @@ def _gerar(nome_modelo_cls=None):
     modelo = cls(sitio, CARTOGRAPHER_CONFIG, rng)
     gerador = GeradorCidade(modelo)
     return gerador.gerar()
+
+
+def _gerar_grande(nome_modelo_cls, nome_cidade="Aurora Vales"):
+    """G01 (docs/16_PLANO_PAINEL_E_IA.md): mesmo `_gerar`, mas `tamanho='grande'`
+    (o experimento da Seção 2.5 só reproduziu a sobreposição de quadra em
+    cidades grandes) — não muda `_gerar`/`_CIDADE_TESTE`, que outros testes já
+    usam com `tamanho='medio'`."""
+    cidade = {**_CIDADE_TESTE, "nome": nome_cidade, "tamanho": "grande"}
+    sitio = SitioCidade.medir(cidade, "ContinenteTeste", CARTOGRAPHER_CONFIG)
+    rng = random.Random(sitio.seed)
+    modelo = nome_modelo_cls(sitio, CARTOGRAPHER_CONFIG, rng)
+    gerador = GeradorCidade(modelo)
+    return gerador.gerar()
+
+
+def _anel_do_poligono(feature):
+    anel = feature["geometry"]["coordinates"][0]
+    if anel and anel[0] == anel[-1]:
+        anel = anel[:-1]
+    return [tuple(p) for p in anel]
 
 
 def test_base_sozinha_basta():
@@ -504,3 +525,15 @@ def test_raio_derivado_dos_domicilios(nome_modelo):
     assert desvio <= 0.15, (
         f"modelo {nome_modelo}: mediana de lotes reais = {mediana:.0f} contra alvo "
         f"{lotes_alvo:.0f} (desvio {desvio:.1%}, amostras {finais})")
+
+
+def test_area_de_intersecao_de_quadrados_conhecidos():
+    """G01 (docs/16_PLANO_PAINEL_E_IA.md): dois quadrados 10×10 m deslocados 5 m
+    num eixo se sobrepõem em 5×10 = 50 m²; só encostando (deslocados 10 m,
+    borda coincidente — Armadilha 21) a área é 0, não um valor residual."""
+    a = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    deslocado_5m = [(5.0, 0.0), (15.0, 0.0), (15.0, 10.0), (5.0, 10.0)]
+    encostado = [(10.0, 0.0), (20.0, 0.0), (20.0, 10.0), (10.0, 10.0)]
+
+    assert area_de_intersecao(a, deslocado_5m) == pytest.approx(50.0)
+    assert area_de_intersecao(a, encostado) == 0.0

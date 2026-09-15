@@ -32,6 +32,7 @@ if raiz not in sys.path:
 from config import cfg_get
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.escala import metros_por_pixel_mundo
+from cartographer.cities.geometria.sobreposicao import pares_sobrepostos
 
 CIDADES_DIR = "database/cidades"
 
@@ -189,6 +190,22 @@ def _razao_largura_profundidade(quarteiroes, metros_por_px):
 
 _FAIXA_FRENTE_POR_BANDA = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_lote_frente_m_faixa_por_banda")
 
+# G01 (docs/16_PLANO_PAINEL_E_IA.md): área mínima pra uma interseção contar como
+# sobreposição de verdade, não ruído de borda encostada (Armadilha 21).
+_AREA_SOBREPOSICAO_MINIMA_M2 = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_sobreposicao_area_minima_m2")
+_AREA_SOBREPOSICAO_EDIFICIO_TOLERADA_M2 = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_sobreposicao_edificio_tolerada_m2")
+
+
+def _pontos_em_metros(feature, metros_por_px):
+    return [(x * metros_por_px, y * metros_por_px) for x, y in _achatar_anel(feature["geometry"]["coordinates"])]
+
+
+def _contagem_sobreposicoes(features, camada, metros_por_px, area_minima):
+    """G01: número de pares de `camada` cuja área de interseção passa de
+    `area_minima` — pré-filtrado por bbox dentro de `pares_sobrepostos`."""
+    poligonos = [_pontos_em_metros(f, metros_por_px) for f in features if f["properties"].get("camada") == camada]
+    return pares_sobrepostos(poligonos, area_minima)
+
 # C01 (docs/14_PLANO_AVANCO_E_CALIBRAGEM.md): violação dura se mais que esta fração das
 # quadras da cidade estiver fora da tolerância — uma quadra degenerada isolada num
 # canto não é bug; muitas quadras discordando do próprio alvo de frente é.
@@ -321,6 +338,11 @@ def auditar_cidade(caminho, metros_por_px):
     fracao_fora_frente_alvo, quadras_avaliadas_frente_alvo, quadras_cortadas = \
         _lotes_vs_frente_alvo(features, metros_por_px)
 
+    pares_quad = _contagem_sobreposicoes(features, "quarteirao", metros_por_px, _AREA_SOBREPOSICAO_MINIMA_M2)
+    pares_edif = [p for p in _contagem_sobreposicoes(features, "edificio", metros_por_px, _AREA_SOBREPOSICAO_MINIMA_M2)
+                  if p[2] > _AREA_SOBREPOSICAO_EDIFICIO_TOLERADA_M2]
+    pares_lote = _contagem_sobreposicoes(features, "lote", metros_por_px, _AREA_SOBREPOSICAO_MINIMA_M2)
+
     raio_m = props_topo.get("raio_m", 0.0)
     vao_m = raio_m / (num_aneis + 1) if num_aneis > 0 else None
 
@@ -343,6 +365,13 @@ def auditar_cidade(caminho, metros_por_px):
         "fracao_fora_frente_alvo": fracao_fora_frente_alvo,
         "quadras_avaliadas_frente_alvo": quadras_avaliadas_frente_alvo,
         "quadras_cortadas": quadras_cortadas,
+        # G01 (docs/16_PLANO_PAINEL_E_IA.md): quad_sobrep/edif_sobrep são
+        # INVARIANTE (barram o script); lote_sobrep é só informativo (G03 — a
+        # sobreposição residual entre lotes existe e não gera edifício
+        # sobreposto, então não é porta ainda).
+        "quad_sobrep": len(pares_quad),
+        "edif_sobrep": len(pares_edif),
+        "lote_sobrep": len(pares_lote),
         "sem_frente_pct": sem_frente_pct,
         "fora_muro_m": pior_invasao,
         "area_lote_mediana_m2": statistics.median(areas_lote_m2) if areas_lote_m2 else 0.0,
@@ -354,6 +383,13 @@ def auditar_cidade(caminho, metros_por_px):
 
 
 def _viola_invariantes(linha):
+    # G01 (docs/16_PLANO_PAINEL_E_IA.md): quadra sobreposta é sempre bug; edifício
+    # sobreposto só conta acima da tolerância (cidade_geo_sobreposicao_edificio_
+    # tolerada_m2) — encolhimento por ocupação/jitter pode deixar uma sobra
+    # residual pequena entre vizinhos sem ser erro de verdade. Lote NÃO é
+    # invariante (G03) — só a coluna informativa acima.
+    if linha["quad_sobrep"] > 0 or linha["edif_sobrep"] > 0:
+        return True
     if linha["bowtie_quarteirao"] > 0 or linha["bowtie_lote"] > 0:
         return True
     if linha["cruzamentos_anel"] > 0:
@@ -389,7 +425,8 @@ def main():
     cabecalho = (f"{'cidade':<22} {'modelo':<10} {'aneis':>5} {'vao_m':>6} {'quadras':>7} "
                  f"{'lotes':>6} {'ocup%':>6} {'bowtie_q':>8} {'bowtie_l':>8} {'anel_x':>6} "
                  f"{'l/quadra':>9} {'max/qd':>7} {'fora_alvo%':>10} {'sem_front%':>10} {'fora_muro':>9} "
-                 f"{'area_med_m2':>11} {'larg/prof':>9} {'lotes/raio2':>11}")
+                 f"{'area_med_m2':>11} {'larg/prof':>9} {'lotes/raio2':>11} "
+                 f"{'quad_sobrep':>11} {'edif_sobrep':>11} {'lote_sobrep':>11}")
     print(cabecalho)
     print("-" * len(cabecalho))
 
@@ -408,12 +445,17 @@ def main():
               f"{_fmt(linha['fora_muro_m'], 1) if linha['fora_muro_m'] is not None else '-':>9} "
               f"{_fmt(linha['area_lote_mediana_m2'], 1):>11} "
               f"{_fmt(linha['largura_profundidade'], 2):>9} "
-              f"{_fmt(linha['lotes_por_raio2'], 4):>11}")
+              f"{_fmt(linha['lotes_por_raio2'], 4):>11} "
+              f"{_fmt(linha['quad_sobrep']):>11} "
+              f"{_fmt(linha['edif_sobrep']):>11} "
+              f"{_fmt(linha['lote_sobrep']):>11}")
 
     if algum_violado:
-        print("\n❌ Um ou mais invariantes violados (bowtie, anéis cruzados, muro, lote sem "
-              f"frente, ou mais de {FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA:.0%} das quadras "
-              f"fora de ±{TOLERANCIA_LOTES_POR_QUADRA_PCT:.0%} do próprio alvo de frente — C01, "
+        print("\n❌ Um ou mais invariantes violados (quadra sobreposta, edifício sobreposto "
+              f"acima de {_AREA_SOBREPOSICAO_EDIFICIO_TOLERADA_M2} m² — G01, docs/"
+              "16_PLANO_PAINEL_E_IA.md —, bowtie, anéis cruzados, muro, lote sem frente, ou "
+              f"mais de {FRACAO_MAXIMA_QUADRAS_FORA_DA_TOLERANCIA:.0%} das quadras fora de "
+              f"±{TOLERANCIA_LOTES_POR_QUADRA_PCT:.0%} do próprio alvo de frente — C01, "
               "docs/14_PLANO_AVANCO_E_CALIBRAGEM.md).")
         sys.exit(1)
     print("\n✅ Nenhum invariante violado nas cidades auditadas.")
