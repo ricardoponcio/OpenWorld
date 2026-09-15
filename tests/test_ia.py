@@ -4,9 +4,18 @@ medição de custo. Nenhum teste deste arquivo toca rede: `ProvedorOpenAICompati
 recebe `transporte` injetado, `RoteadorIA` recebe `fabrica_provedor`/`ambiente`
 injetados, `LimitadorDeTaxa` recebe `relogio` injetado.
 """
+import json
+
 import pytest
 
 from engine.ai.clientes import ClienteIA, resolver_config_cliente, validar_config_ia
+from engine.ai.provedores import (
+    ErroConfiguracaoProvedor,
+    ErroLimiteDeTaxa,
+    ErroProvedorIndisponivel,
+    PedidoIA,
+    ProvedorOpenAICompativel,
+)
 
 
 def _config_ia_valida():
@@ -78,3 +87,87 @@ def test_validar_config_ia_rejeita_zero_tentativas():
     config["clientes"][ClienteIA.MESTRE.value] = {"tentativas_por_provedor": 0}
     with pytest.raises(ValueError, match="tentativas_por_provedor"):
         validar_config_ia(config)
+
+
+# ----------------------------------------------------------------------
+# I02 — ProvedorOpenAICompativel (transporte falso, nenhuma rede)
+# ----------------------------------------------------------------------
+
+class _TransporteFalso:
+    """Grava a última chamada (pra inspecionar corpo/cabeçalhos) e devolve a
+    resposta configurada — o contrato de `transporte` é `(status, corpo_bytes)`,
+    nunca uma exceção do urllib (essas só existem dentro do transporte default)."""
+    def __init__(self, status, corpo_bytes):
+        self.status = status
+        self.corpo_bytes = corpo_bytes
+        self.ultima_chamada = None
+
+    def __call__(self, url, corpo_bytes, cabecalhos, timeout):
+        self.ultima_chamada = {"url": url, "corpo": json.loads(corpo_bytes),
+                                "cabecalhos": cabecalhos, "timeout": timeout}
+        return self.status, self.corpo_bytes
+
+
+def _resposta_ok(texto="ok", usage=None):
+    corpo = {"choices": [{"message": {"content": texto}}]}
+    if usage:
+        corpo["usage"] = usage
+    return json.dumps(corpo).encode("utf-8")
+
+
+def test_provedor_envia_response_format_so_quando_json():
+    transporte = _TransporteFalso(200, _resposta_ok())
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
+
+    provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+    assert "response_format" not in transporte.ultima_chamada["corpo"]
+
+    provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=True, timeout_s=10))
+    assert transporte.ultima_chamada["corpo"]["response_format"] == {"type": "json_object"}
+
+
+def test_provedor_sem_chave_nao_envia_authorization():
+    transporte = _TransporteFalso(200, _resposta_ok())
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
+    provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+    assert "Authorization" not in transporte.ultima_chamada["cabecalhos"]
+
+
+def test_provedor_com_chave_envia_authorization():
+    transporte = _TransporteFalso(200, _resposta_ok())
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "minha-chave-secreta", {}, transporte=transporte)
+    provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+    assert transporte.ultima_chamada["cabecalhos"]["Authorization"] == "Bearer minha-chave-secreta"
+
+
+def test_provedor_le_usage_e_custo():
+    uso = {"prompt_tokens": 10, "completion_tokens": 20, "cost": 0.001}
+    transporte = _TransporteFalso(200, _resposta_ok("resposta", uso))
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
+    resp = provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+    assert resp.texto == "resposta"
+    assert resp.tokens_entrada == 10
+    assert resp.tokens_saida == 20
+    assert resp.custo_informado_usd == 0.001
+
+
+def test_provedor_429_vira_erro_limite_de_taxa():
+    transporte = _TransporteFalso(429, b'{"error": "rate limited"}')
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
+    with pytest.raises(ErroLimiteDeTaxa):
+        provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+
+
+def test_provedor_401_vira_erro_de_configuracao_sem_vazar_chave():
+    transporte = _TransporteFalso(401, b'{"error": "invalid api key sk-teste-12345"}')
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "chave-super-secreta", {}, transporte=transporte)
+    with pytest.raises(ErroConfiguracaoProvedor) as exc_info:
+        provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+    assert "chave-super-secreta" not in str(exc_info.value)
+
+
+def test_provedor_200_com_error_no_corpo_vira_indisponivel():
+    transporte = _TransporteFalso(200, b'{"error": {"message": "modelo sobrecarregado"}}')
+    provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
+    with pytest.raises(ErroProvedorIndisponivel):
+        provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
