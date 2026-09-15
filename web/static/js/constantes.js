@@ -8,5 +8,5 @@
  * (`SituacaoHabitante`, servida — não copiada aqui).
  */
 export const Modo = Object.freeze({ GLOBAL: 'global', CONTINENTE: 'continente', CIDADE: 'cidade' });
-export const Aba = Object.freeze({ MAPA: 'mapa', HABITANTES: 'habitantes', MESTRE: 'mestre', MAPA_LIVE: 'mapa-live' });
+export const Aba = Object.freeze({ MAPA: 'mapa', HABITANTES: 'habitantes', MESTRE: 'mestre', MAPA_LIVE: 'mapa-live', ESTATISTICAS: 'estatisticas' });
 export const AbaModal = Object.freeze({ PERFIL: 'profile', LOGS: 'logs' });

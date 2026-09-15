@@ -634,3 +634,28 @@ header {
 .gravidez-titulo { display: block; }
 .gravidez-detalhe { font-size: 0.75rem; color: var(--text-dim); }
 
+/* Aba Estatísticas (P05, docs/16_PLANO_PAINEL_E_IA.md) */
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.stats-linha { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; font-size: 0.85rem; }
+.stats-linha:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.04); }
+/* P05 passo 4: tabela pode ficar mais larga que a tela em telas estreitas —
+   só ela rola, nunca a página inteira. */
+.stats-tabela-container { overflow-x: auto; }
+.stats-tabela { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.stats-tabela th, .stats-tabela td { padding: 0.6rem 0.9rem; text-align: right; white-space: nowrap; }
+.stats-tabela th:first-child, .stats-tabela td:first-child { text-align: left; }
+.stats-tabela th {
+    color: var(--text-dim);
+    font-family: 'Outfit';
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.stats-tabela tbody tr:not(:last-child) td { border-bottom: 1px solid rgba(255,255,255,0.04); }
+

@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify
 
 from web.banco import obter_db
 from web.rotas._erros import registrar_erro_handler
-from web.serializadores import serializar_estado
+from web.serializadores import serializar_estado, serializar_estatisticas
 
 estado_bp = Blueprint('estado', __name__)
 registrar_erro_handler(estado_bp)
@@ -21,3 +21,8 @@ registrar_erro_handler(estado_bp)
 @estado_bp.route('/api/estado')
 def api_estado():
     return jsonify(serializar_estado(obter_db()))
+
+
+@estado_bp.route('/api/estatisticas')
+def api_estatisticas():
+    return jsonify(serializar_estatisticas(obter_db()))

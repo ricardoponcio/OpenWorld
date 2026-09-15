@@ -12,9 +12,11 @@ primeira importação de `web.dashboard` neste processo (mesmo padrão de
 import tempfile
 import os
 
+import json
+
 from config import cfg_get, get_config
 from engine.database import DatabaseManager
-from engine.models import NPC, EstagioVida
+from engine.models import NPC, EstagioVida, MetaChave
 from web.banco import configurar_db
 
 _dir_teste = tempfile.mkdtemp(prefix="openworld_test_rotas_painel_")
@@ -119,3 +121,30 @@ def test_api_ficha_habitante_resolve_nomes_de_pais():
 def test_api_ficha_habitante_inexistente_devolve_404():
     resposta = app.test_client().get('/api/habitantes/npc_fantasma_xyz')
     assert resposta.status_code == 404
+
+
+def test_api_estatisticas_devolve_o_json_gravado():
+    """P05 (docs/16_PLANO_PAINEL_E_IA.md): a rota devolve o retrato de
+    MetaChave.ESTATISTICAS como está — nunca recalcula nada (Armadilha 24)."""
+    gravado = {"total": {"vivos_por_estagio": {"adulto": 5}}, "hoje": {"nascimento": 2}}
+    _db_teste.meta.salvar(MetaChave.ESTATISTICAS, json.dumps(gravado))
+
+    resposta = app.test_client().get('/api/estatisticas')
+    data = resposta.get_json()
+
+    assert data["total"]["vivos_por_estagio"]["adulto"] == 5
+    assert data["hoje"]["nascimento"] == 2
+    assert data["polling_ms"] == cfg_get(get_config(), "painel", "estatisticas_polling_ms")
+
+
+def test_api_estatisticas_sem_nada_gravado_devolve_dict_vazio_mais_polling():
+    _dir_vazio = tempfile.mkdtemp(prefix="openworld_test_estatisticas_vazio_")
+    db_vazio = DatabaseManager(db_path=os.path.join(_dir_vazio, "teste.db"), pool_size=2)
+    configurar_db(db_vazio)
+    try:
+        resposta = app.test_client().get('/api/estatisticas')
+        data = resposta.get_json()
+        assert "total" not in data
+        assert data["polling_ms"] == cfg_get(get_config(), "painel", "estatisticas_polling_ms")
+    finally:
+        configurar_db(_db_teste)  # devolve o banco compartilhado pros outros testes deste arquivo

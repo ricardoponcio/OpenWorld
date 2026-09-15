@@ -32,6 +32,7 @@
             <button class="tab-btn" data-acao="trocar-aba" data-aba="habitantes">👥 Habitantes</button>
             <button class="tab-btn" data-acao="trocar-aba" data-aba="mestre">🎭 Mestre</button>
             <button class="tab-btn" data-acao="trocar-aba" data-aba="mapa-live">🗾 Mapa Live</button>
+            <button class="tab-btn" data-acao="trocar-aba" data-aba="estatisticas">📊 Estatísticas</button>
         </nav>
     </header>
 
@@ -183,6 +184,35 @@
                     </div>
                 </aside>
                 <div id="mapa-leaflet-container"></div>
+            </div>
+        </div>
+
+        <!-- Estatísticas View -->
+        <div id="estatisticas-view" class="view">
+            <div class="stats-cards">
+                <div class="info-card">
+                    <h3 class="metricas-titulo">⚡ Desempenho</h3>
+                    <div id="stats-desempenho"></div>
+                </div>
+                <div class="info-card">
+                    <h3 class="metricas-titulo">📅 Hoje</h3>
+                    <div id="stats-hoje"></div>
+                </div>
+                <div class="info-card">
+                    <h3 class="metricas-titulo">📆 Dia Anterior</h3>
+                    <div id="stats-ontem"></div>
+                </div>
+            </div>
+            <div class="stats-tabela-container">
+                <table class="stats-tabela">
+                    <thead>
+                        <tr>
+                            <th>Cidade</th><th>Bebês</th><th>Crianças</th><th>Adultos</th><th>Idosos</th>
+                            <th>Empregados</th><th>Desempregados</th><th>Famintos</th><th>Saldo ≤ 0</th><th>Mediana Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-tabela-corpo"></tbody>
+                </table>
             </div>
         </div>
     </div>

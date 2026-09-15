@@ -102,6 +102,18 @@ def serializar_ficha_habitante(db, ficha: dict) -> dict:
     return resultado
 
 
+def serializar_estatisticas(db) -> dict:
+    """P05 (docs/16_PLANO_PAINEL_E_IA.md): devolve o JSON que
+    `ColetorDeEstatisticas`/`run_simulation.py` gravaram em `MetaChave.ESTATISTICAS`
+    como está — o painel NUNCA recalcula nada aqui (Armadilha 24). `{}` se a
+    simulação ainda não gravou nenhum retrato. `polling_ms` é a única adição:
+    mesma razão de `serializar_estado` (ARQUITETURA §10 regra 6)."""
+    bruto = db.meta.carregar(MetaChave.ESTATISTICAS)
+    dados = json.loads(bruto) if bruto else {}
+    dados["polling_ms"] = cfg_get(get_config(), "painel", "estatisticas_polling_ms")
+    return dados
+
+
 def serializar_filtros_habitantes(db) -> dict:
     """P02: catálogo de valores válidos pros filtros da aba Habitantes — servido,
     não copiado no JS (ARQUITETURA §10 regra 6). `FiltroNpc` (F03) sai de

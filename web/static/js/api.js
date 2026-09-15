@@ -19,6 +19,13 @@ export async function obterEstado() {
     return res.json();
 }
 
+// P05 (docs/16_PLANO_PAINEL_E_IA.md): o retrato que ColetorDeEstatisticas grava
+// em MetaChave.ESTATISTICAS — consumido por painel_estatisticas.js.
+export async function obterEstatisticas() {
+    const res = await fetch('/api/estatisticas');
+    return res.json();
+}
+
 export async function definirVelocidade(v) {
     return fetch(`/api/set_speed/${v}`);
 }

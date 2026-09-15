@@ -10,6 +10,7 @@ import { Aba } from './constantes.js';
 import { obterInit } from './api.js';
 import { carregarHistoricoMestre, enviarMensagemMestre } from './chat_mestre.js';
 import { carregarPaginaHabitantes } from './painel_npcs.js';
+import { carregarEstatisticas } from './painel_estatisticas.js';
 import { estado } from './estado_dashboard.js';
 
 // F03: o mapeamento do valor curto de `data-aba` pro id de DOM da view — a view em
@@ -20,6 +21,7 @@ const ABA_PARA_VIEW_ID = {
     [Aba.HABITANTES]: 'npc-view',
     [Aba.MESTRE]: 'mestre-view',
     [Aba.MAPA_LIVE]: 'mapa-leaflet-view',
+    [Aba.ESTATISTICAS]: 'estatisticas-view',
 };
 
 function switchView(btn, aba) {
@@ -31,7 +33,7 @@ function switchView(btn, aba) {
     estado.activeView = aba;
 
     const eventLog = document.getElementById('event-log');
-    if (aba === Aba.HABITANTES || aba === Aba.MESTRE || aba === Aba.MAPA_LIVE) {
+    if (aba === Aba.HABITANTES || aba === Aba.MESTRE || aba === Aba.MAPA_LIVE || aba === Aba.ESTATISTICAS) {
         eventLog.style.display = 'none';
     } else {
         eventLog.style.display = 'block';
@@ -43,6 +45,8 @@ function switchView(btn, aba) {
         initMapaLeaflet();
     } else if (aba === Aba.HABITANTES) {
         carregarPaginaHabitantes();
+    } else if (aba === Aba.ESTATISTICAS) {
+        carregarEstatisticas();
     }
 }
 
