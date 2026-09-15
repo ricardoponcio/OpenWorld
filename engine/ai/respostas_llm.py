@@ -3,7 +3,7 @@ import json
 from typing import Optional, Union, Dict, List
 from engine.logger import WorldLogger
 
-class AIUtils:
+class RespostaLLM:
     """
     Central utility class to clean and parse LLM responses safely,
     deduplicating string manipulations across all specialized AI clients.
@@ -59,10 +59,10 @@ class AIUtils:
         Attempts to clean and parse the LLM raw text response into a JSON object.
         Returns None if parsing fails.
         """
-        cleaned = AIUtils.clean_json_response(raw_text)
+        cleaned = RespostaLLM.clean_json_response(raw_text)
         try:
             return json.loads(cleaned)
-        except Exception as e:
+        except json.JSONDecodeError as e:
             WorldLogger.warning(f"[AI-UTILS] Falha ao decodificar JSON após limpeza: {e}")
             WorldLogger.debug(f"[AI-UTILS] Conteúdo bruto: {raw_text} | Limpo: {cleaned}")
             return None

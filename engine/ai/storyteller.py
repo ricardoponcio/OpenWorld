@@ -2,7 +2,7 @@ import json
 from typing import Dict
 from .client import AIClient, ErroIAIndisponivel
 from .clientes import ClienteIA
-from .utils import AIUtils
+from .respostas_llm import RespostaLLM
 from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
 
@@ -25,7 +25,7 @@ class AIStorytellerClient:
             )
             res = AIClient.query(prompt, cliente=ClienteIA.EVENTO_GLOBAL, json_format=True)
 
-            data = AIUtils.parse_json_safely(res)
+            data = RespostaLLM.parse_json_safely(res)
             if data and isinstance(data, dict) and "titulo" in data and "descricao" in data and "modificadores" in data:
                 return data
         except (ErroIAIndisponivel, KeyError) as e:

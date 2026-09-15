@@ -4,7 +4,7 @@ import zlib
 from engine.logger import WorldLogger
 from engine.ai.client import AIClient, ErroIAIndisponivel
 from engine.ai.clientes import ClienteIA
-from engine.ai.utils import AIUtils
+from engine.ai.respostas_llm import RespostaLLM
 
 # Fase 1.4 (P1.4): fallback procedural — o mesmo padrão de tabela de sílabas usado
 # implicitamente em outros fallbacks do projeto (nomes fixos em world_manager_ai.py), aqui
@@ -91,7 +91,7 @@ class CityManagerAIClient:
                     f"(tentativa {tentativa + 1}/{retries + 1})..."
                 )
                 res = AIClient.query(prompt, cliente=ClienteIA.FUNDACAO_CIDADES, json_format=True)
-                data = AIUtils.parse_json_safely(res)
+                data = RespostaLLM.parse_json_safely(res)
                 if isinstance(data, dict):
                     data = [data]
                 cidades_validas = CityManagerAIClient._validar_cidades(data, biomas_disponiveis)

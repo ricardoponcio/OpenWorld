@@ -9,7 +9,7 @@ if raiz not in sys.path:
 
 from engine.ai.client import AIClient, ErroIAIndisponivel
 from engine.ai.clientes import ClienteIA
-from engine.ai.utils import AIUtils
+from engine.ai.respostas_llm import RespostaLLM
 from engine.logger import WorldLogger
 from cartographer.config import CARTOGRAPHER_CONFIG
 from config import cfg_get
@@ -88,8 +88,8 @@ class WorldManagerAIClient:
             WorldLogger.info(f"[AI-WORLD-STRATEGY] Planejando continentes com a semente: {semente}...")
             res = AIClient.query(prompt, cliente=ClienteIA.PLANEJAMENTO_CONTINENTES, json_format=True)
 
-            # Limpeza e parsing de JSON robustos e seguros via AIUtils global
-            data = AIUtils.parse_json_safely(res)
+            # Limpeza e parsing de JSON robustos e seguros via RespostaLLM global
+            data = RespostaLLM.parse_json_safely(res)
 
             if data and "continentes" in data and isinstance(data["continentes"], list) and len(data["continentes"]) > 0:
                 WorldLogger.info(f"[AI-WORLD-STRATEGY] {len(data['continentes'])} continentes planejados com sucesso pela IA!")

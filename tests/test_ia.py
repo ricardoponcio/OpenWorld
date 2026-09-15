@@ -22,6 +22,7 @@ from engine.ai.provedores import (
     RespostaIA,
 )
 from engine.ai.client import AIClient
+from engine.ai.respostas_llm import RespostaLLM
 from engine.ai.roteador import ErroIAIndisponivel, RoteadorIA
 from engine.logger import WorldLogger
 from engine.ai.biography import AIBiographyClient
@@ -516,3 +517,12 @@ def test_todos_os_chamadores_caem_no_fallback_quando_ia_indisponivel():
         assert len(r8) >= 2
     finally:
         AIClient._roteador = None
+
+
+# ----------------------------------------------------------------------
+# I10 — RespostaLLM (engine/ai/respostas_llm.py, antes utils.py/AIUtils)
+# ----------------------------------------------------------------------
+
+def test_resposta_llm_extrai_json_de_bloco_markdown():
+    assert RespostaLLM.parse_json_safely('```json\n{"a": 1}\n```') == {"a": 1}
+    assert RespostaLLM.parse_json_safely("texto sem json nenhum") is None

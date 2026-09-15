@@ -2,7 +2,7 @@ import random
 from typing import Dict, List, Optional
 from .client import AIClient, ErroIAIndisponivel
 from .clientes import ClienteIA
-from .utils import AIUtils
+from .respostas_llm import RespostaLLM
 from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
 from ..models import Genero
@@ -21,7 +21,7 @@ class AIGeneratorClient:
             prompt = template.format(tema=tema, quantidade=quantidade)
             res = AIClient.query(prompt, cliente=ClienteIA.LOCAIS_CIDADE, json_format=True)
 
-            data = AIUtils.parse_json_safely(res)
+            data = RespostaLLM.parse_json_safely(res)
             if isinstance(data, list) and len(data) > 0:
                 return data
         except (ErroIAIndisponivel, KeyError) as e:
@@ -59,7 +59,7 @@ class AIGeneratorClient:
             )
             res = AIClient.query(prompt, cliente=ClienteIA.DNA_NPC, json_format=True)
 
-            data = AIUtils.parse_json_safely(res)
+            data = RespostaLLM.parse_json_safely(res)
             if data and isinstance(data, dict) and "nome" in data and "genero" in data:
                 return data
         except (ErroIAIndisponivel, KeyError) as e:

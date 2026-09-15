@@ -2,7 +2,7 @@ import json
 from typing import Dict, List
 from .client import AIClient, ErroIAIndisponivel
 from .clientes import ClienteIA
-from .utils import AIUtils
+from .respostas_llm import RespostaLLM
 from ..logger import WorldLogger
 from ..models import ComandoMestre, HumorNPC
 
@@ -39,7 +39,7 @@ class AIGameMasterClient:
                 humores=", ".join(f'"{h.value}"' for h in HumorNPC),
             )
             res = AIClient.query(prompt, cliente=ClienteIA.MESTRE, json_format=True)
-            data = AIUtils.parse_json_safely(res)
+            data = RespostaLLM.parse_json_safely(res)
             if data and isinstance(data, dict) and "narracao" in data:
                 data.setdefault("acoes_propostas", [])
                 return data
