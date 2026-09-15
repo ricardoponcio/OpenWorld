@@ -2319,7 +2319,7 @@ novos deste documento, todos passando).
 | I10 | 2026-09-15 | `git mv utils.py respostas_llm.py`, `AIUtils` -> `RespostaLLM`, `except Exception` -> `except json.JSONDecodeError`. `grep -rn "AIUtils\|ai.utils\|from .utils"` -> 0. Suíte: 250 (249+1). | O primeiro commit (`git add -A` com um pathspec já inválido pós-rename) só pegou o `git mv` em si, sem o conteúdo — corrigido num segundo commit imediato com o resto (classe renomeada, imports dos 6 arquivos, teste). Registrado aqui porque é exatamente o tipo de erro que os protocolos deste plano existem pra pegar (git status antes de confiar num `git add -A`). |
 | I11 | 2026-09-15 | Implementado dentro do commit de I04 (mesma função que já registra o resultado da chamada). `sucesso_truncado` quando `tokens_entrada >= contexto_tokens_servidor`; JSON compacto (`separators=(",",":")`, sem `indent`) em `game_master.py`/`storyteller.py`. | **Passo 1 (ação do dono do projeto, configuração de sistema) não realizado nesta sessão** — não mexo em `systemctl`/serviços do SO. `contexto_tokens_servidor` do `ollama_local` continua em `4096` no config (o valor de ANTES do ajuste); se o dono do projeto aumentar a janela do Ollama pra 32768, é só atualizar essa chave — o resto (detecção de truncamento, JSON compacto) já está pronto e não muda. |
 | **Parada 3 / I09** | | | |
-| T01 | | | |
+| T01 | 2026-09-15 | `venv/bin/python -m pytest tests/ -q` → **252 passed**, 0 falhas (baseline do plano era 176 + os novos deste documento — 252 confirma todos os blocos C/O/D/F/P/G/E/I somados, sem nenhuma regressão ao longo da sessão inteira). | — |
 | T02 | | | |
 
 ---
