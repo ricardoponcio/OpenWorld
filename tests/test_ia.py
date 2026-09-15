@@ -25,6 +25,7 @@ from engine.ai.client import AIClient
 from engine.ai.respostas_llm import RespostaLLM
 from engine.ai.roteador import ErroIAIndisponivel, RoteadorIA
 from engine.logger import WorldLogger
+from builder.fix.estimar_custo_ia import calcular_estimativa
 from engine.ai.biography import AIBiographyClient
 from engine.ai.game_master import AIGameMasterClient
 from engine.ai.generator import AIGeneratorClient
@@ -526,3 +527,39 @@ def test_todos_os_chamadores_caem_no_fallback_quando_ia_indisponivel():
 def test_resposta_llm_extrai_json_de_bloco_markdown():
     assert RespostaLLM.parse_json_safely('```json\n{"a": 1}\n```') == {"a": 1}
     assert RespostaLLM.parse_json_safely("texto sem json nenhum") is None
+
+
+# ----------------------------------------------------------------------
+# I07 — estimar_custo_ia.py (calcular_estimativa é pura — sem arquivo/rede)
+# ----------------------------------------------------------------------
+
+def test_estimativa_de_custo_com_jsonl_conhecido():
+    """I07: 2 sucessos (1.000.000 tokens de entrada/0 de saída, e o inverso) e 1
+    falha — com os preços "por milhão de tokens" do config, o custo total é
+    EXATAMENTE preco_entrada + preco_saida, por definição."""
+    linhas = [
+        {"cliente": "mestre", "resultado": "sucesso", "tokens_entrada": 1_000_000, "tokens_saida": 0,
+         "tokens_estimados": False, "custo_informado_usd": None},
+        {"cliente": "mestre", "resultado": "sucesso", "tokens_entrada": 0, "tokens_saida": 1_000_000,
+         "tokens_estimados": False, "custo_informado_usd": None},
+        {"cliente": "mestre", "resultado": "indisponivel", "tokens_entrada": None, "tokens_saida": None,
+         "tokens_estimados": False, "custo_informado_usd": None},
+    ]
+    preco_entrada, preco_saida = 0.08246, 0.16492
+
+    estimativa = calcular_estimativa(linhas, preco_entrada, preco_saida)
+
+    assert estimativa["total"]["ok"] == 2
+    assert estimativa["total"]["falhas"] == 1
+    assert estimativa["total"]["custo_usd"] == pytest.approx(preco_entrada + preco_saida)
+
+
+def test_estimativa_de_custo_conta_sucesso_truncado_como_sucesso_pros_tokens():
+    linhas = [
+        {"cliente": "mestre", "resultado": "sucesso_truncado", "tokens_entrada": 4096, "tokens_saida": 100,
+         "tokens_estimados": False, "custo_informado_usd": None},
+    ]
+    estimativa = calcular_estimativa(linhas, 1.0, 1.0)
+    assert estimativa["total"]["ok"] == 1
+    assert estimativa["total"]["truncadas"] == 1
+    assert estimativa["por_cliente"]["mestre"]["tokens_entrada_soma"] == 4096
