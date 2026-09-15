@@ -470,8 +470,31 @@ header {
 .dica-titulo { font-weight: 600; }
 
 /* Aba Habitantes */
-.npc-filter-bar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; align-items: center; }
+.npc-filter-bar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .filtro-label { font-family: 'Outfit'; font-weight: 600; color: var(--text-dim); margin-right: 0.5rem; }
+/* P04 (docs/16_PLANO_PAINEL_E_IA.md): cidade/estágio/ação (muitas opções, sem
+   ativo/inativo) usam <select> — situação continua em .filter-btn (3 opções,
+   igual antes). */
+.npc-filtro-select {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-dim);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: 'Outfit';
+}
+.npc-filtro-busca {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    min-width: 160px;
+}
+.npc-paginacao { display: flex; gap: 1rem; align-items: center; justify-content: center; margin-top: 1.5rem; }
+.npc-pagina-label { font-size: 0.8rem; color: var(--text-dim); font-family: 'Outfit'; }
 .badge-gestante {
     margin-top: 0.5rem;
     font-size: 0.65rem;

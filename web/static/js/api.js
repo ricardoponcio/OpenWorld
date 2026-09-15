@@ -28,7 +28,30 @@ export async function alternarPausa() {
     return res.json();
 }
 
+// --- Aba Habitantes (painel_npcs.js) ---
+
+// P04 (docs/16_PLANO_PAINEL_E_IA.md): `params` é um objeto simples
+// {cidade, busca, estagio, acao, situacao, pagina, por_pagina} — só as chaves
+// presentes (com valor) entram na query string.
+export async function obterHabitantes(params) {
+    const query = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v !== '' && v != null)
+    ).toString();
+    const res = await fetch(`/api/habitantes?${query}`);
+    return res.json();
+}
+
+export async function obterFiltrosHabitantes() {
+    const res = await fetch('/api/habitantes/filtros');
+    return res.json();
+}
+
 // --- Ficha do habitante (ficha_npc.js) ---
+
+export async function obterFichaHabitante(npcId) {
+    const res = await fetch(`/api/habitantes/${npcId}`);
+    return res.json();
+}
 
 export async function obterRelacoesNpc(npcId) {
     const res = await fetch(`/api/npc_rels/${npcId}`);

@@ -1,27 +1,15 @@
 /**
- * F05 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): modal do habitante (ficha de vida +
- * crônicas pessoais) — extraído de dashboard.js. Reescrita em P03/P04 (ficha
- * resolvida no servidor); por enquanto é só a mesma lógica, movida.
+ * P03/P04 (docs/16_PLANO_PAINEL_E_IA.md): modal do habitante (ficha de vida +
+ * crônicas pessoais) — reescrito contra /api/habitantes/<id>, que já resolve
+ * nomes de mãe/pai/cônjuge e filhos no servidor (RepositorioNPC.buscar_ficha).
+ * Nunca mais varre uma lista local de NPCs (a antiga `allNpcs`, que P01
+ * eliminou) nem chama a antiga `abrirHistorico`.
  */
 import { registrarAcoes } from './acoes.js';
 import { AbaModal } from './constantes.js';
 import { escaparHtml, getNPCAvatar, rotuloEstagioCompleto } from './formatacao.js';
-import { obterRelacoesNpc, obterLogsNpc } from './api.js';
+import { obterFichaHabitante, obterRelacoesNpc, obterLogsNpc } from './api.js';
 import { estado } from './estado_dashboard.js';
-
-function getNPCNameById(npcId) {
-    if (!npcId) return null;
-    const found = estado.allNpcs.find(n => n.id === npcId);
-    return found ? found.nome : "Desconhecido";
-}
-
-function getNPCChildren(npcId) {
-    return estado.allNpcs.filter(n => n.bio.pai === npcId || n.bio.mae === npcId);
-}
-
-function getNPCRelationships(npcId) {
-    return estado.allRels.filter(r => r.a === npcId);
-}
 
 function switchModalTab(tab) {
     estado.activeModalTab = tab;
@@ -35,47 +23,42 @@ function switchModalTab(tab) {
     document.getElementById('modal-tab-logs').style.display = tab === AbaModal.LOGS ? 'block' : 'none';
 }
 
-function renderNPCProfile(npc) {
-    const avatar = getNPCAvatar(npc.bio.g, npc.bio.ev);
-    const generoStr = npc.bio.g === 'M' ? 'Masculino ♂️' : 'Feminino ♀️';
-    const estagioStr = rotuloEstagioCompleto(npc.bio.ev);
+function montarLinkNpc(id, nome, emoji, corClasse) {
+    if (!id) return null;
+    return `<a href="#" class="link-simples ${corClasse}" data-acao="abrir-ficha" data-npc-id="${escaparHtml(id)}">${emoji} ${escaparHtml(nome)}</a>`;
+}
 
-    // Pais
-    const maeNome = getNPCNameById(npc.bio.mae);
-    const paiNome = getNPCNameById(npc.bio.pai);
-
-    const maeLink = npc.bio.mae ? `<a href="#" class="link-simples cor-accent" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.mae)}">👩 ${escaparHtml(maeNome)}</a>` : '<span class="dim">Desconhecida</span>';
-    const paiLink = npc.bio.pai ? `<a href="#" class="link-simples cor-accent" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.pai)}">👨 ${escaparHtml(paiNome)}</a>` : '<span class="dim">Desconhecido</span>';
-
-    // Cônjuge
-    let conjugeLink = '<span class="dim">Nenhum</span>';
-    if (npc.bio.ec === 'casado' && npc.bio.cj) {
-        const conjugeNome = getNPCNameById(npc.bio.cj);
-        conjugeLink = `<a href="#" class="link-simples cor-success" data-acao="abrir-ficha" data-npc-id="${escaparHtml(npc.bio.cj)}">💍 ${escaparHtml(conjugeNome)}</a>`;
-    }
-
-    // Filhos
-    const filhos = getNPCChildren(npc.id);
-    const filhosList = filhos.length > 0 ? filhos.map(f => `
+function montarListaFilhos(filhos) {
+    return filhos.length > 0 ? filhos.map(f => `
         <li class="ficha-filho-item">
-            <a href="#" class="link-simples cor-accent" data-acao="abrir-ficha" data-npc-id="${escaparHtml(f.id)}">👶 ${escaparHtml(f.nome)} (${f.bio.ev === 'bebe' ? 'Bebê' : 'Criança'})</a>
+            <a href="#" class="link-simples cor-accent" data-acao="abrir-ficha" data-npc-id="${escaparHtml(f.id)}">👶 ${escaparHtml(f.nome)} (${f.estagio_vida === 'bebe' ? 'Bebê' : 'Criança'})</a>
         </li>
     `).join('') : '<span class="dim">Nenhum filho registrado.</span>';
+}
 
-    // Círculo Social
-    const rels = getNPCRelationships(npc.id);
-    const relsList = rels.length > 0 ? rels.map(r => {
-        const outroNome = getNPCNameById(r.b);
+function montarListaRelacoes(rels) {
+    return rels.length > 0 ? rels.map(r => {
         const afinidadeClasse = r.af > 60 ? 'afinidade-alta' : (r.af < 30 ? 'afinidade-baixa' : 'afinidade-media');
         return `
             <div class="rel-item ${afinidadeClasse}">
-                <span class="rel-nome">${escaparHtml(outroNome)}</span>
+                <span class="rel-nome">${escaparHtml(r.nome)}</span>
                 <span class="dim">${escaparHtml(r.v)} (<strong class="rel-afinidade">${r.af} afinidade</strong>)</span>
             </div>
         `;
     }).join('') : '<span class="dim">Sem conexões sociais expressivas.</span>';
+}
 
-    // Gestão de gravidez
+function montarHtmlFicha(npc, rels) {
+    const avatar = getNPCAvatar(npc.bio.g, npc.bio.ev);
+    const generoStr = npc.bio.g === 'M' ? 'Masculino ♂️' : 'Feminino ♀️';
+    const estagioStr = rotuloEstagioCompleto(npc.bio.ev);
+
+    const maeLink = montarLinkNpc(npc.bio.mae, npc.mae_nome, '👩', 'cor-accent') || '<span class="dim">Desconhecida</span>';
+    const paiLink = montarLinkNpc(npc.bio.pai, npc.pai_nome, '👨', 'cor-accent') || '<span class="dim">Desconhecido</span>';
+    const conjugeLink = (npc.bio.ec === 'casado' && npc.bio.cj)
+        ? montarLinkNpc(npc.bio.cj, npc.conjuge_nome, '💍', 'cor-success')
+        : '<span class="dim">Nenhum</span>';
+
     const gravidezHtml = npc.bio.gr > 0 ? `
         <div class="gravidez-box">
             <span class="gravidez-icone">🤰</span>
@@ -118,7 +101,7 @@ function renderNPCProfile(npc) {
                     <div><span class="dim">Cônjuge:</span> ${conjugeLink}</div>
                     <div class="ficha-filhos-bloco">
                         <span class="dim ficha-filhos-label">Filhos:</span>
-                        <ul class="ficha-filhos-lista">${filhosList}</ul>
+                        <ul class="ficha-filhos-lista">${montarListaFilhos(npc.filhos)}</ul>
                     </div>
                 </div>
             </div>
@@ -127,42 +110,38 @@ function renderNPCProfile(npc) {
             <div class="ficha-secao full">
                 <h4>💬 Círculo de Relacionamentos</h4>
                 <div class="ficha-relacoes-scroll">
-                    ${relsList}
+                    ${montarListaRelacoes(rels)}
                 </div>
             </div>
         </div>
     `;
 }
 
-async function abrirHistorico(npcId) {
+async function abrirFicha(npcId) {
     estado.activeNpcId = npcId;
-    const npcEncontrado = estado.allNpcs.find(n => n.id === npcId);
-    const npcNome = npcEncontrado ? npcEncontrado.nome : "Desconhecido";
     const modal = document.getElementById('npc-log-modal');
     const title = document.getElementById('modal-npc-nome');
     const profileContainer = document.getElementById('modal-profile-details');
     const list = document.getElementById('modal-log-list');
 
-    title.innerText = `Ficha de ${npcNome}`;
+    title.innerText = 'Carregando...';
     list.innerHTML = `<p class="modal-carregando">Carregando logs...</p>`;
     profileContainer.innerHTML = `<p class="modal-carregando">Carregando ficha...</p>`;
     modal.classList.add('active');
-
-    // Resetar aba padrão para Perfil
-    switchModalTab(AbaModal.PERFIL);
+    switchModalTab(AbaModal.PERFIL); // Resetar aba padrão para Perfil
 
     try {
-        const dataRels = await obterRelacoesNpc(npcId);
-        if (dataRels.rels) {
-            estado.allRels = dataRels.rels.map(r => ({...r, a: npcId})); // Populate 'a' field to match old logic
-        }
-
-        const foundNpc = estado.allNpcs.find(n => n.id === npcId);
-        if (foundNpc) {
-            profileContainer.innerHTML = renderNPCProfile(foundNpc);
+        const [npc, dataRels] = await Promise.all([obterFichaHabitante(npcId), obterRelacoesNpc(npcId)]);
+        if (npc.error) {
+            title.innerText = 'Ficha não encontrada';
+            profileContainer.innerHTML = `<p class="modal-erro">${escaparHtml(npc.error)}</p>`;
+        } else {
+            title.innerText = `Ficha de ${npc.nome}`;
+            profileContainer.innerHTML = montarHtmlFicha(npc, dataRels.rels || []);
         }
     } catch (e) {
-        console.error("Error loading relationships:", e);
+        console.error("Error loading ficha:", e);
+        profileContainer.innerHTML = `<p class="modal-erro">Falha ao carregar a ficha.</p>`;
     }
 
     try {
@@ -195,7 +174,7 @@ async function abrirHistorico(npcId) {
     }
 }
 
-function fecharHistorico() {
+function fecharFicha() {
     const modal = document.getElementById('npc-log-modal');
     modal.classList.remove('active');
     estado.activeNpcId = null;
@@ -203,11 +182,11 @@ function fecharHistorico() {
 
 // F01: cada módulo registra as próprias ações — evita import circular com app.js.
 registrarAcoes({
-    'abrir-ficha': (alvo) => abrirHistorico(alvo.dataset.npcId),
+    'abrir-ficha': (alvo) => abrirFicha(alvo.dataset.npcId),
     // F01: só fecha quando o clique foi no próprio overlay/botão × — não quando um
     // clique dentro do conteúdo do modal borbulha até aqui (o conteúdo não tem
     // data-acao, então closest() sobe até o overlay; sem esta checagem qualquer
     // clique no modal inteiro o fecharia).
-    'fechar-ficha': (alvo, ev) => { if (ev.target === alvo) fecharHistorico(); },
+    'fechar-ficha': (alvo, ev) => { if (ev.target === alvo) fecharFicha(); },
     'ficha-aba': (alvo) => switchModalTab(alvo.dataset.aba),
 });

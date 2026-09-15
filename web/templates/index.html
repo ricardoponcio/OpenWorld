@@ -130,12 +130,21 @@
         <!-- NPCs View -->
         <div id="npc-view" class="view">
             <div class="npc-filter-bar">
-                <span class="filtro-label">Filtro:</span>
-                <button class="filter-btn active" data-acao="filtro-npc" data-filtro="vivos">🟢 Vivos</button>
-                <button class="filter-btn" data-acao="filtro-npc" data-filtro="mortos">💀 Falecidos</button>
-                <button class="filter-btn" data-acao="filtro-npc" data-filtro="todos">👥 Todos</button>
+                <select id="npc-filtro-cidade" class="npc-filtro-select"><option value="">Todas as cidades</option></select>
+                <select id="npc-filtro-estagio" class="npc-filtro-select"><option value="">Toda fase de vida</option></select>
+                <select id="npc-filtro-acao" class="npc-filtro-select"><option value="">Toda ação</option></select>
+                <button class="filter-btn active" data-acao="npc-situacao" data-situacao="vivos">🟢 Vivos</button>
+                <button class="filter-btn" data-acao="npc-situacao" data-situacao="mortos">💀 Falecidos</button>
+                <button class="filter-btn" data-acao="npc-situacao" data-situacao="todos">👥 Todos</button>
+                <input id="npc-filtro-busca" class="npc-filtro-busca" type="text" placeholder="Buscar por nome...">
+                <button class="filter-btn" data-acao="npc-atualizar">↻ Atualizar</button>
             </div>
             <div id="npc-grid" class="npc-grid"></div>
+            <div class="npc-paginacao">
+                <button class="filter-btn" data-acao="npc-pagina-anterior">‹ anterior</button>
+                <span id="npc-pagina-label" class="npc-pagina-label">página 1 de 1</span>
+                <button class="filter-btn" data-acao="npc-pagina-proxima">próxima ›</button>
+            </div>
         </div>
 
         <!-- Mestre de IA View -->

@@ -1,38 +1,49 @@
 /**
- * F05 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): aba Habitantes (grade e filtro) —
- * extraído de dashboard.js. Reescrita em P04 (paginação/filtro no servidor); por
- * enquanto é só a mesma lógica, movida.
+ * P04 (docs/16_PLANO_PAINEL_E_IA.md): aba Habitantes — filtro e paginação
+ * resolvidos no servidor (/api/habitantes), nunca mais a lista inteira do mundo
+ * (F05/P01 só tinham movido a versão antiga de dashboard.js pra cá; esta é a
+ * reescrita real). Não faz polling: recarrega ao mudar filtro/página, ao clicar
+ * "↻ Atualizar", e a cada `painel.estatisticas_polling_ms` só se a aba estiver
+ * visível.
  */
 import { registrarAcoes } from './acoes.js';
-import { FiltroNpc } from './constantes.js';
-import { escaparHtml, getNPCAvatar, renderStatus, rotuloEstagioCompacto } from './formatacao.js';
+import { Aba } from './constantes.js';
+import { escaparHtml, getNPCAvatar, renderStatus, rotuloEstagioCompacto, rotuloEstagioCompleto } from './formatacao.js';
+import { obterHabitantes, obterFiltrosHabitantes } from './api.js';
 import { estado } from './estado_dashboard.js';
 
-function setNpcFilter(filter) {
-    estado.npcFilter = filter;
-    // F03 (docs/16_PLANO_PAINEL_E_IA.md, Armadilha 19): decidia o botão ativo lendo
-    // o TEXTO VISÍVEL do botão — quebraria se o rótulo mudasse. Agora usa o mesmo
-    // `data-filtro` que a ação já lê.
-    document.querySelectorAll('.filter-btn[data-filtro]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filtro === filter);
-    });
-    atualizarPainelHabitantes(estado.allNpcs);
+// Detalhe de UI (não é config do servidor) — quanto esperar depois da última
+// tecla digitada antes de refazer a busca.
+const ATRASO_BUSCA_MS = 300;
+
+// P04: estado privado deste módulo — filtro/paginação da aba Habitantes não é
+// compartilhado com nenhum outro módulo (ARQUITETURA §10 regra 4).
+const estadoHabitantes = {
+    cidade: '', busca: '', estagio: '', acao: '', situacao: 'vivos',
+    pagina: 1, porPagina: 50, total: 0, timerBusca: null,
+};
+
+function preencherSelect(id, opcoes, rotuloTodos) {
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="">${escaparHtml(rotuloTodos)}</option>` +
+        opcoes.map(o => `<option value="${escaparHtml(o.valor)}">${escaparHtml(o.rotulo)}</option>`).join('');
 }
 
-// Chamada por navegacao.js — só quando a aba Habitantes está ativa (Armadilha 24:
-// nada aqui decide sozinho se deve rodar, quem chama já filtrou por isso).
-export function atualizarPainelHabitantes(npcs) {
+async function carregarFiltros() {
+    const dados = await obterFiltrosHabitantes();
+    estadoHabitantes.porPagina = dados.painel.habitantes_por_pagina;
+
+    preencherSelect('npc-filtro-cidade', dados.cidades.map(c => ({ valor: c.id, rotulo: c.nome })), 'Todas as cidades');
+    preencherSelect('npc-filtro-estagio', dados.estagios.map(e => ({ valor: e, rotulo: rotuloEstagioCompleto(e) })), 'Toda fase de vida');
+    preencherSelect('npc-filtro-acao', dados.acoes.map(a => ({ valor: a, rotulo: a })), 'Toda ação');
+
+    return dados;
+}
+
+function renderizarGrade(habitantes) {
     const grid = document.getElementById('npc-grid');
 
-    // Aplicar o filtro na lista de habitantes
-    let filteredNpcs = npcs;
-    if (estado.npcFilter === FiltroNpc.VIVOS) {
-        filteredNpcs = npcs.filter(n => n.status.h > 0);
-    } else if (estado.npcFilter === FiltroNpc.MORTOS) {
-        filteredNpcs = npcs.filter(n => n.status.h <= 0);
-    }
-
-    grid.innerHTML = filteredNpcs.map(n => {
+    grid.innerHTML = habitantes.map(n => {
         const avatar = getNPCAvatar(n.bio.g, n.bio.ev);
         const stageLabel = rotuloEstagioCompacto(n.bio.ev, n.profissao);
         const pregnantBadge = n.bio.gr > 0 ? `
@@ -71,15 +82,80 @@ export function atualizarPainelHabitantes(npcs) {
         `;
     }).join('');
 
-    // F06 (docs/16_PLANO_PAINEL_E_IA.md): a largura contínua das barras não vai em
-    // style="width:..." — fica numa variável CSS definida por propriedade,
-    // consumida pelas regras .health-fill/.status-fill (style.css).
+    // F06 (docs/16_PLANO_PAINEL_E_IA.md): --percentual via setProperty, nunca
+    // style="width:...".
     grid.querySelectorAll('[data-percentual]').forEach(el => {
         el.style.setProperty('--percentual', el.dataset.percentual + '%');
     });
 }
 
+function atualizarPaginacao() {
+    const totalPaginas = Math.max(1, Math.ceil(estadoHabitantes.total / estadoHabitantes.porPagina));
+    document.getElementById('npc-pagina-label').innerText = `página ${estadoHabitantes.pagina} de ${totalPaginas}`;
+}
+
+export async function carregarPaginaHabitantes() {
+    const dados = await obterHabitantes({
+        cidade: estadoHabitantes.cidade, busca: estadoHabitantes.busca,
+        estagio: estadoHabitantes.estagio, acao: estadoHabitantes.acao,
+        situacao: estadoHabitantes.situacao,
+        pagina: estadoHabitantes.pagina, por_pagina: estadoHabitantes.porPagina,
+    });
+    if (dados.error) { console.error("Habitantes Error:", dados.error); return; }
+
+    estadoHabitantes.total = dados.total;
+    renderizarGrade(dados.habitantes);
+    atualizarPaginacao();
+}
+
+function refiltrar(campo, valor) {
+    estadoHabitantes[campo] = valor;
+    estadoHabitantes.pagina = 1;
+    carregarPaginaHabitantes();
+}
+
+function setSituacao(btn, situacao) {
+    document.querySelectorAll('[data-acao="npc-situacao"]').forEach(b => {
+        b.classList.toggle('active', b.dataset.situacao === situacao);
+    });
+    refiltrar('situacao', situacao);
+}
+
+function aoDigitarBusca(valor) {
+    clearTimeout(estadoHabitantes.timerBusca);
+    estadoHabitantes.timerBusca = setTimeout(() => refiltrar('busca', valor), ATRASO_BUSCA_MS);
+}
+
+function irParaPaginaAnterior() {
+    if (estadoHabitantes.pagina > 1) { estadoHabitantes.pagina--; carregarPaginaHabitantes(); }
+}
+
+function irParaProximaPagina() {
+    const totalPaginas = Math.max(1, Math.ceil(estadoHabitantes.total / estadoHabitantes.porPagina));
+    if (estadoHabitantes.pagina < totalPaginas) { estadoHabitantes.pagina++; carregarPaginaHabitantes(); }
+}
+
+// F01 (docs/16_PLANO_PAINEL_E_IA.md): ponto de início explícito, chamado por
+// app.js. Os <select>/input de filtro disparam 'change'/'input', não 'click' —
+// fora do alcance do despachar() (que só ouve clique); ganham listener direto
+// aqui, uma vez só, mesmo padrão do Enter do campo do Mestre em navegacao.js.
+export async function iniciarPainelHabitantes() {
+    const dados = await carregarFiltros();
+
+    document.getElementById('npc-filtro-cidade').addEventListener('change', (ev) => refiltrar('cidade', ev.target.value));
+    document.getElementById('npc-filtro-estagio').addEventListener('change', (ev) => refiltrar('estagio', ev.target.value));
+    document.getElementById('npc-filtro-acao').addEventListener('change', (ev) => refiltrar('acao', ev.target.value));
+    document.getElementById('npc-filtro-busca').addEventListener('input', (ev) => aoDigitarBusca(ev.target.value));
+
+    setInterval(() => {
+        if (estado.activeView === Aba.HABITANTES) carregarPaginaHabitantes();
+    }, dados.painel.estatisticas_polling_ms);
+}
+
 // F01: cada módulo registra as próprias ações — evita import circular com app.js.
 registrarAcoes({
-    'filtro-npc': (alvo) => setNpcFilter(alvo.dataset.filtro),
+    'npc-situacao': (alvo) => setSituacao(alvo, alvo.dataset.situacao),
+    'npc-atualizar': () => carregarPaginaHabitantes(),
+    'npc-pagina-anterior': () => irParaPaginaAnterior(),
+    'npc-pagina-proxima': () => irParaProximaPagina(),
 });

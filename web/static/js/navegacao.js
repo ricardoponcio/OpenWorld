@@ -9,6 +9,7 @@ import { initMapaLeaflet } from './mapa_leaflet.js';
 import { Aba } from './constantes.js';
 import { obterInit } from './api.js';
 import { carregarHistoricoMestre, enviarMensagemMestre } from './chat_mestre.js';
+import { carregarPaginaHabitantes } from './painel_npcs.js';
 import { estado } from './estado_dashboard.js';
 
 // F03: o mapeamento do valor curto de `data-aba` pro id de DOM da view — a view em
@@ -40,6 +41,8 @@ function switchView(btn, aba) {
         carregarHistoricoMestre();
     } else if (aba === Aba.MAPA_LIVE) {
         initMapaLeaflet();
+    } else if (aba === Aba.HABITANTES) {
+        carregarPaginaHabitantes();
     }
 }
 

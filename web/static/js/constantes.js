@@ -4,10 +4,9 @@
  * 'profile') espalhado pelos módulos (ARQUITETURA §10 regra 5: enums em JS são
  * Object.freeze).
  *
- * FiltroNpc é TEMPORÁRIO: em P02 a lista de situações passa a vir da API
- * (SituacaoHabitante, servida — não copiada aqui); P04 remove este enum.
+ * P04: `FiltroNpc` saiu — a lista de situações vem de `/api/habitantes/filtros`
+ * (`SituacaoHabitante`, servida — não copiada aqui).
  */
 export const Modo = Object.freeze({ GLOBAL: 'global', CONTINENTE: 'continente', CIDADE: 'cidade' });
 export const Aba = Object.freeze({ MAPA: 'mapa', HABITANTES: 'habitantes', MESTRE: 'mestre', MAPA_LIVE: 'mapa-live' });
-export const FiltroNpc = Object.freeze({ VIVOS: 'vivos', MORTOS: 'mortos', TODOS: 'todos' });
 export const AbaModal = Object.freeze({ PERFIL: 'profile', LOGS: 'logs' });
