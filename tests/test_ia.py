@@ -5,10 +5,13 @@ recebe `transporte` injetado, `RoteadorIA` recebe `fabrica_provedor`/`ambiente`
 injetados, `LimitadorDeTaxa` recebe `relogio` injetado.
 """
 import json
+import os
+import threading
 
 import pytest
 
 from engine.ai.clientes import ClienteIA, resolver_config_cliente, validar_config_ia
+from engine.ai.coleta_uso import RegistradorDeUsoIA, RegistroUsoIA, agora_utc_iso
 from engine.ai.limite_taxa import LimitadorDeTaxa
 from engine.ai.provedores import (
     ErroConfiguracaoProvedor,
@@ -229,3 +232,68 @@ def test_limitador_zero_e_ilimitado():
     for _ in range(1000):
         assert limitador.pode_chamar()
         limitador.registrar_chamada()
+
+
+# ----------------------------------------------------------------------
+# I06 — RegistradorDeUsoIA (arquivo em tmp_path, nunca logs/ia_uso.jsonl real)
+# ----------------------------------------------------------------------
+
+def _registro(**overrides):
+    base = dict(
+        ts=agora_utc_iso(), cliente="mestre", provedor="ollama_local", modelo="m",
+        tentativa=1, resultado="sucesso", latencia_s=1.0, tokens_entrada=10,
+        tokens_saida=20, tokens_estimados=False, custo_informado_usd=None,
+        json_format=True, prompt="um prompt", resposta="uma resposta", erro=None,
+    )
+    base.update(overrides)
+    return RegistroUsoIA(**base)
+
+
+def test_registrador_grava_uma_linha_json_por_chamada(tmp_path):
+    arquivo = str(tmp_path / "ia_uso.jsonl")
+    registrador = RegistradorDeUsoIA(arquivo=arquivo, gravar_texto=True, ativo=True)
+    registrador.registrar(_registro())
+    registrador.registrar(_registro(tentativa=2))
+
+    linhas = open(arquivo, encoding="utf-8").read().splitlines()
+    assert len(linhas) == 2
+    dados = [json.loads(l) for l in linhas]
+    assert dados[0]["cliente"] == "mestre"
+    assert dados[1]["tentativa"] == 2
+
+
+def test_registrador_sem_texto_nao_grava_prompt(tmp_path):
+    arquivo = str(tmp_path / "ia_uso.jsonl")
+    registrador = RegistradorDeUsoIA(arquivo=arquivo, gravar_texto=False, ativo=True)
+    registrador.registrar(_registro(prompt="segredo", resposta="resposta"))
+
+    dados = json.loads(open(arquivo, encoding="utf-8").read())
+    assert dados["prompt"] is None
+    assert dados["resposta"] is None
+
+
+def test_registrador_e_seguro_entre_threads(tmp_path):
+    arquivo = str(tmp_path / "ia_uso.jsonl")
+    registrador = RegistradorDeUsoIA(arquivo=arquivo, gravar_texto=True, ativo=True)
+
+    def gravar_50():
+        for _ in range(50):
+            registrador.registrar(_registro())
+
+    threads = [threading.Thread(target=gravar_50) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    linhas = open(arquivo, encoding="utf-8").read().splitlines()
+    assert len(linhas) == 500
+    for linha in linhas:
+        json.loads(linha)  # JSON válido — nenhuma linha corrompida por interleaving entre threads
+
+
+def test_registrador_inativo_nao_grava_nada(tmp_path):
+    arquivo = str(tmp_path / "ia_uso.jsonl")
+    registrador = RegistradorDeUsoIA(arquivo=arquivo, gravar_texto=True, ativo=False)
+    registrador.registrar(_registro())
+    assert not os.path.exists(arquivo)
