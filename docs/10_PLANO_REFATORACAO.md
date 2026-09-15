@@ -1673,6 +1673,8 @@ retorna apenas `caminhos.py`.
 
 # Bloco H — Frontend (JS/HTML/CSS)
 
+> ✅ Executado em 16_PLANO_PAINEL_E_IA.md, Bloco F (2026-09-14).
+
 ### R-H01 · Converter os três arquivos JS para módulos ES
 **Arquivos:** `web/static/js/dashboard.js`, `mapa_composto.js`, `mapa_leaflet.js`, `web/templates/index.html:216-219`
 **Problema:** 56 variáveis globais (`let`/`const` de topo) compartilhando o mesmo escopo
