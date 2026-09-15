@@ -19,7 +19,10 @@ from engine.ai.provedores import (
     ErroProvedorIndisponivel,
     PedidoIA,
     ProvedorOpenAICompativel,
+    RespostaIA,
 )
+from engine.ai.roteador import ErroIAIndisponivel, RoteadorIA
+from engine.logger import WorldLogger
 
 
 def _config_ia_valida():
@@ -297,3 +300,150 @@ def test_registrador_inativo_nao_grava_nada(tmp_path):
     registrador = RegistradorDeUsoIA(arquivo=arquivo, gravar_texto=True, ativo=False)
     registrador.registrar(_registro())
     assert not os.path.exists(arquivo)
+
+
+# ----------------------------------------------------------------------
+# I04/I11 — RoteadorIA (fábrica de provedor falsa, nenhuma rede real)
+# ----------------------------------------------------------------------
+
+class _RegistradorFalso:
+    def __init__(self):
+        self.registros = []
+
+    def registrar(self, registro):
+        self.registros.append(registro)
+
+
+class _ProvedorFalso:
+    """Uma fila de comportamentos por instância — cada `completar()` consome o
+    próximo: ou levanta (se for uma Exception) ou devolve (se for RespostaIA)."""
+    def __init__(self, nome, url_base, chave, cabecalhos_extras, comportamentos):
+        self.nome = nome
+        self.chave = chave
+        self._fila = list(comportamentos)
+
+    def completar(self, pedido):
+        if not self._fila:
+            raise AssertionError(f"{self.nome}: completar() chamado mais vezes do que configurado")
+        comportamento = self._fila.pop(0)
+        if isinstance(comportamento, Exception):
+            raise comportamento
+        return comportamento
+
+
+def _fabrica_com_comportamentos(comportamentos_por_provedor):
+    def fabrica(nome, url_base, chave, cabecalhos_extras):
+        return _ProvedorFalso(nome, url_base, chave, cabecalhos_extras,
+                               comportamentos_por_provedor.get(nome, []))
+    return fabrica
+
+
+def _config_roteador(cadeia, tentativas=2, backoff=0.0, contexto_a=0, contexto_b=0, chave_env_a=""):
+    return {
+        "provedores": {
+            "provedor_a": {"url_base": "http://a", "chave_api_env": chave_env_a, "requisicoes_por_minuto": 0,
+                            "requisicoes_por_dia": 0, "pausa_apos_limite_s": 0, "cabecalhos_extras": {},
+                            "contexto_tokens_servidor": contexto_a},
+            "provedor_b": {"url_base": "http://b", "chave_api_env": "", "requisicoes_por_minuto": 0,
+                            "requisicoes_por_dia": 0, "pausa_apos_limite_s": 0, "cabecalhos_extras": {},
+                            "contexto_tokens_servidor": contexto_b},
+        },
+        "padrao": {"cadeia": cadeia, "timeout_s": 10, "tentativas_por_provedor": tentativas,
+                   "backoff_inicial_s": backoff},
+        "clientes": {c.value: {} for c in ClienteIA},
+    }
+
+
+def _resposta_sucesso(texto="ok", tokens_entrada=1, tokens_saida=1):
+    return RespostaIA(texto=texto, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida,
+                       custo_informado_usd=None, latencia_s=0.01)
+
+
+def test_cadeia_cai_para_o_segundo_provedor_apos_429():
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}, {"provedor": "provedor_b", "modelo": "m"}]
+    config = _config_roteador(cadeia)
+    comportamentos = {"provedor_a": [ErroLimiteDeTaxa("429")], "provedor_b": [_resposta_sucesso()]}
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+
+    texto = roteador.consultar("prompt", ClienteIA.MESTRE, False)
+
+    assert texto == "ok"
+    assert [r.resultado for r in registrador.registros] == ["limite_taxa", "sucesso"]
+
+
+def test_cadeia_repete_no_mesmo_provedor_apos_erro_de_rede():
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}]
+    config = _config_roteador(cadeia, tentativas=2, backoff=0.0)
+    comportamentos = {"provedor_a": [ErroProvedorIndisponivel("rede"), _resposta_sucesso()]}
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+
+    texto = roteador.consultar("prompt", ClienteIA.MESTRE, False)
+
+    assert texto == "ok"
+    assert [r.resultado for r in registrador.registros] == ["indisponivel", "sucesso"]
+
+
+def test_provedor_sem_chave_e_pulado_e_loga_uma_vez(monkeypatch):
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}, {"provedor": "provedor_b", "modelo": "m"}]
+    config = _config_roteador(cadeia, chave_env_a="CHAVE_INEXISTENTE_NO_TESTE")
+    comportamentos = {"provedor_b": [_resposta_sucesso(), _resposta_sucesso()]}
+
+    erros_logados = []
+    monkeypatch.setattr(WorldLogger, "error", staticmethod(lambda msg, npc=None: erros_logados.append(msg)))
+
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+    assert roteador.consultar("p1", ClienteIA.MESTRE, False) == "ok"
+    assert roteador.consultar("p2", ClienteIA.MESTRE, False) == "ok"
+
+    avisos_sem_chave = [m for m in erros_logados if "sem chave" in m]
+    assert len(avisos_sem_chave) == 1  # um só, na construção — não um por chamada
+    assert [r.resultado for r in registrador.registros] == ["pulado_sem_chave", "sucesso", "pulado_sem_chave", "sucesso"]
+
+
+def test_cadeia_esgotada_levanta_erro_ia_indisponivel():
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}]
+    config = _config_roteador(cadeia, tentativas=1, backoff=0.0)
+    comportamentos = {"provedor_a": [ErroProvedorIndisponivel("rede")]}
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+
+    with pytest.raises(ErroIAIndisponivel):
+        roteador.consultar("prompt", ClienteIA.MESTRE, False)
+
+
+def test_roteador_marca_sucesso_truncado_quando_bate_no_contexto():
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}]
+    config = _config_roteador(cadeia, contexto_a=4096)
+    comportamentos = {"provedor_a": [_resposta_sucesso(tokens_entrada=4096)]}
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+
+    roteador.consultar("prompt", ClienteIA.MESTRE, False)
+
+    assert registrador.registros[0].resultado == "sucesso_truncado"
+
+
+def test_roteador_estima_tokens_quando_provedor_nao_manda_usage():
+    cadeia = [{"provedor": "provedor_a", "modelo": "m"}]
+    config = _config_roteador(cadeia)
+    resposta_sem_usage = RespostaIA(texto="uma resposta de quatro palavras", tokens_entrada=None,
+                                     tokens_saida=None, custo_informado_usd=None, latencia_s=0.01)
+    comportamentos = {"provedor_a": [resposta_sem_usage]}
+    registrador = _RegistradorFalso()
+    roteador = RoteadorIA(config, registrador, fabrica_provedor=_fabrica_com_comportamentos(comportamentos),
+                          ambiente={})
+
+    roteador.consultar("um prompt qualquer", ClienteIA.MESTRE, False)
+
+    registro = registrador.registros[0]
+    assert registro.tokens_estimados is True
+    assert registro.tokens_entrada == max(1, len("um prompt qualquer") // 4)
+    assert registro.tokens_saida == max(1, len("uma resposta de quatro palavras") // 4)
