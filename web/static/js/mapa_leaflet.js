@@ -114,24 +114,50 @@ export function initMapaLeaflet() {
     setTimeout(() => estado.leafletMap.invalidateSize(), 50);
 }
 
+// F04 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estas 7 chaves são config do servidor
+// (escala do mundo, zoom, largura de via) — nenhum valor duplicado aqui como
+// fallback (ARQUITETURA §10 regra 6). Se /api/continentes não trouxer uma delas, o
+// Mapa Live mostra erro em vez de desenhar com um número escrito à mão que já
+// divergiu do config uma vez.
+const CHAVES_OBRIGATORIAS_CONTINENTES = [
+    'dimensao_global', 'tile_zoom_maximo_ui', 'tile_max_native_zoom',
+    'mapa_features_tooltip_zoom_min', 'cidade_via_largura_m_por_classe',
+    'cidade_via_largura_min_px', 'metros_por_pixel_mundo',
+];
+
+function mostrarErroMapaLeaflet(mensagem) {
+    console.error(`[Mapa Live] ${mensagem}`);
+    const container = document.getElementById('mapa-leaflet-container');
+    if (container) {
+        container.innerHTML = `<p style="padding:1rem; color: var(--danger, #ef4444);">🔴 ${mensagem}</p>`;
+    }
+}
+
 async function carregarMundoLeaflet() {
     try {
         const res = await fetch('/api/continentes');
         const data = await res.json();
-        estado.leafletDimensaoGlobal = data.dimensao_global || 768;
+
+        const faltando = CHAVES_OBRIGATORIAS_CONTINENTES.filter(chave => data[chave] === undefined);
+        if (faltando.length > 0) {
+            mostrarErroMapaLeaflet(`/api/continentes não trouxe: ${faltando.join(', ')}.`);
+            return;
+        }
+
+        estado.leafletDimensaoGlobal = data.dimensao_global;
         // Fase 0.6: não é mais teto técnico (faltava tile pré-gerado acima disso) — o
         // raster agora pode ser gerado em qualquer zoom (gerar_janela é resolução-livre).
         // tile_zoom_maximo_ui é decisão de custo/UI, calibrada na Fase 1.2.
-        estado.leafletZoomMaximo = data.tile_zoom_maximo_ui || 15;
+        estado.leafletZoomMaximo = data.tile_zoom_maximo_ui;
         // D5/D2 do DIAGNOSTICO_V3: acima deste zoom o raster não tem detalhe novo — o
         // Leaflet estica o último tile renderizado em vez de pedir um novo ao servidor.
-        estado.leafletMaxNativeZoom = data.tile_max_native_zoom || 11;
+        estado.leafletMaxNativeZoom = data.tile_max_native_zoom;
         estado.leafletContinentesCache = data.continentes || [];
-        estado.leafletTooltipZoomMin = data.mapa_features_tooltip_zoom_min || 5;
+        estado.leafletTooltipZoomMin = data.mapa_features_tooltip_zoom_min;
         estado.leafletZoomMinCidade = data.cidade_zoom_min_por_tamanho || {};
-        estado.leafletMetrosPorPixelMundo = data.metros_por_pixel_mundo || estado.leafletMetrosPorPixelMundo;
-        estado.leafletViaLarguraM = data.cidade_via_largura_m_por_classe || estado.leafletViaLarguraM;
-        if (typeof data.cidade_via_largura_min_px === 'number') estado.leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
+        estado.leafletMetrosPorPixelMundo = data.metros_por_pixel_mundo;
+        estado.leafletViaLarguraM = data.cidade_via_largura_m_por_classe;
+        estado.leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
 
         const bounds = L.latLngBounds(pixelParaLatLng(0, estado.leafletDimensaoGlobal), pixelParaLatLng(estado.leafletDimensaoGlobal, 0));
 
@@ -163,7 +189,7 @@ async function carregarMundoLeaflet() {
         carregarFeaturesVisiveisLeaflet();
 
         renderizarListaContinentesLeaflet();
-    } catch (e) { console.error('Erro ao carregar mundo no Leaflet:', e); }
+    } catch (e) { mostrarErroMapaLeaflet(`Falha ao carregar /api/continentes: ${e}`); }
 }
 
 // Estilo de linha/polígono por camada de detalhe de cidade (Fase 4) — L.geoJSON aceita
@@ -191,7 +217,10 @@ const ESTILO_VIA_POR_CLASSE = {
 // moveend (e zoom dispara moveend), então isto se reajusta sozinho ao navegar.
 function estiloRua(feature) {
     const classe = (feature.properties || {}).classe_via || 'secundaria';
-    const larguraM = estado.leafletViaLarguraM[classe] || estado.leafletViaLarguraM.secundaria || 5;
+    // F04 (docs/16_PLANO_PAINEL_E_IA.md): sem `|| 5` no fim — se a classe não existir
+    // NEM em leafletViaLarguraM.secundaria, é a config vinda do servidor que está
+    // incompleta (a chave já é validada em carregarMundoLeaflet).
+    const larguraM = estado.leafletViaLarguraM[classe] || estado.leafletViaLarguraM.secundaria;
     return {
         ...(ESTILO_VIA_POR_CLASSE[classe] || ESTILO_VIA_POR_CLASSE.secundaria),
         // O piso existe porque no zoom em que a camada acende a cidade inteira ainda tem

@@ -301,7 +301,12 @@ function fetchTerrainInfo(x, y) {
         const signal = estado.abortController.signal;
 
         if (estado.currentMode === Modo.CIDADE) {
-            updateSidebar({ x: x, y: y, bioma_id: 6, bioma_nome: "Zona Urbana", altitude: 45, temperatura: 55, umidade: 50 });
+            // F04 (docs/16_PLANO_PAINEL_E_IA.md): dentro de uma cidade não há dado de
+            // terreno por pixel de verdade (a cidade é sub-pixel na escala do mundo,
+            // Seção 2.5/2.1) — nada de inventar um bioma_id/altitude/temperatura/
+            // umidade (era `bioma_id: 6` "Zona Urbana", que não existe no
+            // classificador Python — cartographer/math/climate.py só tem 1-5).
+            updateSidebar({ x: x, y: y, zonaUrbana: true });
             return;
         }
 
@@ -328,12 +333,24 @@ function fetchTerrainInfo(x, y) {
 // Sidebar View Update
 function updateSidebar(data) {
     document.getElementById('lblCoord').innerText = `X: ${data.x}, Y: ${data.y}`;
-    
+
+    const badge = document.getElementById('lblBiomeBadge');
+    if (data.zonaUrbana) {
+        // F04: zona urbana não tem bioma nem métrica de terreno de verdade — mostra
+        // isso, em vez de inventar números.
+        badge.innerText = '🏰 Zona Urbana';
+        badge.className = 'biome-badge';
+        ['Altitude', 'Temperature', 'Humidity'].forEach(sufixo => {
+            document.getElementById(`lbl${sufixo}`).innerText = '—';
+            document.getElementById(`bar${sufixo}`).style.width = '0%';
+        });
+        return;
+    }
+
     const bioma = estado.cachedBiomas[data.bioma_id];
     const badgeInfo = bioma
         ? { text: `${bioma.emoji} ${bioma.rotulo}`, class: `biome-${data.bioma_id}` }
         : { text: `❓ ${data.bioma_nome}`, class: "biome-5" };
-    const badge = document.getElementById('lblBiomeBadge');
     badge.innerText = badgeInfo.text;
     badge.className = `biome-badge ${badgeInfo.class}`;
 
