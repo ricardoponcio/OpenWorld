@@ -12,6 +12,7 @@ import zlib
 from collections import namedtuple
 
 from cartographer.cities.escala import zoom_min_por_camada
+from cartographer.cities.modelos.base import distancia_faixa_dominio
 from config import cfg_get
 
 from . import lotes, quad
@@ -63,8 +64,6 @@ class GeradorCidade(DistribuicaoMixin):
         self.slug = self.nome.lower().replace(" ", "_")
 
         self.quadra_area_minima = cfg_get(self.cfg, "cidade_geo_quadra_area_minima_m2")
-        self.recuo_rua = cfg_get(self.cfg, "cidade_geo_recuo_rua_m")
-        self.via_largura_por_classe = cfg_get(self.cfg, "cidade_via_largura_m_por_classe")
         self.edificacao_recuo = cfg_get(self.cfg, "cidade_geo_edificacao_recuo_m")
         self.edificacao_taxa_ocupacao = cfg_get(self.cfg, "cidade_geo_edificacao_taxa_ocupacao")
         self.edificacao_jitter = cfg_get(self.cfg, "cidade_geo_edificacao_jitter")
@@ -142,12 +141,11 @@ class GeradorCidade(DistribuicaoMixin):
     # por QUALQUER modelo (Seção 5.5). "O que NÃO é gancho" da Seção 4.3.
     # ------------------------------------------------------------------
     def _distancia_faixa_dominio(self, classe):
-        # L02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): "sem_via" não tem via nenhuma pra
-        # recuar dela — distância zero, nunca o default de "secundaria".
-        if classe == "sem_via":
-            return 0.0
-        largura = self.via_largura_por_classe.get(classe, self.via_largura_por_classe.get("secundaria", 5.0))
-        return largura / 2.0 + self.recuo_rua
+        # G02 (docs/16_PLANO_PAINEL_E_IA.md): delega pra base.distancia_faixa_dominio —
+        # era um GÊMEO idêntico (armadilha 18 do doc 4: "a correção foi aplicada num
+        # arquivo e não no gêmeo"), calculando a mesma conta a partir do mesmo
+        # `self.cfg`. Ver a docstring de lá pro tratamento de "sem_via".
+        return distancia_faixa_dominio(self.cfg, classe)
 
     def _gerar_quarteiroes_e_lotes(self, malha):
         """Pega os quads CRUS que o modelo devolveu (`malha.quadras`) e faz o inset pela

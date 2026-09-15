@@ -22,7 +22,7 @@ from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.cities.generate_city_geometry import GeradorCidade
 from cartographer.cities.geometria import quad
 from cartographer.cities.geometria import lotes as lotes_mod
-from cartographer.cities.geometria.sobreposicao import area_de_intersecao
+from cartographer.cities.geometria.sobreposicao import area_de_intersecao, pares_sobrepostos
 from cartographer.cities.modelos import SitioCidade, MODELOS
 from cartographer.cities.modelos.base import ModeloCidade, Quadra, Malha
 from cartographer.cities.escala import corrigir_raio_por_newton, faixa_raio_m, metros_por_pixel_mundo
@@ -525,6 +525,40 @@ def test_raio_derivado_dos_domicilios(nome_modelo):
     assert desvio <= 0.15, (
         f"modelo {nome_modelo}: mediana de lotes reais = {mediana:.0f} contra alvo "
         f"{lotes_alvo:.0f} (desvio {desvio:.1%}, amostras {finais})")
+
+
+@pytest.mark.parametrize("nome_modelo,nome_cidade", [
+    ("radial", "Aurora Vales"),
+    ("organica", "Aurora Vales"),
+    ("organica", "Quenanfield"),
+    ("organica", "Belmir"),
+])
+def test_quadras_e_edificios_nao_se_sobrepoem(nome_modelo, nome_cidade):
+    """G01/G02 (docs/16_PLANO_PAINEL_E_IA.md): 0 pares de quadra acima de 1 m² e 0
+    pares de edifício acima de 5 m², em cidades GRANDES (`_gerar_grande` —
+    `_gerar`/`_CIDADE_TESTE` continuam `tamanho='medio'` pros outros testes).
+
+    "Aurora Vales" (a cidade de teste padrão) não reproduziu o bug do G02 em
+    nenhum tamanho — "Quenanfield" e "Belmir" (organica, grande) são as duas
+    que reproduziram no experimento da Seção 2.5 e foram confirmadas com um
+    script ad-hoc ao escrever esta tarefa. Antes de G02 (base.
+    distancia_faixa_dominio recuando 0.0 numa aresta 'sem_via'), estas duas
+    falhavam com quad_sobrep=2; depois de G02, passam."""
+    metros_por_px = metros_por_pixel_mundo(CARTOGRAPHER_CONFIG)
+    area_minima = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_sobreposicao_area_minima_m2")
+    edif_tolerada = cfg_get(CARTOGRAPHER_CONFIG, "cidade_geo_sobreposicao_edificio_tolerada_m2")
+
+    geo = _gerar_grande(MODELOS[nome_modelo], nome_cidade)
+    quads = [[(x * metros_por_px, y * metros_por_px) for x, y in _anel_do_poligono(f)]
+             for f in geo["features"] if f["properties"]["camada"] == "quarteirao"]
+    edifs = [[(x * metros_por_px, y * metros_por_px) for x, y in _anel_do_poligono(f)]
+             for f in geo["features"] if f["properties"]["camada"] == "edificio"]
+
+    pares_quad = pares_sobrepostos(quads, area_minima)
+    pares_edif = [p for p in pares_sobrepostos(edifs, area_minima) if p[2] > edif_tolerada]
+
+    assert pares_quad == [], f"{nome_modelo}/{nome_cidade}: quadras sobrepostas {pares_quad}"
+    assert pares_edif == [], f"{nome_modelo}/{nome_cidade}: edifícios sobrepostos {pares_edif}"
 
 
 def test_area_de_intersecao_de_quadrados_conhecidos():

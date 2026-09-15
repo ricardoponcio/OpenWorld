@@ -74,10 +74,17 @@ def distancia_faixa_dominio(config, classe):
     `gerador.py` e em `linear.py`; extraído aqui pra `cartographer/cities/expansao.py`
     (X02, docs/12_PLANO_CIDADE_VIVA.md) ter a mesma conta sem copiar de novo.
 
-    L02 (docs/13_PLANO_POPULACAO_E_ESCALA.md): "sem_via" tem distância zero — não há via
-    nenhuma pra recuar dela."""
+    G02 (docs/16_PLANO_PAINEL_E_IA.md): "sem_via" NÃO tem mais distância zero — essa
+    frase (L02, docs/13_PLANO_POPULACAO_E_ESCALA.md) virou mentira na prática (ARQUITETURA
+    §12): uma aresta "sem_via" é um anel orgânico ABERTO (a via daquele anel deixou de
+    existir ali), e as duas quadras vizinhas encolhendo só pelo recuo genérico (sem
+    recuar da faixa da via que já não está mais lá) avançavam uma sobre a outra — medido
+    2 quadras (95 m²) e vários edifícios sobrepostos em Quenanfield. Recua como se a via
+    da classe configurada (`cidade_geo_sem_via_recuo_como_classe`) ainda existisse; a
+    frente de lote continua proibida nessa aresta (isso é decidido em geometria/lotes.py,
+    não aqui — G02 não mexe lá)."""
     if classe == "sem_via":
-        return 0.0
+        classe = cfg_get(config, "cidade_geo_sem_via_recuo_como_classe")
     largura_por_classe = cfg_get(config, "cidade_via_largura_m_por_classe")
     largura = largura_por_classe.get(classe, largura_por_classe.get("secundaria", 5.0))
     return largura / 2.0 + cfg_get(config, "cidade_geo_recuo_rua_m")

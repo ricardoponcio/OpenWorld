@@ -390,6 +390,8 @@
         "_comentario_sobreposicao": "G01 (docs/16_PLANO_PAINEL_E_IA.md): área mínima (m²) para uma interseção entre dois polígonos contar como sobreposição — abaixo disso é ruído numérico de borda encostada (Armadilha 21). edificio_tolerada é mais alta porque encolhimento por ocupação/jitter (cidade_geo_edificacao_*) pode deixar uma sobra residual pequena entre dois edifícios vizinhos sem ser bug de verdade.",
         "cidade_geo_sobreposicao_area_minima_m2": 1.0,
         "cidade_geo_sobreposicao_edificio_tolerada_m2": 5.0,
+        "_comentario_sem_via_recuo": "G02 (docs/16_PLANO_PAINEL_E_IA.md): uma aresta 'sem_via' (anel orgânico aberto, L02) recua do quarteirão como se a via desta classe ainda existisse. Com recuo zero as duas quadras vizinhas avançavam sobre a faixa da rua removida: medido 2 quadras (95 m²) e edifícios sobrepostos em Quenanfield. A frente de lote continua proibida nessa aresta — isso é decidido em geometria/lotes.py, não aqui.",
+        "cidade_geo_sem_via_recuo_como_classe": "anel",
         "_comentario_edificacao": "08_ESPEC_TECIDO_URBANO.md Seção 5.3/E3 (2026-09-11): o edifício vira Polygon — footprint dentro do lote, recuado da divisa (cidade_geo_edificacao_recuo_m, mesma função de inset da E1) e depois encolhido em torno do centroide pela RAIZ de cidade_geo_edificacao_taxa_ocupacao (a área escala com o quadrado do fator linear). cidade_geo_edificacao_jitter varia a taxa por construção (self.rng) pra quadra não virar tabuleiro perfeito.",
         "cidade_geo_edificacao_recuo_m": 1.5,
         "cidade_geo_edificacao_taxa_ocupacao": 0.55,
