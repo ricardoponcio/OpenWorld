@@ -1,46 +1,47 @@
 import { registrarAcoes } from './acoes.js';
 import { initMapaLeaflet } from './mapa_leaflet.js';
+import { Aba, FiltroNpc, AbaModal } from './constantes.js';
 
 // F01 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estado do módulo num objeto só, não
 // dezenas de `let` soltos (ARQUITETURA §10 regra 4).
 const estado = {
     staticData: null,
-    activeView: 'map-view',
-    npcFilter: 'vivos',
+    activeView: Aba.MAPA,
+    npcFilter: FiltroNpc.VIVOS,
     allNpcs: [],
     allRels: [],
-    activeModalTab: 'profile',
+    activeModalTab: AbaModal.PERFIL,
     activeNpcId: null,
 };
 
-// F01: os botões de aba usam nomes curtos em `data-aba` (trocar-aba/mapa,
-// .../habitantes, ...) — o mapeamento pro id de DOM real é temporário; F03 formaliza
-// isso com o enum `Aba`.
+// F03: o mapeamento do valor curto de `data-aba` pro id de DOM da view — a view em
+// si continua sendo um id de elemento HTML, não vocabulário de domínio, então fica
+// como está (não é um enum).
 const ABA_PARA_VIEW_ID = {
-    'mapa': 'map-view',
-    'habitantes': 'npc-view',
-    'mestre': 'mestre-view',
-    'mapa-live': 'mapa-leaflet-view',
+    [Aba.MAPA]: 'map-view',
+    [Aba.HABITANTES]: 'npc-view',
+    [Aba.MESTRE]: 'mestre-view',
+    [Aba.MAPA_LIVE]: 'mapa-leaflet-view',
 };
 
-function switchView(btn, id) {
+function switchView(btn, aba) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
-    document.getElementById(id).classList.add('active');
+    document.getElementById(ABA_PARA_VIEW_ID[aba]).classList.add('active');
     btn.classList.add('active');
-    estado.activeView = id;
+    estado.activeView = aba;
 
     const eventLog = document.getElementById('event-log');
-    if (id === 'npc-view' || id === 'mestre-view' || id === 'mapa-leaflet-view') {
+    if (aba === Aba.HABITANTES || aba === Aba.MESTRE || aba === Aba.MAPA_LIVE) {
         eventLog.style.display = 'none';
     } else {
         eventLog.style.display = 'block';
     }
 
-    if (id === 'mestre-view') {
+    if (aba === Aba.MESTRE) {
         carregarHistoricoMestre();
-    } else if (id === 'mapa-leaflet-view') {
+    } else if (aba === Aba.MAPA_LIVE) {
         initMapaLeaflet();
     } else {
         update();
@@ -49,13 +50,11 @@ function switchView(btn, id) {
 
 function setNpcFilter(filter) {
     estado.npcFilter = filter;
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        const text = btn.innerText.toLowerCase();
-        let isMatch = false;
-        if (filter === 'vivos' && text.includes('vivos')) isMatch = true;
-        if (filter === 'mortos' && text.includes('falecidos')) isMatch = true;
-        if (filter === 'todos' && text.includes('todos')) isMatch = true;
-        btn.classList.toggle('active', isMatch);
+    // F03 (docs/16_PLANO_PAINEL_E_IA.md, Armadilha 19): decidia o botão ativo lendo
+    // o TEXTO VISÍVEL do botão — quebraria se o rótulo mudasse. Agora usa o mesmo
+    // `data-filtro` que a ação já lê.
+    document.querySelectorAll('.filter-btn[data-filtro]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filtro === filter);
     });
     update();
 }
@@ -145,14 +144,14 @@ async function update() {
             window.updateMapEntities(data.npcs);
         }
 
-        if (estado.activeView === 'npc-view' && data.npcs) {
+        if (estado.activeView === Aba.HABITANTES && data.npcs) {
             const grid = document.getElementById('npc-grid');
 
             // Aplicar o filtro na lista de habitantes
             let filteredNpcs = data.npcs;
-            if (estado.npcFilter === 'vivos') {
+            if (estado.npcFilter === FiltroNpc.VIVOS) {
                 filteredNpcs = data.npcs.filter(n => n.status.h > 0);
-            } else if (estado.npcFilter === 'mortos') {
+            } else if (estado.npcFilter === FiltroNpc.MORTOS) {
                 filteredNpcs = data.npcs.filter(n => n.status.h <= 0);
             }
 
@@ -257,12 +256,12 @@ function switchModalTab(tab) {
     estado.activeModalTab = tab;
 
     // Atualizar UI dos botões das abas
-    document.getElementById('tab-profile-btn').classList.toggle('active', tab === 'profile');
-    document.getElementById('tab-logs-btn').classList.toggle('active', tab === 'logs');
+    document.getElementById('tab-profile-btn').classList.toggle('active', tab === AbaModal.PERFIL);
+    document.getElementById('tab-logs-btn').classList.toggle('active', tab === AbaModal.LOGS);
 
     // Atualizar exibição dos blocos de conteúdo
-    document.getElementById('modal-tab-profile').style.display = tab === 'profile' ? 'block' : 'none';
-    document.getElementById('modal-tab-logs').style.display = tab === 'logs' ? 'block' : 'none';
+    document.getElementById('modal-tab-profile').style.display = tab === AbaModal.PERFIL ? 'block' : 'none';
+    document.getElementById('modal-tab-logs').style.display = tab === AbaModal.LOGS ? 'block' : 'none';
 }
 
 function renderNPCProfile(npc) {
@@ -380,7 +379,7 @@ async function abrirHistorico(npcId) {
     modal.classList.add('active');
 
     // Resetar aba padrão para Perfil
-    switchModalTab('profile');
+    switchModalTab(AbaModal.PERFIL);
 
     try {
         const resRels = await fetch(`/api/npc_rels/${npcId}`);
@@ -561,7 +560,7 @@ function ignorarAcoesMestre() {
 registrarAcoes({
     'pausar': () => togglePause(),
     'velocidade': (alvo) => setSpeed(parseInt(alvo.dataset.valor, 10)),
-    'trocar-aba': (alvo) => switchView(alvo, ABA_PARA_VIEW_ID[alvo.dataset.aba]),
+    'trocar-aba': (alvo) => switchView(alvo, alvo.dataset.aba),
     'filtro-npc': (alvo) => setNpcFilter(alvo.dataset.filtro),
     'alternar-cronicas': () => toggleEventLog(),
     'abrir-ficha': (alvo) => abrirHistorico(alvo.dataset.npcId),

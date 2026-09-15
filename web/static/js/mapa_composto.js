@@ -1,3 +1,5 @@
+import { Modo } from './constantes.js';
+
 const canvas = document.getElementById('mapaCanvas');
 const ctx = canvas.getContext('2d');
 const container = document.getElementById('canvasContainer');
@@ -5,7 +7,7 @@ const container = document.getElementById('canvasContainer');
 // F01 (docs/16_PLANO_PAINEL_E_IA.md, Bloco F): estado do módulo num objeto só, não
 // dezenas de `let` soltos (ARQUITETURA §10 regra 4).
 const estado = {
-    currentMode: 'global', // 'global', 'continent' ou 'city'
+    currentMode: Modo.GLOBAL,
     currentContinentUuid: null,
     currentCityNome: null,
     scale: 1.0,
@@ -55,15 +57,15 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, estado.offsetX, estado.offsetY, img.width * estado.scale, img.height * estado.scale);
 
-    if (estado.currentMode === 'global') {
+    if (estado.currentMode === Modo.GLOBAL) {
         drawGlobalMarkers();
     }
 
-    if (estado.currentMode === 'continent') {
+    if (estado.currentMode === Modo.CONTINENTE) {
         drawContinentMarkers();
     }
 
-    if (estado.currentMode === 'city') {
+    if (estado.currentMode === Modo.CIDADE) {
         drawCityGridAndEntities();
         drawCityLegend();
     }
@@ -191,7 +193,7 @@ function drawCityGridAndEntities() {
 }
 
 window.updateMapEntities = function(liveNpcs) {
-    if (estado.currentMode === 'city') {
+    if (estado.currentMode === Modo.CIDADE) {
         const cityLocIds = new Set(estado.cityEntities.locais.map(l => l.id));
         estado.cityEntities.npcs = liveNpcs.filter(npc => cityLocIds.has(npc.loc_id));
         // Note: The animateLoop is constantly drawing, so no need to call draw() explicitly here.
@@ -249,7 +251,7 @@ function aoMoverMouseCanvas(e) {
         // Tooltip logic for the aggregated city marker (D7 do DIAGNOSTICO_V3: um marcador
         // só, não mais um hit-test por local/NPC individual — eles são sub-pixel aqui).
         estado.hoveredTooltip = null;
-        if (estado.currentMode === 'city' && estado.cityAggregateMarker) {
+        if (estado.currentMode === Modo.CIDADE && estado.cityAggregateMarker) {
             const m = estado.cityAggregateMarker;
             const dist = Math.hypot(canvasX - m.x, canvasY - m.y);
             if (dist < m.raio + 4) {
@@ -280,7 +282,7 @@ function aoRodarRodaCanvas(e) {
 
 // Asynchronous details pipeline
 function fetchTerrainInfo(x, y) {
-    const cacheKey = `${estado.currentMode}_${estado.currentContinentUuid || 'global'}_${x},${y}`;
+    const cacheKey = `${estado.currentMode}_${estado.currentContinentUuid || Modo.GLOBAL}_${x},${y}`;
     
     if (apiCache[cacheKey]) {
         updateSidebar(apiCache[cacheKey]);
@@ -298,12 +300,12 @@ function fetchTerrainInfo(x, y) {
         estado.abortController = new AbortController();
         const signal = estado.abortController.signal;
 
-        if (estado.currentMode === 'city') {
+        if (estado.currentMode === Modo.CIDADE) {
             updateSidebar({ x: x, y: y, bioma_id: 6, bioma_nome: "Zona Urbana", altitude: 45, temperatura: 55, umidade: 50 });
             return;
         }
 
-        const url = estado.currentMode === 'global' 
+        const url = estado.currentMode === Modo.GLOBAL 
             ? `/api/mapa_composto/info/${x}/${y}` 
             : `/api/continente/${estado.currentContinentUuid}/info/${x}/${y}`;
 
@@ -348,7 +350,7 @@ function updateSidebar(data) {
     document.getElementById('lblHumidity').innerText = `${humPct}%`;
     document.getElementById('barHumidity').style.width = `${humPct}%`;
 
-    if (estado.currentMode === 'global') {
+    if (estado.currentMode === Modo.GLOBAL) {
         // Deprecated tile functionality removed
     }
 }
@@ -432,7 +434,7 @@ function selectContinent(uuid, nome, btnElement) {
     const originalStatus = statusSpan.innerText;
     statusSpan.innerText = 'Processando...';
 
-    estado.currentMode = 'continent';
+    estado.currentMode = Modo.CONTINENTE;
     estado.currentContinentUuid = uuid;
 
     document.getElementById('status-mapa').innerText = `⏳ Gerando/Carregando ${nome}...`;
@@ -477,7 +479,7 @@ function selectCity(nome, btnElement, continenteNome) {
     btnElement.classList.add('active');
     btnElement.classList.add('loading');
     
-    estado.currentMode = 'city';
+    estado.currentMode = Modo.CIDADE;
     estado.currentCityNome = nome;
     estado.currentContinentUuid = null;
 
@@ -536,7 +538,7 @@ function aoClicarMapaGlobal() {
     document.querySelectorAll('.continent-btn').forEach(b => b.classList.remove('active'));
     this.classList.add('active');
 
-    estado.currentMode = 'global';
+    estado.currentMode = Modo.GLOBAL;
     estado.currentContinentUuid = null;
     estado.currentCityNome = null;
     estado.cityEntities = { locais: [], npcs: [], bbox: null };
