@@ -1,6 +1,7 @@
 import json
 from typing import Dict, List
-from .client import AIClient
+from .client import AIClient, ErroIAIndisponivel
+from .clientes import ClienteIA
 from .utils import AIUtils
 from ..logger import WorldLogger
 from ..models import ComandoMestre, HumorNPC
@@ -27,26 +28,28 @@ class AIGameMasterClient:
         try:
             template = AIClient.read_prompt("mestre_mensagem.txt")
             historico_texto = "\n".join(f"{h['autor']}: {h['mensagem']}" for h in historico[-10:]) or "(início da conversa)"
+            # I11 (docs/16_PLANO_PAINEL_E_IA.md): sem indentação — mesmo conteúdo, ~5%
+            # menos entrada pro contexto do Ollama local (janela apertada, Seção 2.7).
             prompt = template.format(
                 tema=tema,
-                contexto_json=json.dumps(contexto, indent=2, ensure_ascii=False),
+                contexto_json=json.dumps(contexto, ensure_ascii=False, separators=(",", ":")),
                 historico=historico_texto,
                 mensagem_jogador=mensagem_jogador,
                 comandos=", ".join(c.value for c in ComandoMestre),
                 humores=", ".join(f'"{h.value}"' for h in HumorNPC),
             )
-            res = AIClient.query(prompt, json_format=True, timeout=60.0)
+            res = AIClient.query(prompt, cliente=ClienteIA.MESTRE, json_format=True)
             data = AIUtils.parse_json_safely(res)
             if data and isinstance(data, dict) and "narracao" in data:
                 data.setdefault("acoes_propostas", [])
                 return data
-        except Exception as e:
+        except (ErroIAIndisponivel, KeyError) as e:
             WorldLogger.warning(f"[MESTRE-IA] Falha ao gerar resposta, ativando fallback: {e}")
 
         return {
             "narracao": (
-                "O Mestre pondera por um instante, mas as brumas do destino (a IA local) "
-                "estão indisponíveis agora. Verifique se o Ollama está rodando e tente de novo."
+                "O Mestre pondera por um instante, mas as brumas do destino (o serviço de IA) "
+                "estão indisponíveis agora. Verifique a configuração e tente de novo."
             ),
             "acoes_propostas": [],
         }

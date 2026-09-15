@@ -21,8 +21,15 @@ from engine.ai.provedores import (
     ProvedorOpenAICompativel,
     RespostaIA,
 )
+from engine.ai.client import AIClient
 from engine.ai.roteador import ErroIAIndisponivel, RoteadorIA
 from engine.logger import WorldLogger
+from engine.ai.biography import AIBiographyClient
+from engine.ai.game_master import AIGameMasterClient
+from engine.ai.generator import AIGeneratorClient
+from engine.ai.storyteller import AIStorytellerClient
+from cartographer.ai.city_manager_ai import CityManagerAIClient
+from cartographer.ai.world_manager_ai import WorldManagerAIClient
 
 
 def _config_ia_valida():
@@ -447,3 +454,65 @@ def test_roteador_estima_tokens_quando_provedor_nao_manda_usage():
     assert registro.tokens_estimados is True
     assert registro.tokens_entrada == max(1, len("um prompt qualquer") // 4)
     assert registro.tokens_saida == max(1, len("uma resposta de quatro palavras") // 4)
+
+
+# ----------------------------------------------------------------------
+# I05 — AIClient (fachada estática sobre um RoteadorIA por processo)
+# ----------------------------------------------------------------------
+
+def test_aiclient_query_delega_ao_roteador_configurado():
+    class _RoteadorFalso:
+        def __init__(self):
+            self.chamadas = []
+
+        def consultar(self, prompt, cliente, json_format):
+            self.chamadas.append((prompt, cliente, json_format))
+            return "resposta falsa"
+
+    roteador_falso = _RoteadorFalso()
+    AIClient.configurar(roteador_falso)
+    try:
+        texto = AIClient.query("um prompt", cliente=ClienteIA.MESTRE, json_format=True)
+        assert texto == "resposta falsa"
+        assert roteador_falso.chamadas == [("um prompt", ClienteIA.MESTRE, True)]
+    finally:
+        AIClient._roteador = None
+
+
+def test_todos_os_chamadores_caem_no_fallback_quando_ia_indisponivel():
+    """I05: os 8 chamadores trocaram `except Exception` por tipos específicos
+    (ARQUITETURA §9) — prova que `ErroIAIndisponivel` (o único que o roteador de
+    fato levanta pro chamador) continua capturado em todos eles e cada um cai no
+    próprio fallback procedural, sem propagar a exceção. Nenhum destes 8
+    chamadores tinha teste nenhum antes desta tarefa."""
+    class _RoteadorSempreFalha:
+        def consultar(self, prompt, cliente, json_format):
+            raise ErroIAIndisponivel("falha simulada")
+
+    AIClient.configurar(_RoteadorSempreFalha())
+    try:
+        r1 = AIGameMasterClient.gerar_resposta_mestre("tema", {}, [], "oi")
+        assert "narracao" in r1
+
+        r2 = AIBiographyClient.gerar_nome_bebe("M", "Sobrenome", "Mãe", "Pai")
+        assert isinstance(r2, str) and r2
+
+        r3 = AIBiographyClient.gerar_background_npc("tema", "raça", "profissão", "Nome")
+        assert "personalidade" in r3 and "background" in r3
+
+        r4 = AIGeneratorClient.gerar_locais_cidade("tema", 3)
+        assert isinstance(r4, list) and len(r4) == 3
+
+        r5 = AIGeneratorClient.gerar_dna_npc("tema", "loc", "tipo", "M", [])
+        assert "nome" in r5
+
+        r6 = AIStorytellerClient.gerar_evento_global("tema", {})
+        assert "titulo" in r6
+
+        r7 = WorldManagerAIClient.planejar_continentes(42, 768)
+        assert "continentes" in r7
+
+        r8 = CityManagerAIClient.generate_cities_for_continent("Continente", ["Floresta"], 2, 3, retries=0)
+        assert len(r8) >= 2
+    finally:
+        AIClient._roteador = None

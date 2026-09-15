@@ -2,7 +2,8 @@ import os
 import random
 import zlib
 from engine.logger import WorldLogger
-from engine.ai.client import AIClient
+from engine.ai.client import AIClient, ErroIAIndisponivel
+from engine.ai.clientes import ClienteIA
 from engine.ai.utils import AIUtils
 
 # Fase 1.4 (P1.4): fallback procedural — o mesmo padrão de tabela de sílabas usado
@@ -63,7 +64,7 @@ class CityManagerAIClient:
 
     @staticmethod
     def generate_cities_for_continent(nome_continente: str, biomas_disponiveis: list, min_cidades: int,
-                                       max_cidades: int, model_name: str = "qwen2.5-coder:7b", retries: int = 2):
+                                       max_cidades: int, retries: int = 2):
         """
         Fase 1.4 (P1.4): antes, uma falha ou resposta curta da IA matava o processo
         inteiro (`raise e` sem retry, sem fallback). Agora tenta até `retries` vezes,
@@ -89,7 +90,7 @@ class CityManagerAIClient:
                     f"[AI-CITY-STRATEGY] Fundando cidades para {nome_continente} "
                     f"(tentativa {tentativa + 1}/{retries + 1})..."
                 )
-                res = AIClient.query(prompt, json_format=True, timeout=120.0, model_name=model_name)
+                res = AIClient.query(prompt, cliente=ClienteIA.FUNDACAO_CIDADES, json_format=True)
                 data = AIUtils.parse_json_safely(res)
                 if isinstance(data, dict):
                     data = [data]
@@ -101,7 +102,7 @@ class CityManagerAIClient:
                     f"[AI-CITY-STRATEGY] Só {len(cidades_validas)} cidade(s) válida(s) "
                     f"(< mínimo {min_cidades}) na tentativa {tentativa + 1}."
                 )
-            except Exception as e:
+            except ErroIAIndisponivel as e:
                 WorldLogger.warning(f"[AI-CITY-STRATEGY] Falha na tentativa {tentativa + 1}: {e}")
 
         # Fallback procedural determinístico — nunca hash() (aleatorizado por processo,

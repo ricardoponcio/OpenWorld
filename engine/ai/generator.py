@@ -1,6 +1,7 @@
 import random
 from typing import Dict, List, Optional
-from .client import AIClient
+from .client import AIClient, ErroIAIndisponivel
+from .clientes import ClienteIA
 from .utils import AIUtils
 from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
@@ -18,12 +19,12 @@ class AIGeneratorClient:
         try:
             template = AIClient.read_prompt("locations.txt")
             prompt = template.format(tema=tema, quantidade=quantidade)
-            res = AIClient.query(prompt, json_format=True, timeout=60.0)
-            
+            res = AIClient.query(prompt, cliente=ClienteIA.LOCAIS_CIDADE, json_format=True)
+
             data = AIUtils.parse_json_safely(res)
             if isinstance(data, list) and len(data) > 0:
                 return data
-        except Exception as e:
+        except (ErroIAIndisponivel, KeyError) as e:
             WorldLogger.warning(f"[AI-GENERATOR] Ativando fallback para criação de locais devido a falha: {e}")
             
         # Fallback procedural
@@ -55,13 +56,13 @@ class AIGeneratorClient:
                 loc_nome=loc_nome,
                 loc_tipo=loc_tipo,
                 genero=genero
-            )            # Aumentado de 30s para 120s para suportar chamadas pesadas via ThreadPool
-            res = AIClient.query(prompt, json_format=True, timeout=120.0)
-            
+            )
+            res = AIClient.query(prompt, cliente=ClienteIA.DNA_NPC, json_format=True)
+
             data = AIUtils.parse_json_safely(res)
             if data and isinstance(data, dict) and "nome" in data and "genero" in data:
                 return data
-        except Exception as e:
+        except (ErroIAIndisponivel, KeyError) as e:
             WorldLogger.warning(f"[AI-GENERATOR] Ativando fallback para DNA de NPC: {e}")
             
         # Fallback procedural

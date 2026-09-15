@@ -1,64 +1,57 @@
+"""
+MODULE: client.py
+FUNÇÃO: Fachada estática de `AIClient.query` sobre um `RoteadorIA` de processo
+    (I05, docs/16_PLANO_PAINEL_E_IA.md).
+"""
 import os
-import json
-import urllib.request
-import urllib.error
-import time
-from engine.logger import WorldLogger
+import threading
+from typing import Optional
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "qwen2.5-coder:7b"
+from config import cfg_get, get_config
+
+from .clientes import ClienteIA
+from .coleta_uso import RegistradorDeUsoIA
+from .roteador import ErroIAIndisponivel, RoteadorIA
 
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
+__all__ = ["AIClient", "ErroIAIndisponivel"]
+
 
 class AIClient:
-    """
-    Base low-level AI Client.
-    Handles communication with local Ollama service, robust retries with backoff,
-    detailed performance logging, and central configuration.
-    """
-    @staticmethod
-    def query(prompt: str, json_format: bool = False, max_retries: int = 3, timeout: float = 15.0, model_name: str = MODEL_NAME) -> str:
-        """
-        Sends a generic text prompt to the LLM with automatic retries and exponential backoff.
-        """
-        payload = {
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False
-        }
-        if json_format:
-            payload["format"] = "json"
+    """⚠️ Paliativo consciente (I05, docs/16_PLANO_PAINEL_E_IA.md): fachada
+    estática sobre um `RoteadorIA` por processo, porque os 8 chamadores são
+    estáticos e alguns rodam em thread. O substituto é injetar `RoteadorIA` nos
+    gerenciadores (ARQUITETURA §7) quando eles forem convertidos em classes de
+    instância — mesmo padrão que `config.configurar_fonte` já usa."""
+    _roteador: Optional[RoteadorIA] = None
+    _trava = threading.Lock()
 
-        data_bytes = json.dumps(payload).encode('utf-8')
-        backoff = 1.0
+    @classmethod
+    def configurar(cls, roteador: RoteadorIA) -> None:
+        """Usado por testes e pontos de entrada — sem chamar isto, o primeiro
+        `query` constrói o roteador sozinho a partir de `get_config()`."""
+        cls._roteador = roteador
 
-        for attempt in range(1, max_retries + 1):
-            start_time = time.time()
-            try:
-                req = urllib.request.Request(
-                    OLLAMA_URL,
-                    data=data_bytes,
-                    headers={'Content-Type': 'application/json'}
-                )
-                with urllib.request.urlopen(req, timeout=timeout) as response:
-                    res_body = json.loads(response.read().decode('utf-8'))
-                    content = res_body['message']['content'].strip()
-                    duration = time.time() - start_time
-                    WorldLogger.debug(f"[AI] Requisição bem-sucedida em {duration:.2f}s (Tentativa {attempt})")
-                    return content
-            except urllib.error.URLError as e:
-                duration = time.time() - start_time
-                WorldLogger.warning(f"[AI] Erro de rede/conexão na tentativa {attempt}/{max_retries} ({duration:.2f}s): {e}")
-            except Exception as e:
-                duration = time.time() - start_time
-                WorldLogger.warning(f"[AI] Erro inesperado na tentativa {attempt}/{max_retries} ({duration:.2f}s): {e}")
+    @classmethod
+    def _obter_roteador(cls) -> RoteadorIA:
+        if cls._roteador is None:
+            with cls._trava:
+                if cls._roteador is None:  # outra thread pode ter construído enquanto esta esperava a trava
+                    cfg_ia = cfg_get(get_config(), "ia")
+                    cfg_coleta = cfg_get(cfg_ia, "coleta_uso")
+                    registrador = RegistradorDeUsoIA(
+                        arquivo=cfg_get(cfg_coleta, "arquivo"),
+                        gravar_texto=cfg_get(cfg_coleta, "gravar_texto"),
+                        ativo=cfg_get(cfg_coleta, "ativa"))
+                    cls._roteador = RoteadorIA(cfg_ia, registrador)
+        return cls._roteador
 
-            if attempt < max_retries:
-                time.sleep(backoff)
-                backoff *= 2.0
-
-        raise ConnectionError("O serviço local de IA está offline ou indisponível após múltiplas tentativas.")
+    @classmethod
+    def query(cls, prompt: str, cliente: ClienteIA, json_format: bool = False) -> str:
+        """Levanta `ErroIAIndisponivel` quando a cadeia inteira falha — o
+        chamador cai no fallback procedural que já existe."""
+        return cls._obter_roteador().consultar(prompt, cliente, json_format)
 
     @staticmethod
     def read_prompt(filename: str) -> str:

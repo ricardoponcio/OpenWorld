@@ -7,7 +7,8 @@ raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if raiz not in sys.path:
     sys.path.append(raiz)
 
-from engine.ai.client import AIClient
+from engine.ai.client import AIClient, ErroIAIndisponivel
+from engine.ai.clientes import ClienteIA
 from engine.ai.utils import AIUtils
 from engine.logger import WorldLogger
 from cartographer.config import CARTOGRAPHER_CONFIG
@@ -85,18 +86,18 @@ class WorldManagerAIClient:
             prompt = prompt_template.replace("{semente}", str(semente)).replace("{limite}", str(tamanho_global - 150))
             
             WorldLogger.info(f"[AI-WORLD-STRATEGY] Planejando continentes com a semente: {semente}...")
-            res = AIClient.query(prompt, json_format=True, timeout=120.0)
-            
+            res = AIClient.query(prompt, cliente=ClienteIA.PLANEJAMENTO_CONTINENTES, json_format=True)
+
             # Limpeza e parsing de JSON robustos e seguros via AIUtils global
             data = AIUtils.parse_json_safely(res)
-            
+
             if data and "continentes" in data and isinstance(data["continentes"], list) and len(data["continentes"]) > 0:
                 WorldLogger.info(f"[AI-WORLD-STRATEGY] {len(data['continentes'])} continentes planejados com sucesso pela IA!")
                 data["continentes"] = WorldManagerAIClient._validar_e_clampar_layout(data["continentes"], tamanho_global)
                 return data
             raise ValueError("Resposta da IA formatada incorretamente ou vazia.")
-        except Exception as e:
-            WorldLogger.warning(f"[AI-WORLD-STRATEGY] Falha ao consultar IA Ollama: {e}. Usando fallback determinístico.")
+        except (ErroIAIndisponivel, ValueError) as e:
+            WorldLogger.warning(f"[AI-WORLD-STRATEGY] Falha ao consultar o serviço de IA: {e}. Usando fallback determinístico.")
             
         # Fallback procedural determinístico baseado na semente
         import random

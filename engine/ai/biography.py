@@ -1,6 +1,8 @@
+import json
 import re
 from typing import Dict
-from .client import AIClient
+from .client import AIClient, ErroIAIndisponivel
+from .clientes import ClienteIA
 from .fallbacks import AIFallbacks
 from ..logger import WorldLogger
 
@@ -22,12 +24,12 @@ class AIBiographyClient:
                 mae_nome=mae_nome,
                 pai_nome=pai_nome
             )
-            res = AIClient.query(prompt, timeout=8.0)
+            res = AIClient.query(prompt, cliente=ClienteIA.NOME_BEBE)
             res = re.sub(r'["\'`\n\r]', '', res).strip()
             if res and len(res) < 50 and "Erro" not in res:
                 return res
-        except Exception as e:
-            WorldLogger.warning(f"[AI-BIOLOGY] Ativando fallback para nome de bebê devido a erro no Ollama: {e}")
+        except (ErroIAIndisponivel, KeyError) as e:
+            WorldLogger.warning(f"[AI-BIOLOGY] Ativando fallback para nome de bebê devido a erro no serviço de IA: {e}")
             
         # Fallback de alta fidelidade
         primeiro_nome = AIFallbacks.sortear_nome_bebe(genero)
@@ -46,12 +48,11 @@ class AIBiographyClient:
                 raca=raca,
                 profissao=profissao
             )
-            res = AIClient.query(prompt, json_format=True, timeout=8.0)
-            import json
+            res = AIClient.query(prompt, cliente=ClienteIA.BACKGROUND_NPC, json_format=True)
             data = json.loads(res)
             if "personalidade" in data and "background" in data:
                 return data
-        except Exception as e:
+        except (ErroIAIndisponivel, json.JSONDecodeError, KeyError) as e:
             WorldLogger.warning(f"[AI-BIOLOGY] Ativando fallback para background do NPC {nome}: {e}")
             
         # Fallback de alta fidelidade
