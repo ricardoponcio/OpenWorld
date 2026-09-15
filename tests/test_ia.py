@@ -9,6 +9,7 @@ import json
 import pytest
 
 from engine.ai.clientes import ClienteIA, resolver_config_cliente, validar_config_ia
+from engine.ai.limite_taxa import LimitadorDeTaxa
 from engine.ai.provedores import (
     ErroConfiguracaoProvedor,
     ErroLimiteDeTaxa,
@@ -171,3 +172,60 @@ def test_provedor_200_com_error_no_corpo_vira_indisponivel():
     provedor = ProvedorOpenAICompativel("teste", "http://x", "", {}, transporte=transporte)
     with pytest.raises(ErroProvedorIndisponivel):
         provedor.completar(PedidoIA(prompt="oi", modelo="m", json_format=False, timeout_s=10))
+
+
+# ----------------------------------------------------------------------
+# I03 — LimitadorDeTaxa (relógio falso, nenhum sleep de verdade)
+# ----------------------------------------------------------------------
+
+class _RelogioFalso:
+    def __init__(self, inicio=0.0):
+        self.agora = inicio
+
+    def __call__(self):
+        return self.agora
+
+    def avancar(self, segundos):
+        self.agora += segundos
+
+
+def test_limitador_bloqueia_a_21a_chamada_no_mesmo_minuto():
+    relogio = _RelogioFalso()
+    limitador = LimitadorDeTaxa(por_minuto=20, por_dia=0, pausa_apos_limite_s=60, relogio=relogio)
+    for _ in range(20):
+        assert limitador.pode_chamar()
+        limitador.registrar_chamada()
+    assert not limitador.pode_chamar()
+
+
+def test_limitador_libera_depois_de_60s():
+    relogio = _RelogioFalso()
+    limitador = LimitadorDeTaxa(por_minuto=1, por_dia=0, pausa_apos_limite_s=60, relogio=relogio)
+    assert limitador.pode_chamar()
+    limitador.registrar_chamada()
+    assert not limitador.pode_chamar()
+
+    relogio.avancar(60.01)
+    assert limitador.pode_chamar()
+
+
+def test_limitador_pausa_apos_429():
+    relogio = _RelogioFalso()
+    limitador = LimitadorDeTaxa(por_minuto=0, por_dia=0, pausa_apos_limite_s=30, relogio=relogio)
+    assert limitador.pode_chamar()
+
+    limitador.pausar_por_limite()
+    assert not limitador.pode_chamar()
+
+    relogio.avancar(29.9)
+    assert not limitador.pode_chamar()
+    relogio.avancar(0.2)
+    assert limitador.pode_chamar()
+
+
+def test_limitador_zero_e_ilimitado():
+    relogio = _RelogioFalso()
+    limitador = LimitadorDeTaxa(por_minuto=0, por_dia=0, pausa_apos_limite_s=60, relogio=relogio)
+    for _ in range(1000):
+        assert limitador.pode_chamar()
+        limitador.registrar_chamada()
