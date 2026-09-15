@@ -12,8 +12,10 @@ export async function obterInit() {
     return res.json();
 }
 
-export async function obterEstadoPainel() {
-    const res = await fetch('/api/update');
+// P01 (docs/16_PLANO_PAINEL_E_IA.md): substitui /api/update (23 MB/s) — relógio,
+// pausa, velocidade, evento global e crônicas, nunca a lista de NPCs/locais.
+export async function obterEstado() {
+    const res = await fetch('/api/estado');
     return res.json();
 }
 

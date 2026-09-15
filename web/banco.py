@@ -17,6 +17,16 @@ CAMINHO_BANCO = os.path.abspath(
 _db = None
 
 
+def configurar_db(db: DatabaseManager) -> None:
+    """P01 (docs/16_PLANO_PAINEL_E_IA.md): mesmo padrão de
+    `config.resolver.configurar_fonte` — troca a instância usada pelo processo
+    inteiro. Único jeito de testar uma rota Flask com `app.test_client()` sem
+    tocar `database/openworld.db`: chame isto ANTES de importar `web.dashboard`
+    pela primeira vez (o módulo faz `db = obter_db()` na importação)."""
+    global _db
+    _db = db
+
+
 def obter_db() -> DatabaseManager:
     global _db
     if _db is None:
