@@ -213,7 +213,9 @@
         "habitantes_por_pagina": 50,
         "habitantes_por_pagina_maximo": 200,
         "estado_polling_ms": 1000,
-        "estatisticas_polling_ms": 5000
+        "estatisticas_polling_ms": 5000,
+        "_comentario_mapa_lotes": "M03 (docs/16_PLANO_PAINEL_E_IA.md): o Mapa Live buscava lotes_alterados de cada cidade visível a cada moveend (0,41s cada, medido antes de M02). O front cacheia por cidade e só busca de novo depois deste TTL.",
+        "mapa_lotes_alterados_cache_ms": 30000
     },
     "geracao_urbana": {
         "_comentario": "Capacidade padrão de residência/local. Migrado de literais duplicados em engine/mechanics/housing.py e builder/populate.py na Frente 1 (2026-09-09).",

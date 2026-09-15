@@ -42,6 +42,9 @@ export const estado = {
     leafletMetrosPorPixelMundo: 15811.4,
     leafletViaLarguraM: { principal: 11, anel: 7, secundaria: 5 },
     leafletViaLarguraMinPx: 1.5,
+    // M03 (docs/16_PLANO_PAINEL_E_IA.md): TTL do cache de lotes_alterados por
+    // cidade, vindo de /api/continentes (painel.mapa_lotes_alterados_cache_ms).
+    leafletLotesAlteradosCacheMs: 30000,
 };
 
 export function pixelParaLatLng(px, py) {

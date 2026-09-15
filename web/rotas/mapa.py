@@ -8,7 +8,7 @@ from web.banco import obter_db
 from cartographer.config import CARTOGRAPHER_CONFIG
 from cartographer.math.climate import Bioma
 from cartographer.cities.escala import metros_por_pixel_mundo, tabela_zoom_min
-from config import cfg_get
+from config import cfg_get, get_config
 from PIL import Image
 
 mapa_bp = Blueprint('mapa', __name__)
@@ -119,6 +119,9 @@ def api_continentes():
         # sem regerar as cidades.
         "cidade_via_largura_m_por_classe": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_m_por_classe"),
         "cidade_via_largura_min_px": cfg_get(CARTOGRAPHER_CONFIG, "cidade_via_largura_min_px"),
+        # M03 (docs/16_PLANO_PAINEL_E_IA.md): TTL do cache de lotes_alterados por
+        # cidade no Mapa Live — servido, não copiado no JS (ARQUITETURA §10 regra 6).
+        "mapa_lotes_alterados_cache_ms": cfg_get(get_config(), "painel", "mapa_lotes_alterados_cache_ms"),
         # Tabela de biomas (id -> rótulo/emoji) — o frontend consome daqui em vez de
         # manter uma cópia própria (R-B06: já divergiu uma vez, com um bioma "Zona Urbana"
         # inventado no JS que não existe no classificador).

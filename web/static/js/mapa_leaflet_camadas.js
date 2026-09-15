@@ -7,6 +7,12 @@ import { TIPO_CIDADE_EMOJI, escaparHtml } from './formatacao.js';
 import { estado, latLngParaPixelExato } from './mapa_leaflet_estado.js';
 import { ESTILO_CAMADA_CIDADE } from './mapa_leaflet_estilos.js';
 import { obterLotesAlterados, obterFeaturesMapa } from './api.js';
+import { bboxExpandida, precisaBuscarDeNovo, registrarBuscaFeita } from './mapa_recorte.js';
+
+// M02: o JSON cru da última resposta de cada camada — clearLayers()/addData() só
+// roda de novo se o conteúdo mudou (comparação por string é barata comparada ao
+// custo de reconstruir milhares de elementos de canvas à toa).
+const ultimaFeatureCollectionPorCamada = {};
 
 // Fase 4 (P2.2): "detalhe_cidade" é um grupo com as 8 camadas internas de geometria de
 // cidade (rua/quarteirao/muralha/torre/portao/praca/edificio/lote) — um único toggle no
@@ -156,13 +162,27 @@ function _cidadesVisiveisLeaflet(x0, y0, x1, y1) {
     return [...ids];
 }
 
+// M03 (docs/16_PLANO_PAINEL_E_IA.md): 0,41 s por cidade visível, a cada moveend —
+// um `Map` cidade_id -> { quando, lista } evita rebuscar dentro do TTL do
+// servidor (painel.mapa_lotes_alterados_cache_ms, validado em mapa_leaflet.js).
+const cacheLotesAlteradosPorCidade = new Map();
+
+async function _lotesAlteradosComCache(cidadeId) {
+    const cache = cacheLotesAlteradosPorCidade.get(cidadeId);
+    const agora = Date.now();
+    if (cache && (agora - cache.quando) < estado.leafletLotesAlteradosCacheMs) {
+        return cache.lista;
+    }
+    const lista = await obterLotesAlterados(cidadeId).catch(() => []);
+    cacheLotesAlteradosPorCidade.set(cidadeId, { quando: agora, lista });
+    return lista;
+}
+
 async function mesclarLotesAlteradosLeaflet(loteFeatureCollection, x0, y0, x1, y1) {
     const idsCidade = _cidadesVisiveisLeaflet(x0, y0, x1, y1);
     if (idsCidade.length === 0) return;
 
-    const respostas = await Promise.all(idsCidade.map(id =>
-        obterLotesAlterados(id).catch(() => [])
-    ));
+    const respostas = await Promise.all(idsCidade.map(id => _lotesAlteradosComCache(id)));
     const estadoPorId = new Map();
     for (const lista of respostas) {
         for (const item of lista) estadoPorId.set(item.id, item.estado);
@@ -194,13 +214,24 @@ export async function carregarFeaturesVisiveisLeaflet() {
     // seu zoom_min, desenhando geometria numa escala em que ela ainda vira borrão.
     const z = Math.floor(estado.leafletMap.getZoom());
 
+    // M02 (docs/16_PLANO_PAINEL_E_IA.md): um pan pequeno dentro da última bbox
+    // (expandida em 50%) já buscada não dispara requisição nenhuma.
+    if (!precisaBuscarDeNovo(x0, y0, x1, y1, z)) return;
+    const pedido = bboxExpandida(x0, y0, x1, y1);
+
     try {
         const camadas = CAMADAS_VETORIAIS_DISPONIVEIS.join(',');
-        const data = await obterFeaturesMapa(camadas, `${x0},${y0},${x1},${y1}`, z);
-        if (data.lote) await mesclarLotesAlteradosLeaflet(data.lote, x0, y0, x1, y1);
+        const data = await obterFeaturesMapa(camadas, `${pedido.x0},${pedido.y0},${pedido.x1},${pedido.y1}`, z);
+        registrarBuscaFeita(pedido.x0, pedido.y0, pedido.x1, pedido.y1, z);
+        if (data.lote) await mesclarLotesAlteradosLeaflet(data.lote, pedido.x0, pedido.y0, pedido.x1, pedido.y1);
         CAMADAS_VETORIAIS_DISPONIVEIS.forEach(nome => {
             const layer = estado.leafletCamadasVetoriais[nome];
             if (!layer || !data[nome]) return;
+            // M02: só reconstrói a camada se o conteúdo mudou de verdade — em
+            // boa parte dos moveends a bbox nova ainda cobre as mesmas features.
+            const bruto = JSON.stringify(data[nome]);
+            if (ultimaFeatureCollectionPorCamada[nome] === bruto) return;
+            ultimaFeatureCollectionPorCamada[nome] = bruto;
             layer.clearLayers();
             layer.addData(data[nome]);
         });

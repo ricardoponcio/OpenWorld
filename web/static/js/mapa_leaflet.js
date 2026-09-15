@@ -20,6 +20,20 @@ import { criarCamadasVetoriaisLeaflet, carregarFeaturesVisiveisLeaflet } from '.
 import { obterContinentes, obterInfoMapaMundi } from './api.js';
 import { escaparHtml } from './formatacao.js';
 
+// M02 (docs/16_PLANO_PAINEL_E_IA.md): espera este tanto depois do último
+// `moveend` antes de buscar features de novo — um pan/zoom contínuo (arrastar,
+// scroll) dispara `moveend` várias vezes por segundo; sem isto cada um vira uma
+// requisição de ~3 MB de GeoJSON.
+const DEBOUNCE_MOVEEND_MS = 250;
+
+function _debounce(fn, ms) {
+    let temporizador = null;
+    return (...args) => {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => fn(...args), ms);
+    };
+}
+
 export function initMapaLeaflet() {
     if (estado.leafletMap) {
         // Já inicializado — só garante que o tamanho renderiza certo ao trocar de aba
@@ -37,6 +51,10 @@ export function initMapaLeaflet() {
         minZoom: 0,
         zoomSnap: 0.25,
         attributionControl: false,
+        // M02 (docs/16_PLANO_PAINEL_E_IA.md): polígonos/linhas do L.geoJSON desenhados
+        // num canvas só, em vez de um elemento SVG por feature — uma cidade grande tem
+        // milhares de ruas/lotes/edifícios. bindPopup continua funcionando normalmente.
+        preferCanvas: true,
     });
 
     estado.leafletMap.on('click', onMapaLeafletClick);
@@ -54,7 +72,7 @@ export function initMapaLeaflet() {
 const CHAVES_OBRIGATORIAS_CONTINENTES = [
     'dimensao_global', 'tile_zoom_maximo_ui', 'tile_max_native_zoom',
     'mapa_features_tooltip_zoom_min', 'cidade_via_largura_m_por_classe',
-    'cidade_via_largura_min_px', 'metros_por_pixel_mundo',
+    'cidade_via_largura_min_px', 'metros_por_pixel_mundo', 'mapa_lotes_alterados_cache_ms',
 ];
 
 function mostrarErroMapaLeaflet(mensagem) {
@@ -89,6 +107,7 @@ async function carregarMundoLeaflet() {
         estado.leafletMetrosPorPixelMundo = data.metros_por_pixel_mundo;
         estado.leafletViaLarguraM = data.cidade_via_largura_m_por_classe;
         estado.leafletViaLarguraMinPx = data.cidade_via_largura_min_px;
+        estado.leafletLotesAlteradosCacheMs = data.mapa_lotes_alterados_cache_ms;
 
         const bounds = L.latLngBounds(pixelParaLatLng(0, estado.leafletDimensaoGlobal), pixelParaLatLng(estado.leafletDimensaoGlobal, 0));
 
@@ -115,7 +134,7 @@ async function carregarMundoLeaflet() {
         // moveend/zoomend (bbox+zoom visíveis), não no load inicial só.
         if (Object.keys(estado.leafletCamadasVetoriais).length === 0) {
             criarCamadasVetoriaisLeaflet();
-            estado.leafletMap.on('moveend', carregarFeaturesVisiveisLeaflet);
+            estado.leafletMap.on('moveend', _debounce(carregarFeaturesVisiveisLeaflet, DEBOUNCE_MOVEEND_MS));
         }
         carregarFeaturesVisiveisLeaflet();
 
