@@ -4,9 +4,11 @@ FUNÇÃO: Serialização de payloads HTTP com mais de 3 campos (ARQUITETURA §14
     fora das rotas, para manter cada rota em ≤ 10 linhas.
 """
 import json
+from datetime import datetime
 
 from config import cfg_get, get_config
 from engine.models import Acao, EstagioVida, MetaChave, SituacaoHabitante
+from engine.tempo import RelogioMundo
 
 
 def formatar_moeda(total_pc):
@@ -78,6 +80,26 @@ def serializar_habitante(r) -> dict:
             "cj": r["conjuge_id"], "gr": r["gravidez_ticks"],
         },
     }
+
+
+def serializar_ficha_habitante(db, ficha: dict) -> dict:
+    """P03 (docs/16_PLANO_PAINEL_E_IA.md): mesmo formato de `serializar_habitante`
+    (reaproveitado), mais os nomes de mãe/pai/cônjuge e a lista de filhos que a
+    ficha do modal precisa — todos resolvidos no servidor (`buscar_ficha`), nunca
+    mais varrendo `allNpcs` no JS."""
+    npc = ficha["npc"]
+    limiar_morte = cfg_get(get_config(), "biologia_e_sociedade", "crescimento_dias_idoso_para_morte")
+    data_simulada_iso = db.meta.carregar(MetaChave.HORA_ISO) or RelogioMundo.HORA_INICIAL_PADRAO_ISO
+    data_simulada = datetime.fromisoformat(data_simulada_iso)
+
+    resultado = serializar_habitante(npc)
+    resultado["bio"]["idade"] = RelogioMundo.idade_em_anos(npc["data_nascimento"], data_simulada, limiar_morte)
+    resultado["mae_nome"] = npc["mae_nome"]
+    resultado["pai_nome"] = npc["pai_nome"]
+    resultado["conjuge_nome"] = npc["conjuge_nome"]
+    resultado["filhos"] = [{"id": f["id"], "nome": f["nome"], "estagio_vida": f["estagio_vida"]}
+                            for f in ficha["filhos"]]
+    return resultado
 
 
 def serializar_filtros_habitantes(db) -> dict:

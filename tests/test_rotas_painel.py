@@ -98,3 +98,24 @@ def test_api_habitantes_filtros_devolve_enums_e_config():
     assert "vivos" in data["situacoes"] and "mortos" in data["situacoes"]
     assert "adulto" in data["estagios"]
     assert data["painel"]["habitantes_por_pagina"] == cfg_get(get_config(), "painel", "habitantes_por_pagina")
+
+
+def test_api_ficha_habitante_resolve_nomes_de_pais():
+    """P03 (docs/16_PLANO_PAINEL_E_IA.md): ponta a ponta via Flask — GET
+    /api/habitantes/<id> nunca colide com a rota estática /api/habitantes/filtros
+    (Werkzeug prioriza a regra sem parâmetro)."""
+    _db_teste.npcs.salvar_completo([
+        _npc("ficha_mae", nome="Ficha Mãe"),
+        _npc("ficha_filho", nome="Ficha Filho", mae_id="ficha_mae"),
+    ])
+
+    resposta = app.test_client().get('/api/habitantes/ficha_filho')
+    data = resposta.get_json()
+
+    assert data["mae_nome"] == "Ficha Mãe"
+    assert data["bio"]["idade"] >= 0
+
+
+def test_api_ficha_habitante_inexistente_devolve_404():
+    resposta = app.test_client().get('/api/habitantes/npc_fantasma_xyz')
+    assert resposta.status_code == 404

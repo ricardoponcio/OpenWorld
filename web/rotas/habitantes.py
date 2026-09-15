@@ -14,7 +14,7 @@ from engine.models import Acao, EstagioVida, SituacaoHabitante
 from engine.repositorios.npc import FiltroHabitantes
 from web.banco import obter_db
 from web.rotas._erros import registrar_erro_handler
-from web.serializadores import serializar_filtros_habitantes, serializar_habitante
+from web.serializadores import serializar_ficha_habitante, serializar_filtros_habitantes, serializar_habitante
 
 habitantes_bp = Blueprint('habitantes', __name__)
 registrar_erro_handler(habitantes_bp)
@@ -59,3 +59,12 @@ def api_habitantes():
 @habitantes_bp.route('/api/habitantes/filtros')
 def api_habitantes_filtros():
     return jsonify(serializar_filtros_habitantes(obter_db()))
+
+
+@habitantes_bp.route('/api/habitantes/<npc_id>')
+def api_ficha_habitante(npc_id):
+    db = obter_db()
+    ficha = db.npcs.buscar_ficha(npc_id)
+    if ficha is None:
+        return jsonify({"error": "NPC não encontrado"}), 404
+    return jsonify(serializar_ficha_habitante(db, ficha))

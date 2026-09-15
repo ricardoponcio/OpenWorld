@@ -144,6 +144,34 @@ def test_listar_habitantes_pagina_e_filtra_por_cidade(tmp_path):
     assert [r["nome"] for r in pagina] == [f"C1 NPC {i:02d}" for i in range(50, 60)]
 
 
+def test_buscar_ficha_resolve_nomes_de_pais_e_filhos(tmp_path):
+    """P03 (docs/16_PLANO_PAINEL_E_IA.md): a ficha resolve mãe/pai/cônjuge (LEFT
+    JOIN — cônjuge pode não existir) e filhos numa consulta só, sem varrer a
+    tabela inteira em Python."""
+    db = _db(tmp_path)
+    mae = _npc("mae_1", nome="Mãe Um")
+    pai = _npc("pai_1", nome="Pai Um")
+    filho = _npc("filho_1", nome="Filho Um", mae_id="mae_1", pai_id="pai_1", estagio_vida=EstagioVida.CRIANCA.value)
+    npc = _npc("npc_1", nome="NPC Um", mae_id="mae_1", pai_id="pai_1", conjuge_id="conjuge_inexistente")
+    db.npcs.salvar_completo([mae, pai, filho, npc])
+
+    ficha = db.npcs.buscar_ficha("npc_1")
+
+    assert ficha["npc"]["mae_nome"] == "Mãe Um"
+    assert ficha["npc"]["pai_nome"] == "Pai Um"
+    assert ficha["npc"]["conjuge_nome"] is None  # cônjuge referenciado não existe no banco
+    assert ficha["filhos"] == []  # npc_1 não tem filhos cadastrados
+
+    # pai_1/mae_1 têm DOIS filhos cadastrados: filho_1 e o próprio npc_1 (mesmos pais)
+    filhos_do_pai = db.npcs.buscar_ficha("pai_1")["filhos"]
+    assert {f["id"] for f in filhos_do_pai} == {"filho_1", "npc_1"}
+
+
+def test_buscar_ficha_de_npc_inexistente_devolve_none(tmp_path):
+    db = _db(tmp_path)
+    assert db.npcs.buscar_ficha("fantasma") is None
+
+
 def test_busca_por_nome_nao_aceita_injecao(tmp_path):
     """Busca monta `nome LIKE ?` com parâmetro — nunca f-string com o texto do
     usuário (ARQUITETURA §15 item 4)."""

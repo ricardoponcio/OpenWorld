@@ -244,6 +244,19 @@ class RepositorioNPC:
             cursor.execute('SELECT npc_b_id, afinidade, vinculo FROM relacionamentos WHERE npc_a_id = ? AND afinidade != 0', (npc_id,))
             return cursor.fetchall()
 
+    def listar_relacionamentos_com_nomes(self, npc_id: str) -> list:
+        """P03 (docs/16_PLANO_PAINEL_E_IA.md): mesma consulta de
+        `listar_relacionamentos`, com o NOME do outro NPC via JOIN — o frontend
+        resolvia isso em `allNpcs`, a lista inteira que P01 eliminou."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT r.npc_b_id, r.afinidade, r.vinculo, n.nome AS nome_b
+                   FROM relacionamentos r JOIN npcs n ON n.id = r.npc_b_id
+                   WHERE r.npc_a_id = ? AND r.afinidade != 0""",
+                (npc_id,))
+            return cursor.fetchall()
+
     def listar_relacionamentos_gerais(self, limite: int) -> list:
         """Amostra de vínculos não-neutros de qualquer par de NPCs (não filtrado por um
         NPC específico) — usada pelo contexto do Modo Mestre, que só precisa de um
@@ -292,6 +305,30 @@ class RepositorioNPC:
                 f"ORDER BY nome LIMIT ? OFFSET ?",
                 (*parametros, filtro.por_pagina, offset))
             return cursor.fetchall()
+
+    def buscar_ficha(self, npc_id: str):
+        """P03 (docs/16_PLANO_PAINEL_E_IA.md): NPC + nomes de mãe/pai/cônjuge (LEFT
+        JOIN na própria tabela — o pai/mãe/cônjuge pode não existir mais) + filhos,
+        numa consulta só. `None` se o NPC não existir. Antes a ficha (nomes de
+        pais/filhos) era resolvida no JS varrendo `allNpcs`, a lista inteira que
+        P01 eliminou."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT n.*, mae.nome AS mae_nome, pai.nome AS pai_nome, conjuge.nome AS conjuge_nome
+                   FROM npcs n
+                   LEFT JOIN npcs mae ON mae.id = n.mae_id
+                   LEFT JOIN npcs pai ON pai.id = n.pai_id
+                   LEFT JOIN npcs conjuge ON conjuge.id = n.conjuge_id
+                   WHERE n.id = ?""",
+                (npc_id,))
+            npc = cursor.fetchone()
+            if npc is None:
+                return None
+            cursor.execute(
+                "SELECT id, nome, estagio_vida FROM npcs WHERE mae_id = ? OR pai_id = ?",
+                (npc_id, npc_id))
+            return {"npc": npc, "filhos": cursor.fetchall()}
 
     def listar_resumo_vivos(self, cidade_id) -> list:
         """M01 (docs/15_PLANO_MUNDO_CRIVEL.md, Bloco M): filtra por cidade — o

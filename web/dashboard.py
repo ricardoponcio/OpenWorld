@@ -86,8 +86,11 @@ def get_npc_logs(npc_id):
 @app.route('/api/npc_rels/<npc_id>')
 def get_npc_rels(npc_id):
     try:
-        rel_rows = _tabela_ou_vazio(lambda: db.npcs.listar_relacionamentos(npc_id), default=[])
-        rels = [{"b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo']} for r in rel_rows]
+        # P03 (docs/16_PLANO_PAINEL_E_IA.md): o nome do outro NPC vem daqui agora
+        # (JOIN no repositório) — o frontend resolvia isso em `allNpcs`, a lista
+        # inteira que P01 eliminou.
+        rel_rows = _tabela_ou_vazio(lambda: db.npcs.listar_relacionamentos_com_nomes(npc_id), default=[])
+        rels = [{"b": r['npc_b_id'], "af": r['afinidade'], "v": r['vinculo'], "nome": r['nome_b']} for r in rel_rows]
         return jsonify({"rels": rels})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
