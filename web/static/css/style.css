@@ -209,12 +209,20 @@ header {
     overflow: hidden;
     margin-top: 4px;
 }
-.health-fill { height: 100%; transition: width 0.3s; }
+/* F06 (docs/16_PLANO_PAINEL_E_IA.md): a largura contínua vem de uma variável CSS
+   (elemento.style.setProperty('--percentual', ...)), não de style="width:...". */
+.health-fill { height: 100%; transition: width 0.3s; width: var(--percentual, 0%); }
+.health-fill.saude-baixa { background: var(--danger); }
+.health-fill.saude-ok { background: var(--success); }
 
 .status-row { display: flex; gap: 1rem; margin-top: 1rem; }
 .status-item { flex: 1; text-align: center; }
+.status-icon { font-size: 0.8rem; }
 .status-bar { height: 4px; background: #222; border-radius: 2px; margin-top: 4px; overflow: hidden; }
-.status-fill { height: 100%; transition: width 0.5s; }
+.status-fill { height: 100%; transition: width 0.5s; width: var(--percentual, 0%); }
+.status-fill--energia { background: var(--accent); }
+.status-fill--fome { background: var(--danger); }
+.status-fill--social { background: var(--success); }
 
 #event-log {
     position: fixed;
@@ -266,6 +274,7 @@ header {
 }
 
 .event-item { margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.event-log-titulo { margin-bottom: 1rem; color: var(--accent); font-family: 'Outfit'; }
 
 /* Estilos de Botão de Filtro */
 .filter-btn {
@@ -396,4 +405,209 @@ header {
     color: var(--text-dim);
     margin-bottom: 0.3rem;
 }
+
+/* F06 (docs/16_PLANO_PAINEL_E_IA.md, R-H06): style="" saiu de index.html e dos
+   templates gerados em JS — cada valor fixo virou classe; valor calculado em tempo
+   de execução (barra de saúde/energia/fome/social) usa a variável --percentual
+   (definida via elemento.style.setProperty, não style="width:...") consumida pelas
+   regras .health-fill/.status-fill acima. */
+
+/* Utilitários repetidos nos templates */
+.dim { color: var(--text-dim); }
+.link-simples { text-decoration: none; font-weight: 600; }
+.cor-accent { color: var(--accent); }
+.cor-success { color: var(--success); }
+.cor-danger { color: var(--danger); }
+.cor-warning { color: var(--warning); }
+.texto-capitalize { text-transform: capitalize; }
+
+/* Cabeçalho */
+.header-left { display: flex; align-items: center; }
+.clock-badge {
+    font-family: 'Outfit';
+    color: var(--accent);
+    font-weight: bold;
+    background: rgba(56,189,248,0.1);
+    padding: 4px 12px;
+    border-radius: 20px;
+}
+.pause-btn {
+    margin-left: 1rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    box-shadow: 0 0 10px var(--accent);
+}
+
+/* Banner de evento global */
+.evento-titulo { color: var(--danger); display: block; }
+.evento-desc { font-size: 0.8rem; }
+
+/* Aba Mapa */
+.continentes-titulo {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 0.6rem;
+}
+.tile-grid-title--continentes { margin-top: 0.8rem; font-size: 0.75rem; }
+.lista-carregando { font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 1rem; }
+.metricas-titulo {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.4rem;
+}
+.dica-titulo { font-weight: 600; }
+
+/* Aba Habitantes */
+.npc-filter-bar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; align-items: center; }
+.filtro-label { font-family: 'Outfit'; font-weight: 600; color: var(--text-dim); margin-right: 0.5rem; }
+.badge-gestante {
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+    color: #ff007f;
+    background: rgba(255,0,127,0.08);
+    border: 1px dashed #ff007f;
+    padding: 2px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+.npc-card.falecido { opacity: 0.6; filter: grayscale(50%); }
+.npc-card-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+.npc-card-nome { font-family: 'Outfit'; }
+.npc-card-acao {
+    font-size: 0.7rem;
+    background: rgba(56,189,248,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: var(--accent);
+}
+.npc-card-subrow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+.npc-card-estagio { font-size: 0.8rem; color: var(--text-dim); }
+.npc-card-humor { font-size: 0.7rem; color: var(--warning); }
+.npc-card .health-bar { margin-top: 0.8rem; }
+.npc-card-saude-label { font-size: 0.6rem; color: var(--text-dim); margin-bottom: 1rem; text-align: right; }
+.npc-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+.npc-card-dinheiro { font-weight: bold; color: var(--warning); }
+.perfil-btn { padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent); }
+
+/* Aba Mestre de IA */
+.mestre-container { max-width: 800px; margin: 0 auto; }
+.mestre-intro { margin-bottom: 1rem; }
+.mestre-intro-texto { font-size: 0.85rem; color: var(--text-dim); margin: 0 0 0.6rem 0; }
+.mestre-tempo-botoes { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.mestre-chat-log {
+    height: 50vh;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.15);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+.mestre-acoes-pendentes { display: none; margin-bottom: 1rem; }
+.mestre-input-row { display: flex; gap: 0.5rem; }
+.mestre-input {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.2);
+    color: var(--text-main, #fff);
+}
+.chat-bubble { max-width: 80%; padding: 0.6rem 0.9rem; border-radius: 14px; font-size: 0.85rem; white-space: pre-wrap; }
+.chat-bubble--jogador { align-self: flex-end; background: var(--accent); color: #04202e; }
+.chat-bubble--mestre { align-self: flex-start; background: rgba(255,255,255,0.06); color: inherit; }
+.mestre-acoes-card { border: 1px solid var(--accent); }
+.mestre-acoes-titulo { font-size: 0.85rem; }
+.mestre-acoes-lista { font-size: 0.8rem; color: var(--text-dim); margin: 0.4rem 0; }
+.mestre-aguardando { text-align: center; color: var(--text-dim); font-size: 0.8rem; }
+
+/* Aba Mapa Live (Leaflet) */
+.leaflet-view-layout { display: flex; gap: 1rem; height: 75vh; }
+.leaflet-sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 0.4rem; overflow-y: auto; }
+.leaflet-sidebar-titulo { font-size: 0.85rem; color: var(--text-dim); margin: 0 0 0.4rem 0; }
+.leaflet-continent-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.leaflet-lista-vazia { color: var(--text-dim); font-size: 0.8rem; }
+#mapa-leaflet-container { flex: 1; border-radius: 12px; background: #04202e; }
+.mapa-live-erro { padding: 1rem; color: var(--danger); }
+.continente-area { opacity: 0.7; font-size: 0.75rem; }
+.popup-coord { opacity: 0.6; font-size: 0.75rem; }
+.leaflet-icone-emoji { font-size: 20px; line-height: 1; text-align: center; filter: drop-shadow(0 0 2px #000); }
+.popup-sub { opacity: 0.8; }
+.popup-continente { opacity: 0.6; font-size: 0.85rem; }
+.popup-descricao { margin-top: 6px; }
+.popup-dica-zoom { margin-top: 6px; opacity: 0.7; font-size: 0.8rem; }
+
+/* Modal de ficha do NPC */
+.modal-header--empilhado { flex-direction: column; align-items: stretch; gap: 1rem; }
+.modal-header-linha { display: flex; justify-content: space-between; align-items: center; }
+.modal-tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; }
+.modal-tab-btn { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+.modal-body--ficha { padding-top: 0.5rem; }
+.modal-tab-content--oculto { display: none; }
+.modal-carregando { text-align: center; color: var(--text-dim); }
+.modal-erro { text-align: center; color: var(--danger); }
+.ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem; }
+.ficha-secao { background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04); }
+.ficha-secao.full { grid-column: 1 / -1; }
+.ficha-secao h4 {
+    color: var(--accent);
+    font-family: 'Outfit';
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid rgba(56,189,248,0.1);
+    padding-bottom: 0.4rem;
+}
+.ficha-lista { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem; }
+.ficha-lista--arvore { gap: 0.6rem; }
+.ficha-filhos-bloco { margin-top: 0.4rem; }
+.ficha-filhos-label { display: block; margin-bottom: 0.3rem; }
+.ficha-filhos-lista { padding-left: 0; margin: 0; }
+.ficha-filho-item { list-style: none; margin-bottom: 0.3rem; }
+.ficha-relacoes-scroll { max-height: 140px; overflow-y: auto; padding-right: 0.3rem; }
+.saude-baixa { color: var(--danger); }
+.saude-ok { color: var(--success); }
+.rel-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background: rgba(255,255,255,0.02);
+    border-radius: 6px;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+    border-left: 3px solid var(--text-dim);
+}
+.rel-item.afinidade-alta { border-left-color: var(--success); }
+.rel-item.afinidade-media { border-left-color: var(--warning); }
+.rel-item.afinidade-baixa { border-left-color: var(--danger); }
+.rel-nome { font-weight: 600; color: var(--text); }
+.rel-item.afinidade-alta .rel-afinidade { color: var(--success); }
+.rel-item.afinidade-media .rel-afinidade { color: var(--warning); }
+.rel-item.afinidade-baixa .rel-afinidade { color: var(--danger); }
+.gravidez-box {
+    background: rgba(255,0,127,0.08);
+    border: 1px dashed #ff007f;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    color: #ff007f;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+.gravidez-icone { font-size: 1.5rem; }
+.gravidez-titulo { display: block; }
+.gravidez-detalhe { font-size: 0.75rem; color: var(--text-dim); }
 

@@ -21,11 +21,15 @@ export function getNPCAvatar(genero, estagio_vida) {
     return genero === 'M' ? '👨' : '👩';
 }
 
-export function renderStatus(icon, val, color) {
+// F06 (docs/16_PLANO_PAINEL_E_IA.md): `corClasse` é um modificador de
+// .status-fill (status-fill--energia/fome/social, ver style.css) — a largura
+// contínua vai em data-percentual e é aplicada via setProperty por quem insere
+// este HTML no DOM (painel_npcs.js::atualizarPainelHabitantes), nunca em style="".
+export function renderStatus(icon, val, corClasse) {
     return `
         <div class="status-item">
-            <span style="font-size:0.8rem">${icon}</span>
-            <div class="status-bar"><div class="status-fill" style="width:${val}%; background:${color}"></div></div>
+            <span class="status-icon">${icon}</span>
+            <div class="status-bar"><div class="status-fill ${corClasse}" data-percentual="${val}"></div></div>
         </div>
     `;
 }

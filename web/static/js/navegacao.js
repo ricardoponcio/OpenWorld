@@ -136,7 +136,7 @@ async function update() {
         if (data.evs) {
             const logInner = document.getElementById('event-log-inner');
             if (logInner) {
-                logInner.innerHTML = `<h4 style="margin-bottom:1rem; color:var(--accent); font-family:'Outfit'">📜 Crônicas Recentes</h4>` +
+                logInner.innerHTML = `<h4 class="event-log-titulo">📜 Crônicas Recentes</h4>` +
                     data.evs.map(e => `<div class="event-item"><small>${escaparHtml(e.t)}</small><br>${escaparHtml(e.r)}</div>`).join('');
             }
         }

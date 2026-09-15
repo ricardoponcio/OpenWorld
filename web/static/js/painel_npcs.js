@@ -36,39 +36,47 @@ export function atualizarPainelHabitantes(npcs) {
         const avatar = getNPCAvatar(n.bio.g, n.bio.ev);
         const stageLabel = rotuloEstagioCompacto(n.bio.ev, n.profissao);
         const pregnantBadge = n.bio.gr > 0 ? `
-            <div style="margin-top: 0.5rem; font-size: 0.65rem; color: #ff007f; background: rgba(255,0,127,0.08); border: 1px dashed #ff007f; padding: 2px 8px; border-radius: 6px; display: inline-block;">
+            <div class="badge-gestante">
                 🤰 Gestante (${n.bio.gr} ticks)
             </div>
         ` : '';
+        const saudeClasse = n.status.h > 30 ? 'saude-ok' : 'saude-baixa';
 
         return `
-            <div class="npc-card" style="${n.status.h <= 0 ? 'opacity: 0.6; filter: grayscale(50%);' : ''}">
-                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-                    <h3 style="font-family:'Outfit'">${avatar} ${escaparHtml(n.nome)} ${n.status.h <= 0 ? '💀' : ''}</h3>
-                    <span style="font-size:0.7rem; background:rgba(56,189,248,0.1); padding:2px 8px; border-radius:10px; color:var(--accent)">${n.status.h <= 0 ? 'FALECIDO' : escaparHtml(n.acao)}</span>
+            <div class="npc-card ${n.status.h <= 0 ? 'falecido' : ''}">
+                <div class="npc-card-header">
+                    <h3 class="npc-card-nome">${avatar} ${escaparHtml(n.nome)} ${n.status.h <= 0 ? '💀' : ''}</h3>
+                    <span class="npc-card-acao">${n.status.h <= 0 ? 'FALECIDO' : escaparHtml(n.acao)}</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.2rem;">
-                    <span style="font-size:0.8rem; color:var(--text-dim)">${stageLabel}</span>
-                    <span style="font-size:0.7rem; color:var(--warning)">${n.status.h <= 0 ? 'Sem Humor' : escaparHtml(n.status.m)}</span>
+                <div class="npc-card-subrow">
+                    <span class="npc-card-estagio">${stageLabel}</span>
+                    <span class="npc-card-humor">${n.status.h <= 0 ? 'Sem Humor' : escaparHtml(n.status.m)}</span>
                 </div>
                 ${pregnantBadge}
 
-                <div class="health-bar" style="margin-top:0.8rem;">
-                    <div class="health-fill" style="width:${n.status.h}%; background:${n.status.h > 30 ? 'var(--success)' : 'var(--danger)'}"></div>
+                <div class="health-bar">
+                    <div class="health-fill ${saudeClasse}" data-percentual="${n.status.h}"></div>
                 </div>
-                <p style="font-size:0.6rem; color:var(--text-dim); margin-bottom:1rem; text-align:right">SAÚDE: ${n.status.h}%</p>
+                <p class="npc-card-saude-label">SAÚDE: ${n.status.h}%</p>
                 <div class="status-row">
-                    ${renderStatus('⚡', n.status.e, 'var(--accent)')}
-                    ${renderStatus('🍗', n.status.f, 'var(--danger)')}
-                    ${renderStatus('💬', n.status.s, 'var(--success)')}
+                    ${renderStatus('⚡', n.status.e, 'status-fill--energia')}
+                    ${renderStatus('🍗', n.status.f, 'status-fill--fome')}
+                    ${renderStatus('💬', n.status.s, 'status-fill--social')}
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
-                    <div style="font-weight:bold; color:var(--warning)">💰 ${n.status.d}</div>
-                    <button class="filter-btn" style="padding: 0.2rem 0.6rem; font-size: 0.7rem; border-color: rgba(56,189,248,0.3); color: var(--accent);" data-acao="abrir-ficha" data-npc-id="${escaparHtml(n.id)}">👤 Perfil</button>
+                <div class="npc-card-footer">
+                    <div class="npc-card-dinheiro">💰 ${n.status.d}</div>
+                    <button class="filter-btn perfil-btn" data-acao="abrir-ficha" data-npc-id="${escaparHtml(n.id)}">👤 Perfil</button>
                 </div>
             </div>
         `;
     }).join('');
+
+    // F06 (docs/16_PLANO_PAINEL_E_IA.md): a largura contínua das barras não vai em
+    // style="width:..." — fica numa variável CSS definida por propriedade,
+    // consumida pelas regras .health-fill/.status-fill (style.css).
+    grid.querySelectorAll('[data-percentual]').forEach(el => {
+        el.style.setProperty('--percentual', el.dataset.percentual + '%');
+    });
 }
 
 // F01: cada módulo registra as próprias ações — evita import circular com app.js.

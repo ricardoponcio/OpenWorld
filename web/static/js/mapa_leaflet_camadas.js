@@ -47,7 +47,7 @@ export function criarCamadasVetoriaisLeaflet() {
                 const props = feature.properties || {};
                 layer.bindPopup(`
                     <strong>${props.nome ? escaparHtml(props.nome) : 'Edifício'}</strong><br>
-                    <span style="opacity:0.8">${escaparHtml(props.tipo_local || '')}${props.bairro ? ' · ' + escaparHtml(props.bairro) : ''}</span>
+                    <span class="popup-sub">${escaparHtml(props.tipo_local || '')}${props.bairro ? ' · ' + escaparHtml(props.bairro) : ''}</span>
                 `);
             };
         }
@@ -91,7 +91,7 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
 
     const marker = L.marker(latlng, {
         icon: L.divIcon({
-            html: `<div style="font-size:20px; line-height:1; text-align:center; filter:drop-shadow(0 0 2px #000);">${emoji}</div>`,
+            html: `<div class="leaflet-icone-emoji">${emoji}</div>`,
             className: 'leaflet-vector-icon',
             iconSize: [24, 24],
             iconAnchor: [12, 12],
@@ -120,10 +120,10 @@ function criarMarcadorFeatureLeaflet(feature, latlng) {
 
     marker.bindPopup(`
         <strong>${props.nome ? escaparHtml(props.nome) : 'Sem nome'}</strong><br>
-        <span style="opacity:0.8">${escaparHtml(props.tipo || '')}${props.tamanho ? ' · ' + escaparHtml(props.tamanho) : ''}</span><br>
-        ${props.continente ? `<span style="opacity:0.6; font-size:0.85rem;">${escaparHtml(props.continente)}</span><br>` : ''}
-        ${props.descricao ? `<p style="margin-top:6px;">${escaparHtml(props.descricao)}</p>` : ''}
-        <p style="margin-top:6px; opacity:0.7; font-size:0.8rem;">${dicaZoom}</p>
+        <span class="popup-sub">${escaparHtml(props.tipo || '')}${props.tamanho ? ' · ' + escaparHtml(props.tamanho) : ''}</span><br>
+        ${props.continente ? `<span class="popup-continente">${escaparHtml(props.continente)}</span><br>` : ''}
+        ${props.descricao ? `<p class="popup-descricao">${escaparHtml(props.descricao)}</p>` : ''}
+        <p class="popup-dica-zoom">${dicaZoom}</p>
     `);
 
     // D3 do DIAGNOSTICO_V3, Passo 3: nada no marcador indicava que aproximar revela uma

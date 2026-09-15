@@ -103,6 +103,24 @@
     100% { opacity: 1; }
 }
 
+/* F06 (docs/16_PLANO_PAINEL_E_IA.md): lista de cidades aninhada sob um continente —
+   antes eram 4 atribuições de citiesDiv.style/cidBtn.style em mapa_composto.js. */
+.cities-list {
+    padding-left: 20px;
+    border-left: 2px solid rgba(255,255,255,0.1);
+    margin-left: 12px;
+    margin-bottom: 10px;
+}
+
+.city-btn {
+    padding: 0.4rem 0.6rem;
+    margin-top: 4px;
+}
+
+.city-btn .continent-name {
+    font-size: 0.85rem;
+}
+
 /* Center Column - Map Canvas */
 .canvas-section {
     background: var(--card-bg);

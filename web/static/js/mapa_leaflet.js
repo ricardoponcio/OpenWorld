@@ -61,7 +61,7 @@ function mostrarErroMapaLeaflet(mensagem) {
     console.error(`[Mapa Live] ${mensagem}`);
     const container = document.getElementById('mapa-leaflet-container');
     if (container) {
-        container.innerHTML = `<p style="padding:1rem; color: var(--danger, #ef4444);">🔴 ${mensagem}</p>`;
+        container.innerHTML = `<p class="mapa-live-erro">🔴 ${mensagem}</p>`;
     }
 }
 
@@ -127,12 +127,12 @@ function renderizarListaContinentesLeaflet() {
     const container = document.getElementById('leaflet-continent-list');
     if (!container) return;
     if (estado.leafletContinentesCache.length === 0) {
-        container.innerHTML = '<span style="color:var(--text-dim); font-size:0.8rem;">Nenhum continente no manifesto — gere o mundo primeiro.</span>';
+        container.innerHTML = '<span class="leaflet-lista-vazia">Nenhum continente no manifesto — gere o mundo primeiro.</span>';
         return;
     }
     container.innerHTML = estado.leafletContinentesCache.map((c, i) => `
         <button class="filter-btn" data-acao="ir-para-continente-leaflet" data-indice="${i}">
-            🏔️ ${escaparHtml(c.nome)} <span style="opacity:0.7; font-size:0.75rem;">(${Math.round((c.area_real_km2 || 0) / 1000)}k km²)</span>
+            🏔️ ${escaparHtml(c.nome)} <span class="continente-area">(${Math.round((c.area_real_km2 || 0) / 1000)}k km²)</span>
         </button>
     `).join('') + `<button class="filter-btn" data-acao="voltar-mundo-leaflet">🌍 Ver mundo inteiro</button>`;
 }
@@ -170,7 +170,7 @@ async function onMapaLeafletClick(e) {
                 Altitude: ${(data.altitude * 100).toFixed(1)}%<br>
                 Temperatura: ${(data.temperatura * 100).toFixed(1)}%<br>
                 Umidade: ${(data.umidade * 100).toFixed(1)}%<br>
-                <span style="opacity:0.6; font-size:0.75rem;">px (${x}, ${y})</span>
+                <span class="popup-coord">px (${x}, ${y})</span>
             `)
             .openOn(estado.leafletMap);
     } catch (err) { console.error('Erro ao consultar info do mapa:', err); }

@@ -56,20 +56,14 @@ function loadContinents() {
                 if (c.cidades && c.cidades.length > 0) {
                     const citiesDiv = document.createElement('div');
                     citiesDiv.className = 'cities-list';
-                    citiesDiv.style.paddingLeft = '20px';
-                    citiesDiv.style.borderLeft = '2px solid rgba(255,255,255,0.1)';
-                    citiesDiv.style.marginLeft = '12px';
-                    citiesDiv.style.marginBottom = '10px';
 
                     c.cidades.forEach(cid => {
                         const cidBtn = document.createElement('button');
                         cidBtn.className = 'continent-btn city-btn';
-                        cidBtn.style.padding = '0.4rem 0.6rem';
-                        cidBtn.style.marginTop = '4px';
                         cidBtn.innerHTML = `
                             <span class="continent-emoji">🏰</span>
                             <span class="continent-details">
-                                <span class="continent-name" style="font-size: 0.85rem">${escaparHtml(cid.nome)}</span>
+                                <span class="continent-name">${escaparHtml(cid.nome)}</span>
                                 <span class="continent-info-small">${escaparHtml(cid.tamanho)} | ${escaparHtml(cid.tipo)}</span>
                             </span>
                         `;

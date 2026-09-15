@@ -12,8 +12,9 @@ function renderMestreChatLog(historico) {
     const log = document.getElementById('mestre-chat-log');
     log.innerHTML = historico.map(h => {
         const ehJogador = h.autor === 'jogador';
+        const modificador = ehJogador ? 'chat-bubble--jogador' : 'chat-bubble--mestre';
         return `
-            <div style="align-self:${ehJogador ? 'flex-end' : 'flex-start'}; max-width: 80%; background: ${ehJogador ? 'var(--accent)' : 'rgba(255,255,255,0.06)'}; color: ${ehJogador ? '#04202e' : 'inherit'}; padding: 0.6rem 0.9rem; border-radius: 14px; font-size: 0.85rem; white-space: pre-wrap;">
+            <div class="chat-bubble ${modificador}">
                 ${escaparHtml(h.mensagem)}
             </div>
         `;
@@ -26,9 +27,9 @@ function renderMestreChatLog(historico) {
     if (ultima && ultima.autor === 'mestre' && !ultima.aplicada && ultima.acoes_propostas && ultima.acoes_propostas.length > 0) {
         painel.style.display = 'block';
         painel.innerHTML = `
-            <div class="info-card" style="border: 1px solid var(--accent);">
-                <strong style="font-size:0.85rem;">⚡ O Mestre propôs ${ultima.acoes_propostas.length} ação(ões) no mundo:</strong>
-                <ul style="font-size:0.8rem; color: var(--text-dim); margin: 0.4rem 0;">
+            <div class="info-card mestre-acoes-card">
+                <strong class="mestre-acoes-titulo">⚡ O Mestre propôs ${ultima.acoes_propostas.length} ação(ões) no mundo:</strong>
+                <ul class="mestre-acoes-lista">
                     ${ultima.acoes_propostas.map(a => `<li>${escaparHtml(a.comando)} ${escaparHtml(a.id || '')}</li>`).join('')}
                 </ul>
                 <button class="filter-btn active" data-acao="confirmar-acoes" data-conversa-id="${ultima.id}">✅ Confirmar</button>
@@ -70,7 +71,7 @@ export async function enviarMensagemMestre() {
 
 async function avancarTempoMestre(minutos) {
     const log = document.getElementById('mestre-chat-log');
-    log.insertAdjacentHTML('beforeend', `<div id="mestre-aguardando" style="text-align:center; color: var(--text-dim); font-size:0.8rem;">⏳ Avançando ${minutos} minutos de jogo...</div>`);
+    log.insertAdjacentHTML('beforeend', `<div id="mestre-aguardando" class="mestre-aguardando">⏳ Avançando ${minutos} minutos de jogo...</div>`);
     log.scrollTop = log.scrollHeight;
     try {
         const data = await avancarTempoDoMestre(minutos);
